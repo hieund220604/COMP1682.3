@@ -13,12 +13,9 @@ import { setupSocketIO } from './socketSetup';
 import { initializeFirebase } from './config/firebase';
 import authRoutes from './route/authRoutes';
 import groupRoutes from './route/groupRoutes';
-import expenseRoutes from './route/expenseRoutes';
-import settlementRoutes from './route/settlementRoutes';
 import accountRoutes from './route/accountRoutes';
 import vnpayRoutes from './route/vnpayRoutes';
 import withdrawalRoutes from './route/withdrawalRoutes';
-import debtRoutes from './route/debtRoutes';
 import transactionRoutes from './route/transactionRoutes';
 import subscriptionRoutes from './route/subscriptionRoutes';
 import chatRoutes from './route/chatRoutes';
@@ -48,14 +45,11 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
-app.use('/api/groups', expenseRoutes);
-app.use('/api/groups', settlementRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/payments', vnpayRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api', debtRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes); // New upload route
 app.use('/api/notifications', notificationRoutes); // Notification route

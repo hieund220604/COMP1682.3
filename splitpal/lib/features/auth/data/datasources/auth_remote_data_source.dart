@@ -18,7 +18,6 @@ abstract class AuthRemoteDataSource {
   Future<String> initiateChangePassword(String oldPassword, String newPassword, {String? totpToken});
   Future<String> confirmChangePassword(String otp, String newPassword);
   Future<String> contactUs(String subject, String message);
-  Future<Map<String, dynamic>> getGlobalDebtSummary();
 
   // 2FA methods
   Future<Map<String, dynamic>> setup2FA();
@@ -184,12 +183,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       },
     );
     return response.data['message'];
-  }
-
-  @override
-  Future<Map<String, dynamic>> getGlobalDebtSummary() async {
-    final response = await _dioClient.get('/debts/summary');
-    return response.data['data'] as Map<String, dynamic>;
   }
 
   // ─── 2FA ─────────────────────────────────────────────────────────────

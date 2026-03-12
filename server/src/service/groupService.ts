@@ -2,9 +2,6 @@ import { Group } from '../models/Group';
 import { GroupMember } from '../models/GroupMember';
 import { Invite } from '../models/Invite';
 import { User } from '../models/User';
-import { Expense } from '../models/Expense';
-import { ExpenseShare } from '../models/ExpenseShare';
-import { Settlement } from '../models/Settlement';
 import { OriginalDebt } from '../models/OriginalDebt';
 import { originalDebtService } from './originalDebtService';
 import { notificationService } from './notificationService';
@@ -261,7 +258,6 @@ export const groupService = {
         // Import models needed for cascade
         const { Subscription } = await import('../models/Subscription');
         const { Invoice } = await import('../models/Invoice');
-        const { Expense } = await import('../models/Expense');
 
         // 1. Cancel all active subscriptions
         await Subscription.updateMany(
@@ -280,16 +276,10 @@ export const groupService = {
             { groupDeleted: true }
         );
 
-        // 3. Mark expenses as archived (NOT delete)
-        await Expense.updateMany(
-            { groupId },
-            { groupDeleted: true }
-        );
-
-        // 4. Soft delete group
+        // 3. Soft delete group
         await Group.findByIdAndUpdate(groupId, { deletedAt: new Date() });
 
-        // 5. Mark all members as left
+        // 4. Mark all members as left
         await GroupMember.updateMany(
             { groupId, leftAt: null },
             { leftAt: new Date() }
@@ -581,42 +571,27 @@ export const groupService = {
             _id: { $in: members.map(m => m.userId) }
         }).select('_id displayName');
 
-        // Get all debts in this group using OriginalDebt-based calculation
-        // Exclude debts whose ALL transfers were cancelled without ever being paid
+        // Get all unresolved debts in this group from the active debt engine.
         const allDebts = await OriginalDebt.find({
             groupId,
             remainingAmount: { $gt: 0.01 }
         });
         const debts = await originalDebtService.filterCancelledTransferDebts(allDebts);
 
-        // For backward compatibility, also calculate totals from Expense
-        const expenses = await Expense.find({ groupId });
-        const expenseIds = expenses.map(e => e._id.toString());
-        const shares = await ExpenseShare.find({ expenseId: { $in: expenseIds } });
-
         const balances = members.map(member => {
             const memberId = member.userId;
 
-            // Calculate net balance from OriginalDebt (accurate after payments)
-            let netBalance = 0;
+            let totalLent = 0;
+            let totalOwed = 0;
             for (const debt of debts) {
                 if (debt.creditorId === memberId) {
-                    // This member is owed money
-                    netBalance += debt.remainingAmount;
+                    totalLent += debt.remainingAmount;
                 } else if (debt.debtorId === memberId) {
-                    // This member owes money
-                    netBalance -= debt.remainingAmount;
+                    totalOwed += debt.remainingAmount;
                 }
             }
 
-            // Calculate totalPaid and totalOwed from original expenses (before any payments)
-            const totalPaid = expenses
-                .filter(e => e.paidBy === memberId)
-                .reduce((sum, e) => sum + Number(e.amountTotal), 0);
-
-            const totalOwed = shares
-                .filter(s => s.userId === memberId)
-                .reduce((sum, s) => sum + Number(s.owedAmount), 0);
+            const netBalance = totalLent - totalOwed;
 
             const user = users.find(u => u._id.toString() === memberId);
 
@@ -624,7 +599,7 @@ export const groupService = {
                 userId: memberId,
                 displayName: user?.displayName ?? undefined,
                 totalOwed: Math.round(totalOwed * 100) / 100,
-                totalLent: Math.round(totalPaid * 100) / 100,
+                totalLent: Math.round(totalLent * 100) / 100,
                 netBalance: Math.round(netBalance * 100) / 100
             };
         });

@@ -1,23 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../core/config/gemini_config.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../../../core/di/injection_container.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
 import '../../../../features/groups/presentation/providers/group_provider.dart';
 import '../../../../features/subscriptions/presentation/providers/subscription_provider.dart';
-import '../../../../features/auth/domain/repositories/auth_repository.dart';
 import '../../../../features/groups/presentation/pages/group_detail_page.dart';
 import '../../../../features/subscriptions/presentation/pages/subscription_detail_page.dart';
 import '../../../../features/home/presentation/pages/home_shell_page.dart';
 import '../../../../features/exchange/presentation/pages/currency_converter_page.dart';
-import '../../../../features/home/domain/services/gemini_insights_service.dart';
-import '../../../../features/home/presentation/widgets/smart_insights_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -33,57 +27,7 @@ class _DashboardPageState extends State<DashboardPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
        context.read<GroupProvider>().fetchGroupsAndInvites();
        context.read<SubscriptionProvider>().fetchSubscriptions();
-       _triggerSmartInsights();
     });
-  }
-
-  /// Load debt summary just for Smart Insights popup.
-  Future<void> _triggerSmartInsights() async {
-    final result = await sl<AuthRepository>().getGlobalDebtSummary();
-    result.fold(
-      (failure) => null,
-      (data) => _showSmartInsightsIfNeeded(data),
-    );
-  }
-
-  /// Show AI insights popup once per day.
-  Future<void> _showSmartInsightsIfNeeded(Map<String, dynamic> data) async {
-    if (!GeminiConfig.isConfigured) return;
-    if (!mounted) return;
-
-    try {
-      final prefs = sl<SharedPreferences>();
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final lastShown = prefs.getString('last_insights_date');
-
-      if (lastShown == today) return; // Already shown today
-
-      final totalIOwe = (data['totalI_Owe'] as num?)?.toDouble() ?? 0.0;
-      final totalOweMe = (data['totalOwe_Me'] as num?)?.toDouble() ?? 0.0;
-      final netBalance = (data['netBalance'] as num?)?.toDouble() ?? 0.0;
-      final currency = context.read<AuthProvider>().user?.currency ?? 'VND';
-
-      final service = sl<GeminiInsightsService>();
-      final insights = await service.generateInsights(
-        totalIOwe: totalIOwe,
-        totalOweMe: totalOweMe,
-        netBalance: netBalance,
-        currency: currency,
-      );
-
-      if (!mounted || insights.isEmpty) return;
-
-      await prefs.setString('last_insights_date', today);
-
-      // Small delay so the dashboard is visible first
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (!mounted) return;
-
-      SmartInsightsDialog.show(context, insights);
-    } catch (e) {
-      // Silently fail - insights are non-critical
-      debugPrint('Smart Insights failed: $e');
-    }
   }
 
   @override

@@ -404,20 +404,6 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
-  @override
-  ResultFuture<Map<String, dynamic>> getGlobalDebtSummary() async {
-    try {
-      final data = await _remoteDataSource.getGlobalDebtSummary();
-      return Right(data);
-    } on ServerException catch (e) {
-      return Left(ServerFailure(message: e.message, statusCode: e.statusCode));
-    } on NetworkException catch (e) {
-      return Left(NetworkFailure(message: e.message));
-    } catch (e) {
-      return Left(UnknownFailure(message: e.toString()));
-    }
-  }
-
   // ─── 2FA ─────────────────────────────────────────────────────────────
 
   @override

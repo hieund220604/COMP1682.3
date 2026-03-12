@@ -39,7 +39,6 @@ class ApiConstants {
       '/groups/$groupId/members/$memberId';
   static String leaveGroup(String groupId) => '/groups/$groupId/leave';
   static String groupBalance(String groupId) => '/groups/$groupId/balance';
-  static String groupBalances(String groupId) => '/groups/$groupId/balances';
   static String groupTransactions(String groupId) =>
       '/groups/$groupId/transactions';
   static const String pendingInvites = '/groups/invites/pending';
@@ -113,23 +112,6 @@ class ApiConstants {
   // Chat Endpoints
   static String chatMessages(String groupId) =>
       '/chat/groups/$groupId/messages';
-
-  // Debt Endpoints
-  static String groupDebts(String groupId) => '/groups/$groupId/debts';
-  static String pendingDebts(String groupId) =>
-      '/groups/$groupId/debts/pending';
-  static String pendingCredits(String groupId) =>
-      '/groups/$groupId/credits/pending';
-  static String quickPay(String groupId) => '/groups/$groupId/debts/quick-pay';
-  static String paySettlementBalance(String settlementId) =>
-      '/settlements/$settlementId/pay-balance';
-  static String paySettlementVnpay(String settlementId) =>
-      '/settlements/$settlementId/pay-vnpay';
-
-  // Settlement Endpoints
-  static String settlements(String groupId) => '/groups/$groupId/settlements';
-  static String suggestedSettlements(String groupId) =>
-      '/groups/$groupId/settlements/suggested';
 
   // Headers
   static Map<String, String> get defaultHeaders => {

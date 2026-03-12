@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/gemini_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/repositories/invoice_repository.dart';
 import '../../domain/services/gemini_ocr_service.dart';
 import '../providers/invoice_provider.dart';
-import '../providers/ocr_provider.dart';
 import '../widgets/invoice_ocr_picker.dart';
 import '../../../groups/presentation/providers/group_provider.dart';
 
@@ -50,7 +50,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   @override
   void initState() {
     super.initState();
-    _loadGroupMembers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadGroupMembers();
+    });
     _addNewItem();
   }
 
@@ -68,6 +70,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     try {
       final groupProvider = context.read<GroupProvider>();
       await groupProvider.fetchGroupDetailsData(widget.groupId);
+
+      if (!mounted) return;
 
       final group = groupProvider.currentGroup;
       final baseCurrency = (group?['baseCurrency'] ?? group?['currency'] ?? 'VND').toString();
@@ -88,14 +92,15 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
         _isLoadingMembers = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _isLoadingMembers = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load members: $e')),
-        );
-      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load members: $e')),
+      );
     }
   }
 
@@ -186,6 +191,16 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   void _showOcrPicker() {
+    if (!GeminiConfig.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('OCR is not configured. Please set GEMINI_API_KEY in .env'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     InvoiceOcrPicker.showOcrBottomSheet(
       context,
       onDataExtracted: _handleOcrConfirm,
@@ -196,7 +211,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     // Populate form with OCR extracted data
     setState(() {
       // Title
-      _titleController.text = ocrData.title;
+      if (ocrData.title.trim().isNotEmpty) {
+        _titleController.text = ocrData.title;
+      }
 
       // Currency
       if (_supportedCurrencies.contains(ocrData.currency)) {
@@ -216,10 +233,16 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
       if (ocrData.items.isNotEmpty) {
         for (var ocrItem in ocrData.items) {
+          final amount = ocrItem.amount > 0
+              ? ocrItem.amount
+              : (ocrItem.unitPrice * ocrItem.quantity);
+
           final newItem = InvoiceItemData(
-            nameController: TextEditingController(text: ocrItem.name),
+            nameController: TextEditingController(
+              text: ocrItem.name.trim().isNotEmpty ? ocrItem.name : 'Scanned item',
+            ),
             amountController: TextEditingController(
-              text: ocrItem.amount.toStringAsFixed(2),
+              text: amount.toStringAsFixed(2),
             ),
             splitType: 'EQUAL',
             assignedTo: _groupMembers.isNotEmpty
@@ -228,9 +251,30 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           );
           _items.add(newItem);
         }
+      } else if (ocrData.amountTotal > 0) {
+        // Fallback: model found total but not line items.
+        _items.add(
+          InvoiceItemData(
+            nameController: TextEditingController(text: 'Scanned item'),
+            amountController: TextEditingController(
+              text: ocrData.amountTotal.toStringAsFixed(2),
+            ),
+            splitType: 'EQUAL',
+            assignedTo: _groupMembers.isNotEmpty
+                ? [_groupMembers[0]['id']]
+                : [],
+          ),
+        );
       } else {
-        // Add empty item if OCR didn't extract items
-        _addNewItem();
+        // Keep one editable empty line if no amount/item could be extracted.
+        _items.add(
+          InvoiceItemData(
+            nameController: TextEditingController(),
+            amountController: TextEditingController(),
+            splitType: 'EQUAL',
+            assignedTo: const [],
+          ),
+        );
       }
     });
 

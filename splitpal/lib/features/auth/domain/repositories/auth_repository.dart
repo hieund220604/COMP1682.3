@@ -61,8 +61,6 @@ abstract class AuthRepository {
     required String message,
   });
 
-  ResultFuture<Map<String, dynamic>> getGlobalDebtSummary();
-
   // 2FA methods
   ResultFuture<Map<String, dynamic>> setup2FA();
   ResultFuture<Map<String, dynamic>> verifySetup2FA({required String token});

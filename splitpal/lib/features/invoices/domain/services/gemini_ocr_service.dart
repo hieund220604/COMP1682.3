@@ -25,23 +25,60 @@ class InvoiceOcrData {
 
   factory InvoiceOcrData.fromJson(Map<String, dynamic> json) {
     try {
-      final itemsRaw = json['items'] as List<dynamic>? ?? [];
+      final itemsRaw =
+          (json['items'] as List<dynamic>?) ??
+          (json['lineItems'] as List<dynamic>?) ??
+          const <dynamic>[];
       final items = itemsRaw
           .map((item) => InvoiceItemData.fromJson(item as Map<String, dynamic>))
           .toList();
 
+      final confidenceRaw =
+          (json['confidence'] as String?)?.trim().toUpperCase() ?? 'MEDIUM';
+      final confidence =
+          confidenceRaw == 'HIGH' || confidenceRaw == 'LOW' || confidenceRaw == 'MEDIUM'
+              ? confidenceRaw
+              : 'MEDIUM';
+
       return InvoiceOcrData(
-        title: json['title'] as String? ?? 'Unknown',
-        invoiceDate: _parseDate(json['invoiceDate']),
+        title:
+            (json['title'] as String?)?.trim().isNotEmpty == true
+                ? (json['title'] as String).trim()
+                : (json['vendorName'] as String?)?.trim().isNotEmpty == true
+                    ? (json['vendorName'] as String).trim()
+                    : (json['merchant'] as String?)?.trim().isNotEmpty == true
+                        ? (json['merchant'] as String).trim()
+                        : 'Scanned Invoice',
+        invoiceDate: _parseDate(
+          json['invoiceDate'] ?? json['date'] ?? json['issuedDate'],
+        ),
         items: items,
-        amountTotal: (json['amountTotal'] as num?)?.toDouble() ?? 0.0,
-        currency: json['currency'] as String? ?? 'VND',
-        note: json['note'] as String?,
-        confidence: json['confidence'] as String? ?? 'MEDIUM',
+        amountTotal: _parseNum(
+          json['amountTotal'] ?? json['totalAmount'] ?? json['total'],
+        ),
+        currency:
+            ((json['currency'] ?? json['currencyCode']) as String?)
+                ?.trim()
+                .toUpperCase() ??
+            'VND',
+        note: (json['note'] ?? json['description']) as String?,
+        confidence: confidence,
       );
     } catch (e) {
       throw Exception('Failed to parse OCR data: $e');
     }
+  }
+
+  static double _parseNum(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) {
+      final normalized = raw
+          .replaceAll(RegExp(r'[^0-9,.-]'), '')
+          .replaceAll(',', '')
+          .trim();
+      return double.tryParse(normalized) ?? 0.0;
+    }
+    return 0.0;
   }
 
   static DateTime _parseDate(dynamic date) {
@@ -80,11 +117,29 @@ class InvoiceItemData {
   });
 
   factory InvoiceItemData.fromJson(Map<String, dynamic> json) {
+    final amount = InvoiceOcrData._parseNum(
+      json['amount'] ?? json['total'] ?? json['lineTotal'],
+    );
+    int quantity = InvoiceOcrData._parseNum(
+      json['quantity'] ?? json['qty'],
+    ).round();
+    if (quantity <= 0) quantity = 1;
+
+    double unitPrice = InvoiceOcrData._parseNum(
+      json['unitPrice'] ?? json['price'] ?? json['rate'],
+    );
+    if (unitPrice <= 0 && amount > 0) {
+      unitPrice = amount / quantity;
+    }
+
     return InvoiceItemData(
-      name: json['name'] as String? ?? '',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
-      unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0.0,
-      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      name:
+          ((json['name'] ?? json['itemName'] ?? json['description']) as String?)
+              ?.trim() ??
+          '',
+      quantity: quantity,
+      unitPrice: unitPrice,
+      amount: amount > 0 ? amount : unitPrice * quantity,
     );
   }
 
@@ -98,7 +153,7 @@ class InvoiceItemData {
 
 class GeminiOcrService {
   late final GenerativeModel _model;
-  static const String _geminiModelName = 'gemini-1.5-flash';
+  static const String _geminiModelName = 'gemini-2.5-flash';
 
   GeminiOcrService({required String apiKey}) {
     _model = GenerativeModel(
@@ -144,7 +199,6 @@ Return valid JSON ONLY:''';
     try {
       // Read image as bytes
       final imageBytes = await imageFile.readAsBytes();
-      final base64Image = base64Encode(imageBytes);
 
       // Determine MIME type
       final mimeType = _getMimeType(imageFile.path);

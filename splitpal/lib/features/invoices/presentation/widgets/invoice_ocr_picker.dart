@@ -7,15 +7,16 @@ import '../../domain/services/gemini_ocr_service.dart';
 import '../providers/ocr_provider.dart';
 
 class InvoiceOcrPicker {
-  static final ImagePicker _picker = ImagePicker();
-
   static Future<void> showOcrBottomSheet(
     BuildContext context, {
     required Function(InvoiceOcrData) onDataExtracted,
   }) {
+    final hostContext = context;
+
     return showModalBottomSheet(
       context: context,
       builder: (context) => _OcrPickerSheet(
+        hostContext: hostContext,
         onDataExtracted: onDataExtracted,
       ),
       shape: const RoundedRectangleBorder(
@@ -28,44 +29,48 @@ class InvoiceOcrPicker {
 }
 
 class _OcrPickerSheet extends StatelessWidget {
+  final BuildContext hostContext;
   final Function(InvoiceOcrData) onDataExtracted;
 
-  const _OcrPickerSheet({required this.onDataExtracted});
+  const _OcrPickerSheet({
+    required this.hostContext,
+    required this.onDataExtracted,
+  });
 
-  Future<void> _captureImage(BuildContext context) async {
+  Future<void> _captureImage(BuildContext sheetContext) async {
     try {
       final XFile? photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
         imageQuality: 85,
       );
 
-      if (photo != null && context.mounted) {
-        Navigator.pop(context); // Close bottom sheet
-        await _processImage(context, File(photo.path));
+      if (photo != null && sheetContext.mounted && hostContext.mounted) {
+        Navigator.pop(sheetContext); // Close bottom sheet
+        await _processImage(hostContext, File(photo.path));
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (hostContext.mounted) {
+        ScaffoldMessenger.of(hostContext).showSnackBar(
           SnackBar(content: Text('Camera error: $e')),
         );
       }
     }
   }
 
-  Future<void> _pickImage(BuildContext context) async {
+  Future<void> _pickImage(BuildContext sheetContext) async {
     try {
       final XFile? image = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         imageQuality: 85,
       );
 
-      if (image != null && context.mounted) {
-        Navigator.pop(context); // Close bottom sheet
-        await _processImage(context, File(image.path));
+      if (image != null && sheetContext.mounted && hostContext.mounted) {
+        Navigator.pop(sheetContext); // Close bottom sheet
+        await _processImage(hostContext, File(image.path));
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (hostContext.mounted) {
+        ScaffoldMessenger.of(hostContext).showSnackBar(
           SnackBar(content: Text('Gallery error: $e')),
         );
       }
@@ -90,10 +95,19 @@ class _OcrPickerSheet extends StatelessWidget {
       return;
     }
 
-    if (result != null) {
-      // Show preview dialog before confirming
-      _showOcrPreview(context, result, imageFile);
+    if (result == null) {
+      final errorMessage = ocrProvider.errorMessage ?? 'Failed to process invoice image';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red[400],
+        ),
+      );
+      return;
     }
+
+    // Show preview dialog before confirming
+    _showOcrPreview(context, result, imageFile);
   }
 
   void _showOcrPreview(
@@ -400,20 +414,29 @@ class _OcrPreviewDialog extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.silver,
-              fontSize: 13,
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.silver,
+                fontSize: 13,
+              ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.midnightBlue,
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.midnightBlue,
+              ),
             ),
           ),
         ],

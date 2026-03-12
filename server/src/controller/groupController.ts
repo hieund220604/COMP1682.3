@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { groupService } from '../service/groupService';
-import { ledgerService } from '../service/ledgerService';
 import { ResponseUtil } from '../util/responseUtil';
 import {
     CreateGroupRequest,
@@ -244,23 +243,6 @@ export const groupController = {
             ResponseUtil.success(res, invites, 'Pending invites retrieved successfully');
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to get pending invites');
-        }
-    },
-
-    // Get all member balances from ledger
-    async getGroupBalances(req: Request<{ groupId: string }>, res: Response<ApiResponse<any>>): Promise<void> {
-        try {
-            if (!req.user) {
-                return ResponseUtil.unauthorized(res);
-            }
-            const { groupId } = req.params;
-
-            // Get all member balances from ledger
-            const balances = await ledgerService.getGroupBalances(groupId);
-
-            ResponseUtil.success(res, balances, 'Group balances retrieved successfully');
-        } catch (error) {
-            ResponseUtil.handleError(res, error, 'Failed to get group balances');
         }
     }
 };

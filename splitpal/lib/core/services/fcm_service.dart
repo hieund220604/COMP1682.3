@@ -19,12 +19,24 @@ class FcmService {
   final Function(String)? onTokenUpdate;
   final Function(RemoteMessage)? onMessageReceived;
 
+  static bool _isInitialized = false;
+  static bool _backgroundHandlerRegistered = false;
+  bool _messageHandlersRegistered = false;
   bool _localNotificationsInitialized = false;
 
   FcmService({this.onTokenUpdate, this.onMessageReceived});
 
   Future<void> initialize() async {
+    if (_isInitialized) return;
+
     try {
+      if (!_backgroundHandlerRegistered) {
+        FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler,
+        );
+        _backgroundHandlerRegistered = true;
+      }
+
       await _initializeLocalNotifications();
 
       final settings = await _firebaseMessaging.requestPermission(
@@ -52,9 +64,7 @@ class FcmService {
         });
 
         _setupMessageHandlers();
-        FirebaseMessaging.onBackgroundMessage(
-          _firebaseMessagingBackgroundHandler,
-        );
+        _isInitialized = true;
       }
     } catch (_) {}
   }
@@ -96,6 +106,8 @@ class FcmService {
   }
 
   void _setupMessageHandlers() {
+    if (_messageHandlersRegistered) return;
+
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       _showForegroundNotification(message);
       onMessageReceived?.call(message);
@@ -110,6 +122,8 @@ class FcmService {
         _handleNotificationTap(message);
       }
     });
+
+    _messageHandlersRegistered = true;
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {

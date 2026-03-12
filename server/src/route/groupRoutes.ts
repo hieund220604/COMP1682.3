@@ -30,7 +30,6 @@ router.post('/:groupId/leave', groupController.leaveGroup);
 
 // Balance
 router.get('/:groupId/balance', groupController.getGroupBalance);
-router.get('/:groupId/balances', groupController.getGroupBalances); // All member balances from ledger
 
 // Transactions
 router.get('/:groupId/transactions', transactionController.getGroupTransactions);

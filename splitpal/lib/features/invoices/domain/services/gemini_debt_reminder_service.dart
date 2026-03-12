@@ -5,7 +5,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 /// Service that generates creative debt reminder messages using Gemini AI.
 class GeminiDebtReminderService {
   final String _apiKey;
-  static const String _geminiModelName = 'gemini-2.0-flash';
+  static const String _geminiModelName = 'gemini-2.5-flash';
 
   GeminiDebtReminderService({required String apiKey}) : _apiKey = apiKey;
 
