@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: splitpal-server
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: cd server && npm install && npx prisma generate && npm run build
+    startCommand: cd server && npm run dev
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080

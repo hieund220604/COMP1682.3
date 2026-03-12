@@ -1,0 +1,44 @@
+import mongoose, { Schema, Document, Types } from 'mongoose';
+
+export enum NotificationType {
+    EXPENSE_CREATED = 'EXPENSE_CREATED',
+    EXPENSE_UPDATED = 'EXPENSE_UPDATED',
+    INVOICE_CREATED = 'INVOICE_CREATED',
+    SETTLEMENT_CREATED = 'SETTLEMENT_CREATED',
+    PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+    INVITE_RECEIVED = 'INVITE_RECEIVED',
+    GROUP_JOINED = 'GROUP_JOINED',
+    BALANCE_UPDATED = 'BALANCE_UPDATED',
+    SUBSCRIPTION_BILLING_SUCCESS = 'SUBSCRIPTION_BILLING_SUCCESS',
+    SUBSCRIPTION_BILLING_FAILED = 'SUBSCRIPTION_BILLING_FAILED',
+    SUBSCRIPTION_CANCELLED = 'SUBSCRIPTION_CANCELLED'
+}
+
+export interface INotification extends Document {
+    _id: Types.ObjectId;
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    data?: any;
+    read: boolean;
+    sentEmail: boolean;
+    createdAt: Date;
+}
+
+const notificationSchema = new Schema<INotification>({
+    userId: { type: String, required: true, index: true },
+    type: { type: String, enum: Object.values(NotificationType), required: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    data: { type: Schema.Types.Mixed },
+    read: { type: Boolean, default: false, index: true },
+    sentEmail: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now, index: true }
+});
+
+// Compound indexes
+notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, createdAt: -1 });
+
+export const Notification = mongoose.model<INotification>('Notification', notificationSchema);
