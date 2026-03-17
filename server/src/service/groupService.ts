@@ -17,6 +17,7 @@ import {
     GroupBalanceResponse,
     GroupRole
 } from '../type/group';
+import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
 
 function transformUser(user: any) {
     if (!user) return undefined;
@@ -26,6 +27,16 @@ function transformUser(user: any) {
         displayName: user.displayName ?? undefined,
         avatarUrl: user.avatarUrl ?? undefined
     };
+}
+
+const GROUP_DETAIL_CACHE_TTL_SECONDS = 60;
+
+function groupDetailCacheKey(userId: string, groupId: string): string {
+    return buildRedisKey('cache', 'group', groupId, 'detail', userId);
+}
+
+async function invalidateGroupCache(groupId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'group', groupId));
 }
 
 export const groupService = {
@@ -71,6 +82,12 @@ export const groupService = {
             throw new Error('Group not found or access denied');
         }
 
+        const cacheKey = groupDetailCacheKey(userId, groupId);
+        const cached = await getJsonCache<GroupResponse>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const group = await Group.findById(groupId);
 
         if (!group) {
@@ -85,7 +102,7 @@ export const groupService = {
         const userMap = new Map();
         users.forEach(u => userMap.set(u._id.toString(), u));
 
-        return {
+        const response: GroupResponse = {
             id: group._id.toString(),
             name: group.name,
             description: '',
@@ -105,6 +122,9 @@ export const groupService = {
                     user: transformUser(userMap.get(m.userId))
                 }))
         };
+
+        await setJsonCache(cacheKey, response, GROUP_DETAIL_CACHE_TTL_SECONDS);
+        return response;
     },
 
     async getGroupsForUser(userId: string): Promise<GroupResponse[]> {
@@ -144,6 +164,8 @@ export const groupService = {
             baseCurrency: data.baseCurrency
         });
 
+        await invalidateGroupCache(groupId);
+
         return this.getGroupById(userId, groupId);
     },
 
@@ -172,6 +194,7 @@ export const groupService = {
 
         // 3. Update role to ADMIN
         await GroupMember.findByIdAndUpdate(targetMemberId, { role: 'ADMIN' });
+        await invalidateGroupCache(groupId);
 
         // 4. Return updated member
         const user = await User.findById(targetMember.userId).select('_id email displayName avatarUrl');
@@ -219,6 +242,7 @@ export const groupService = {
 
         // 4. Update Group.createdBy
         await Group.findByIdAndUpdate(groupId, { createdBy: newOwnerId });
+        await invalidateGroupCache(groupId);
 
         // 5. Return both members
         const [oldUser, newUser] = await Promise.all([
@@ -284,6 +308,8 @@ export const groupService = {
             { groupId, leftAt: null },
             { leftAt: new Date() }
         );
+
+        await invalidateGroupCache(groupId);
     },
 
     async createInvite(userId: string, groupId: string, data: InviteRequest): Promise<InviteResponse> {
@@ -387,6 +413,7 @@ export const groupService = {
         });
 
         await Invite.findByIdAndUpdate(invite._id, { status: 'ACCEPTED' });
+        await invalidateGroupCache(invite.groupId);
 
         // Notify all group members about the new member (except the new member themselves)
         const group = await Group.findById(invite.groupId);
@@ -479,6 +506,7 @@ export const groupService = {
         }
 
         await GroupMember.findByIdAndUpdate(memberId, { role: newRole });
+        await invalidateGroupCache(groupId);
 
         const user = await User.findById(targetMember.userId).select('_id email displayName avatarUrl');
 
@@ -523,6 +551,8 @@ export const groupService = {
                 { status: 'LEFT', leftAt: new Date() }
             );
         }
+
+        await invalidateGroupCache(groupId);
     },
 
     async leaveGroup(userId: string, groupId: string): Promise<void> {
@@ -557,6 +587,7 @@ export const groupService = {
         }
 
         await GroupMember.findByIdAndUpdate(membership._id, { leftAt: new Date() });
+        await invalidateGroupCache(groupId);
     },
 
     async calculateGroupBalance(userId: string, groupId: string): Promise<GroupBalanceResponse> {

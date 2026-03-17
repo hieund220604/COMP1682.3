@@ -9,6 +9,7 @@ import { originalDebtService } from './originalDebtService';
 import { transactionService } from './transactionService';
 import { exchangeRateService } from './exchangeRateService';
 import { OriginalDebt } from '../models/OriginalDebt';
+import { debtSettlementEngine, RawDebt } from './debtSettlementEngine';
 import {
     PaymentRequestResponse,
     PaymentRequestDetailResponse,
@@ -19,6 +20,7 @@ import { UserSummary, UserDebtBreakdown } from '../type/invoice';
 import { TransactionType } from '../type/transaction';
 import mongoose from 'mongoose';
 import { acquireLock } from '../util/lock';
+import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
 
 const transformUser = (user: any): UserSummary => ({
     id: user._id.toString(),
@@ -26,14 +28,25 @@ const transformUser = (user: any): UserSummary => ({
     avatarUrl: user.avatarUrl
 });
 
-interface TransferWithAllocation {
-    fromUserId: string;
-    toUserId: string;
-    amount: number;
-    debtAllocations: {
-        originalDebtId: string;
-        amount: number;
-    }[];
+// Transfer + allocation types now come from debtSettlementEngine
+
+const PAYMENT_REQUEST_DETAIL_CACHE_TTL_SECONDS = 45;
+const PAYMENT_REQUEST_LIST_CACHE_TTL_SECONDS = 30;
+
+function paymentRequestDetailCacheKey(userId: string, groupId: string, requestId: string): string {
+    return buildRedisKey('cache', 'payment_request', groupId, 'detail', userId, requestId);
+}
+
+function paymentRequestListCacheKey(userId: string, groupId: string): string {
+    return buildRedisKey('cache', 'payment_request', groupId, 'list', userId);
+}
+
+async function invalidatePaymentRequestCache(groupId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'payment_request', groupId));
+}
+
+async function invalidateRelatedInvoiceCache(groupId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'invoice', groupId));
 }
 
 export const paymentRequestService = {
@@ -107,11 +120,22 @@ export const paymentRequestService = {
                     }
                 }
 
-                // Get all remaining debts
+                // Get all remaining net balances
                 const netBalances = await originalDebtService.getNetBalances(groupId);
 
-                // Generate optimal transfers with debt allocations
-                const transfers = await this.generateOptimalTransfers(groupId, netBalances);
+                // Get raw pairwise debts for strategy auto-detection (MinCostFlow vs Greedy)
+                const rawDebtDocs = await OriginalDebt.find({
+                    groupId,
+                    remainingAmount: { $gt: 0.01 }
+                });
+                const rawDebts: RawDebt[] = rawDebtDocs.map(d => ({
+                    debtorId: d.debtorId,
+                    creditorId: d.creditorId,
+                    remainingAmount: d.remainingAmount
+                }));
+
+                // Engine automatically selects Greedy or MinCostFlow, then allocates debts via FIFO
+                const transfers = await debtSettlementEngine.settle(groupId, netBalances, rawDebts);
 
                 if (transfers.length === 0) {
                     throw new Error('No transfers needed - all balances are settled');
@@ -174,117 +198,13 @@ export const paymentRequestService = {
             });
 
             // result is paymentRequestId
+            await invalidatePaymentRequestCache(groupId);
+            await invalidateRelatedInvoiceCache(groupId);
             return this.getPaymentRequestById(userId, groupId, result!);
         } finally {
             await session.endSession();
             await lock.release();
         }
-    },
-
-    /**
-     * Generate optimal transfers with debt allocations
-     * Uses greedy algorithm: match largest debtor with largest creditor
-     */
-    async generateOptimalTransfers(
-        groupId: string,
-        netBalances: Map<string, number>
-    ): Promise<TransferWithAllocation[]> {
-        // Separate debtors (negative balance) and creditors (positive balance)
-        const debtors: { userId: string; amount: number }[] = [];
-        const creditors: { userId: string; amount: number }[] = [];
-
-        for (const [userId, balance] of netBalances.entries()) {
-            if (balance < -0.01) {
-                debtors.push({ userId, amount: Math.abs(balance) });
-            } else if (balance > 0.01) {
-                creditors.push({ userId, amount: balance });
-            }
-        }
-
-        // Sort by amount descending
-        debtors.sort((a, b) => b.amount - a.amount);
-        creditors.sort((a, b) => b.amount - a.amount);
-
-        const transfers: TransferWithAllocation[] = [];
-        let di = 0, ci = 0;
-
-        while (di < debtors.length && ci < creditors.length) {
-            const debtor = debtors[di];
-            const creditor = creditors[ci];
-            const transferAmount = Math.min(debtor.amount, creditor.amount);
-
-            if (transferAmount > 0.01) {
-                // Get debt allocations for this transfer
-                const allocations = await this.allocateDebtsForTransfer(
-                    groupId,
-                    debtor.userId,
-                    creditor.userId,
-                    transferAmount
-                );
-
-                transfers.push({
-                    fromUserId: debtor.userId,
-                    toUserId: creditor.userId,
-                    amount: Math.round(transferAmount * 100) / 100,
-                    debtAllocations: allocations
-                });
-            }
-
-            debtor.amount -= transferAmount;
-            creditor.amount -= transferAmount;
-
-            if (debtor.amount < 0.01) di++;
-            if (creditor.amount < 0.01) ci++;
-        }
-
-        return transfers;
-    },
-
-    /**
-     * Allocate specific debts to a transfer (FIFO by creation date)
-     */
-    async allocateDebtsForTransfer(
-        groupId: string,
-        debtorId: string,
-        creditorId: string,
-        amount: number
-    ): Promise<{ originalDebtId: string; amount: number }[]> {
-        const debts = await OriginalDebt.find({
-            groupId,
-            debtorId,
-            creditorId,
-            remainingAmount: { $gt: 0.01 }
-        }).sort({ createdAt: 1 }); // FIFO
-
-        const allocations: { originalDebtId: string; amount: number }[] = [];
-        let remaining = amount;
-
-        for (const debt of debts) {
-            if (remaining <= 0.01) break;
-
-            const allocAmount = Math.min(remaining, debt.remainingAmount);
-            allocations.push({
-                originalDebtId: debt._id.toString(),
-                amount: Math.round(allocAmount * 100) / 100
-            });
-            remaining -= allocAmount;
-        }
-
-        // CRITICAL: Validate allocation is complete
-        if (remaining > 0.01) {
-            console.error('[ERROR] Insufficient debts to allocate:', {
-                groupId,
-                debtorId,
-                creditorId,
-                requestedAmount: amount,
-                allocatedAmount: amount - remaining,
-                shortfall: remaining,
-                allocations
-            });
-            throw new Error(`Cannot allocate ${amount} VND. Only ${amount - remaining} VND available in debts from ${debtorId} to ${creditorId}`);
-        }
-
-        return allocations;
     },
 
     /**
@@ -298,6 +218,12 @@ export const paymentRequestService = {
         const membership = await GroupMember.findOne({ groupId, userId, leftAt: null });
         if (!membership) {
             throw new Error('NOT_GROUP_MEMBER');
+        }
+
+        const cacheKey = paymentRequestDetailCacheKey(userId, groupId, requestId);
+        const cached = await getJsonCache<PaymentRequestDetailResponse>(cacheKey);
+        if (cached) {
+            return cached;
         }
 
         const request = await PaymentRequest.findOne({ _id: requestId, groupId });
@@ -347,7 +273,7 @@ export const paymentRequestService = {
             });
         }
 
-        return {
+        const response: PaymentRequestDetailResponse = {
             id: request._id.toString(),
             groupId: request.groupId,
             createdBy: creator ? transformUser(creator) : { id: request.createdBy, displayName: null, avatarUrl: null },
@@ -363,6 +289,9 @@ export const paymentRequestService = {
             userBreakdowns,
             transfers: transferSummaries
         };
+
+        await setJsonCache(cacheKey, response, PAYMENT_REQUEST_DETAIL_CACHE_TTL_SECONDS);
+        return response;
     },
 
     /**
@@ -374,9 +303,15 @@ export const paymentRequestService = {
             throw new Error('NOT_GROUP_MEMBER');
         }
 
+        const cacheKey = paymentRequestListCacheKey(userId, groupId);
+        const cached = await getJsonCache<PaymentRequestResponse[]>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const requests = await PaymentRequest.find({ groupId }).sort({ createdAt: -1 });
 
-        return Promise.all(requests.map(async (req) => {
+        const result = await Promise.all(requests.map(async (req) => {
             const creator = await User.findById(req.createdBy);
             const transfers = await Transfer.find({ paymentRequestId: req._id.toString() });
             const totalAmount = transfers.reduce((sum, t) => sum + t.amount, 0);
@@ -397,6 +332,9 @@ export const paymentRequestService = {
                 completedTransfers
             };
         }));
+
+        await setJsonCache(cacheKey, result, PAYMENT_REQUEST_LIST_CACHE_TTL_SECONDS);
+        return result;
     },
 
     /**
@@ -471,8 +409,8 @@ export const paymentRequestService = {
                     }
 
                     // Restore original debts from allocations
-                    const allocations = await TransferDebtAllocation.find({ 
-                        transferId: transfer._id.toString() 
+                    const allocations = await TransferDebtAllocation.find({
+                        transferId: transfer._id.toString()
                     }).session(session);
 
                     for (const alloc of allocations) {
@@ -583,6 +521,9 @@ export const paymentRequestService = {
             session.endSession();
         }
 
+        await invalidatePaymentRequestCache(groupId);
+        await invalidateRelatedInvoiceCache(groupId);
+
         return { refundedTransfers: refundedCount, cancelledTransfers: cancelledCount };
     },
 
@@ -598,8 +539,8 @@ export const paymentRequestService = {
         }
 
         // Only the debtor or group admin can cancel
-        const membership = await GroupMember.findOne({ 
-            groupId: transfer.groupId, userId, leftAt: null 
+        const membership = await GroupMember.findOne({
+            groupId: transfer.groupId, userId, leftAt: null
         });
         if (!membership) {
             throw new Error('NOT_GROUP_MEMBER');
@@ -639,6 +580,11 @@ export const paymentRequestService = {
      * Update request status based on transfer completions
      */
     async updateRequestStatus(requestId: string): Promise<void> {
+        const request = await PaymentRequest.findById(requestId);
+        if (!request) {
+            return;
+        }
+
         const transfers = await Transfer.find({ paymentRequestId: requestId });
         const activeTransfers = transfers.filter(t => t.status !== 'CANCELLED');
         const completedCount = activeTransfers.filter(t => t.status === 'COMPLETED').length;
@@ -666,8 +612,7 @@ export const paymentRequestService = {
         // Unlock invoices when request is terminal (PAID or CANCELLED)
         // so they can be used in a new payment request if needed
         if (newStatus === 'CANCELLED' || newStatus === 'PAID') {
-            const request = await PaymentRequest.findById(requestId);
-            if (request && request.invoiceIds && request.invoiceIds.length > 0) {
+            if (request.invoiceIds && request.invoiceIds.length > 0) {
                 await Invoice.updateMany(
                     { _id: { $in: request.invoiceIds } },
                     {
@@ -680,5 +625,7 @@ export const paymentRequestService = {
         }
 
         await PaymentRequest.findByIdAndUpdate(requestId, update);
+        await invalidatePaymentRequestCache(request.groupId);
+        await invalidateRelatedInvoiceCache(request.groupId);
     }
 };

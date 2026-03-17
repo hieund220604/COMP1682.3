@@ -17,12 +17,28 @@ import {
     InvoiceItemSplit
 } from '../type/invoice';
 import mongoose from 'mongoose';
+import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
 
 const transformUser = (user: any): UserSummary => ({
     id: user._id.toString(),
     displayName: user.displayName,
     avatarUrl: user.avatarUrl
 });
+
+const INVOICE_DETAIL_CACHE_TTL_SECONDS = 60;
+const INVOICE_LIST_CACHE_TTL_SECONDS = 45;
+
+function invoiceDetailCacheKey(userId: string, groupId: string, invoiceId: string): string {
+    return buildRedisKey('cache', 'invoice', groupId, 'detail', userId, invoiceId);
+}
+
+function invoiceListCacheKey(userId: string, groupId: string, status?: InvoiceStatus): string {
+    return buildRedisKey('cache', 'invoice', groupId, 'list', userId, status || 'ALL');
+}
+
+async function invalidateInvoiceCache(groupId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'invoice', groupId));
+}
 
 /**
  * Validate that splits data is consistent with the chosen splitType.
@@ -238,7 +254,7 @@ export const invoiceService = {
         // Send notifications to assigned users (after transaction completes)
         const uploader = await User.findById(userId);
         const uploaderName = uploader?.displayName || 'Someone';
-        
+
         // Notify all assigned users about the new invoice
         for (const assignedUserId of allAssignedUsers) {
             if (assignedUserId !== userId) { // Don't notify the uploader
@@ -257,6 +273,8 @@ export const invoiceService = {
             }
         }
 
+        await invalidateInvoiceCache(groupId);
+
         return this.getInvoiceById(userId, groupId, invoice._id.toString());
     },
 
@@ -268,6 +286,12 @@ export const invoiceService = {
         const membership = await GroupMember.findOne({ groupId, userId, leftAt: null });
         if (!membership) {
             throw new Error('NOT_GROUP_MEMBER');
+        }
+
+        const cacheKey = invoiceDetailCacheKey(userId, groupId, invoiceId);
+        const cached = await getJsonCache<InvoiceResponse>(cacheKey);
+        if (cached) {
+            return cached;
         }
 
         const invoice = await Invoice.findOne({ _id: invoiceId, groupId });
@@ -293,7 +317,7 @@ export const invoiceService = {
             })
         );
 
-        return {
+        const response: InvoiceResponse = {
             id: invoice._id.toString(),
             groupId: invoice.groupId,
             title: invoice.title,
@@ -315,6 +339,9 @@ export const invoiceService = {
             createdAt: invoice.createdAt,
             updatedAt: invoice.updatedAt
         };
+
+        await setJsonCache(cacheKey, response, INVOICE_DETAIL_CACHE_TTL_SECONDS);
+        return response;
     },
 
     /**
@@ -326,6 +353,12 @@ export const invoiceService = {
             throw new Error('NOT_GROUP_MEMBER');
         }
 
+        const cacheKey = invoiceListCacheKey(userId, groupId, status);
+        const cached = await getJsonCache<InvoiceResponse[]>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const query: any = { groupId };
         if (status) {
             query.status = status;
@@ -333,9 +366,12 @@ export const invoiceService = {
 
         const invoices = await Invoice.find(query).sort({ createdAt: -1 });
 
-        return Promise.all(
+        const result = await Promise.all(
             invoices.map(inv => this.getInvoiceById(userId, groupId, inv._id.toString()))
         );
+
+        await setJsonCache(cacheKey, result, INVOICE_LIST_CACHE_TTL_SECONDS);
+        return result;
     },
 
     /**
@@ -510,6 +546,8 @@ export const invoiceService = {
             session.endSession();
         }
 
+        await invalidateInvoiceCache(groupId);
+
         return this.getInvoiceById(userId, groupId, invoiceId);
     },
 
@@ -543,6 +581,8 @@ export const invoiceService = {
         } finally {
             session.endSession();
         }
+
+        await invalidateInvoiceCache(groupId);
     },
 
     /**
@@ -590,6 +630,8 @@ export const invoiceService = {
             isAdjustment: true,
             originalInvoiceId
         });
+
+        await invalidateInvoiceCache(groupId);
 
         return this.getInvoiceById(userId, groupId, result.id);
     }

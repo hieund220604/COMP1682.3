@@ -16,6 +16,7 @@ import { transactionService } from './transactionService';
 import { TransactionType } from '../type/transaction';
 import { notificationService } from './notificationService';
 import { NotificationType } from '../models/Notification';
+import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -45,6 +46,33 @@ function calculateNextBillingDate(fromDate: Date, cycle: BillingCycle): Date {
             break;
     }
     return next;
+}
+
+const SUBSCRIPTION_DETAIL_CACHE_TTL_SECONDS = 60;
+const SUBSCRIPTION_LIST_CACHE_TTL_SECONDS = 45;
+const SUBSCRIPTION_BILLING_HISTORY_TTL_SECONDS = 30;
+
+function subscriptionDetailCacheKey(userId: string, subscriptionId: string): string {
+    return buildRedisKey('cache', 'subscription', 'detail', subscriptionId, userId);
+}
+
+function subscriptionUserListCacheKey(userId: string): string {
+    return buildRedisKey('cache', 'subscription', 'user', userId, 'list');
+}
+
+function subscriptionBillingHistoryCacheKey(userId: string, subscriptionId: string): string {
+    return buildRedisKey('cache', 'subscription', 'billing_history', subscriptionId, userId);
+}
+
+async function invalidateSubscriptionCache(subscriptionId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'subscription', 'detail', subscriptionId));
+    await deleteKeysByPrefix(buildRedisKey('cache', 'subscription', 'billing_history', subscriptionId));
+
+    const members = await SubscriptionMember.find({ subscriptionId }).select('userId');
+    const userIds = [...new Set(members.map(m => m.userId))];
+    for (const userId of userIds) {
+        await deleteKeysByPrefix(subscriptionUserListCacheKey(userId));
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,12 +128,20 @@ export const subscriptionService = {
 
         await SubscriptionMember.insertMany(memberShares);
 
+        await invalidateSubscriptionCache(subscription._id.toString());
+
         return this.getSubscriptionById(userId, subscription._id.toString());
     },
 
     // ── READ ─────────────────────────────────────────────────────────────────
 
     async getSubscriptionById(userId: string, subscriptionId: string): Promise<SubscriptionResponse> {
+        const cacheKey = subscriptionDetailCacheKey(userId, subscriptionId);
+        const cached = await getJsonCache<SubscriptionResponse>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const subscription = await Subscription.findById(subscriptionId);
         if (!subscription) throw new Error('Subscription not found');
 
@@ -118,7 +154,7 @@ export const subscriptionService = {
         const group = await Group.findById(subscription.groupId).select('name');
         const creator = await User.findById(subscription.createdBy).select('displayName email');
 
-        return {
+        const response: SubscriptionResponse = {
             id: subscription._id.toString(),
             groupId: subscription.groupId,
             groupName: group?.name ?? 'Unknown Group',
@@ -145,9 +181,18 @@ export const subscriptionService = {
             })),
             memberCount: members.length
         };
+
+        await setJsonCache(cacheKey, response, SUBSCRIPTION_DETAIL_CACHE_TTL_SECONDS);
+        return response;
     },
 
     async getSubscriptionsForUser(userId: string): Promise<SubscriptionResponse[]> {
+        const cacheKey = subscriptionUserListCacheKey(userId);
+        const cached = await getJsonCache<SubscriptionResponse[]>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const memberSubscriptions = await SubscriptionMember.find({ userId, status: 'ACTIVE' });
         const subscriptionIds = memberSubscriptions.map(m => m.subscriptionId);
 
@@ -156,12 +201,20 @@ export const subscriptionService = {
             status: { $ne: SubscriptionStatus.CANCELLED }
         }).sort({ createdAt: -1 });
 
-        return Promise.all(subscriptions.map(s => this.getSubscriptionById(userId, s._id.toString())));
+        const result = await Promise.all(subscriptions.map(s => this.getSubscriptionById(userId, s._id.toString())));
+        await setJsonCache(cacheKey, result, SUBSCRIPTION_LIST_CACHE_TTL_SECONDS);
+        return result;
     },
 
     // ── GET BILLING HISTORY ──────────────────────────────────────────────────
 
     async getBillingHistory(userId: string, subscriptionId: string): Promise<any[]> {
+        const cacheKey = subscriptionBillingHistoryCacheKey(userId, subscriptionId);
+        const cached = await getJsonCache<any[]>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const subscription = await Subscription.findById(subscriptionId);
         if (!subscription) throw new Error('Subscription not found');
 
@@ -173,7 +226,7 @@ export const subscriptionService = {
             .sort({ billingDate: -1 })
             .limit(50);
 
-        return history.map(h => ({
+        const result = history.map(h => ({
             id: h._id.toString(),
             billingDate: h.billingDate,
             amount: h.amount,
@@ -185,6 +238,9 @@ export const subscriptionService = {
             failureReason: h.failureReason ?? undefined,
             memberResults: h.memberResults
         }));
+
+        await setJsonCache(cacheKey, result, SUBSCRIPTION_BILLING_HISTORY_TTL_SECONDS);
+        return result;
     },
 
     // ── CANCEL ───────────────────────────────────────────────────────────────
@@ -220,6 +276,8 @@ export const subscriptionService = {
                 { subscriptionId }
             );
         }
+
+        await invalidateSubscriptionCache(subscriptionId);
 
         return this.getSubscriptionById(userId, subscriptionId);
     },
@@ -282,6 +340,8 @@ export const subscriptionService = {
                 cancelledAt: new Date()
             });
         }
+
+        await invalidateSubscriptionCache(subscriptionId);
     },
 
     // ── PAUSE ────────────────────────────────────────────────────────────────
@@ -310,6 +370,8 @@ export const subscriptionService = {
         await Subscription.findByIdAndUpdate(subscriptionId, {
             status: SubscriptionStatus.PAUSED
         });
+
+        await invalidateSubscriptionCache(subscriptionId);
 
         return this.getSubscriptionById(userId, subscriptionId);
     },
@@ -349,6 +411,8 @@ export const subscriptionService = {
                 status: SubscriptionStatus.ACTIVE
             });
         }
+
+        await invalidateSubscriptionCache(subscriptionId);
 
         return this.getSubscriptionById(userId, subscriptionId);
     },
@@ -404,6 +468,7 @@ export const subscriptionService = {
         }
 
         await Subscription.findByIdAndUpdate(subscriptionId, updates);
+        await invalidateSubscriptionCache(subscriptionId);
         return this.getSubscriptionById(userId, subscriptionId);
     },
 
@@ -437,6 +502,7 @@ export const subscriptionService = {
 
             if (sub.status === SubscriptionStatus.PAST_DUE && sub.retryCount >= 3) {
                 await Subscription.findByIdAndUpdate(sub._id, { status: SubscriptionStatus.CANCELLED });
+                await invalidateSubscriptionCache(sub._id.toString());
                 continue;
             }
 
@@ -547,6 +613,8 @@ export const subscriptionService = {
                 });
                 result.autoCancelled = true;
             }
+
+            await invalidateSubscriptionCache(subscription._id.toString());
 
             // Log billing failure
             await BillingHistory.create({
@@ -677,6 +745,7 @@ export const subscriptionService = {
             lastBilledAt: new Date(),
             nextBillingDate: nextDate
         });
+        await invalidateSubscriptionCache(subscription._id.toString());
 
         // ── 5. SAVE BILLING HISTORY ───────────────────────────────────────────
         await BillingHistory.create({

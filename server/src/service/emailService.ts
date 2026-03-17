@@ -1,8 +1,76 @@
 
 import nodemailer from 'nodemailer';
+import { createHash } from 'crypto';
+import { buildRedisKey, getRedis } from '../redis';
 
-// Store OTP in memory (in production, use Redis or database)
+// In-memory fallback when Redis is unavailable.
 const otpStore = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+const OTP_TTL_SECONDS = 10 * 60;
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function otpRedisKey(email: string): string {
+  const emailHash = createHash('sha256').update(normalizeEmail(email)).digest('hex');
+  return buildRedisKey('otp', 'email', emailHash);
+}
+
+async function saveOtpRecord(email: string, record: { otp: string; expiresAt: number; attempts: number }): Promise<void> {
+  otpStore.set(normalizeEmail(email), record);
+
+  const redis = getRedis();
+  if (!redis) {
+    return;
+  }
+
+  try {
+    const ttlSeconds = Math.max(1, Math.ceil((record.expiresAt - Date.now()) / 1000));
+    if (ttlSeconds <= 0) {
+      await redis.del(otpRedisKey(email));
+      return;
+    }
+
+    await redis.set(otpRedisKey(email), JSON.stringify(record), 'EX', ttlSeconds);
+  } catch (error) {
+    console.error('Failed to save OTP to Redis, using memory fallback:', error);
+  }
+}
+
+async function getOtpRecord(email: string): Promise<{ otp: string; expiresAt: number; attempts: number } | null> {
+  const normalizedEmail = normalizeEmail(email);
+  const redis = getRedis();
+
+  if (redis) {
+    try {
+      const raw = await redis.get(otpRedisKey(normalizedEmail));
+      if (raw) {
+        const parsed = JSON.parse(raw) as { otp: string; expiresAt: number; attempts: number };
+        otpStore.set(normalizedEmail, parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.error('Failed to read OTP from Redis, using memory fallback:', error);
+    }
+  }
+
+  return otpStore.get(normalizedEmail) || null;
+}
+
+async function deleteOtpRecord(email: string): Promise<void> {
+  otpStore.delete(normalizeEmail(email));
+
+  const redis = getRedis();
+  if (!redis) {
+    return;
+  }
+
+  try {
+    await redis.del(otpRedisKey(email));
+  } catch (error) {
+    console.error('Failed to delete OTP from Redis:', error);
+  }
+}
 
 // Configure your email service here
 const transporter = nodemailer.createTransport({
@@ -40,9 +108,9 @@ export const emailService = {
    */
   async sendOTP(email: string): Promise<string> {
     const otp = generateOTP();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + OTP_TTL_SECONDS * 1000; // 10 minutes
 
-    otpStore.set(email, {
+    await saveOtpRecord(email, {
       otp,
       expiresAt,
       attempts: 0,
@@ -203,8 +271,8 @@ export const emailService = {
   /**
    * Verify OTP
    */
-  verifyOTP(email: string, otp: string): boolean {
-    const record = otpStore.get(email);
+  async verifyOTP(email: string, otp: string): Promise<boolean> {
+    const record = await getOtpRecord(email);
 
     if (!record) {
       return false;
@@ -212,7 +280,7 @@ export const emailService = {
 
     // Check if OTP is expired
     if (Date.now() > record.expiresAt) {
-      otpStore.delete(email);
+      await deleteOtpRecord(email);
       return false;
     }
 
@@ -222,16 +290,16 @@ export const emailService = {
 
       // Delete after 3 failed attempts
       if (record.attempts >= 3) {
-        otpStore.delete(email);
+        await deleteOtpRecord(email);
       } else {
-        otpStore.set(email, record);
+        await saveOtpRecord(email, record);
       }
 
       return false;
     }
 
     // OTP is valid, delete it
-    otpStore.delete(email);
+    await deleteOtpRecord(email);
     return true;
   },
 

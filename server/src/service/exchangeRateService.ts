@@ -4,6 +4,8 @@
  * Uses exchangerate-api.com free tier or fallback static rates
  */
 
+import { buildRedisKey, getRedis } from '../redis';
+
 // Static fallback rates (relative to VND)
 const STATIC_RATES_TO_VND: Record<string, number> = {
     'VND': 1,
@@ -29,6 +31,8 @@ const STATIC_RATES_TO_VND: Record<string, number> = {
 // Cache for API rates (TTL: 1 hour)
 let cachedRates: { rates: Record<string, number>; fetchedAt: number } | null = null;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL_SECONDS = 60 * 60;
+const RATES_CACHE_KEY = buildRedisKey('exchange', 'rates_to_vnd');
 
 export const exchangeRateService = {
     /**
@@ -90,6 +94,22 @@ export const exchangeRateService = {
             return cachedRates.rates;
         }
 
+        const redis = getRedis();
+        if (redis) {
+            try {
+                const raw = await redis.get(RATES_CACHE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw) as { rates: Record<string, number>; fetchedAt: number };
+                    if (parsed?.rates && parsed?.fetchedAt && (Date.now() - parsed.fetchedAt) < CACHE_TTL_MS) {
+                        cachedRates = parsed;
+                        return parsed.rates;
+                    }
+                }
+            } catch (error) {
+                console.error('[ExchangeRate] Failed to read Redis cache:', error);
+            }
+        }
+
         try {
             // Try fetching from exchangerate-api (free tier, no key needed for open endpoint)
             const response = await fetch('https://open.er-api.com/v6/latest/VND');
@@ -107,6 +127,11 @@ export const exchangeRateService = {
                 }
 
                 cachedRates = { rates: ratesToVND, fetchedAt: Date.now() };
+
+                if (redis) {
+                    await redis.set(RATES_CACHE_KEY, JSON.stringify(cachedRates), 'EX', CACHE_TTL_SECONDS);
+                }
+
                 return ratesToVND;
             }
         } catch (error) {
@@ -146,5 +171,10 @@ export const exchangeRateService = {
      */
     clearCache(): void {
         cachedRates = null;
+
+        const redis = getRedis();
+        if (redis) {
+            void redis.del(RATES_CACHE_KEY);
+        }
     }
 };

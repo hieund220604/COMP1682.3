@@ -1,17 +1,36 @@
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import { authController } from '../controller/authController';
 import { twoFactorController } from '../controller/twoFactorController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { createRateLimit } from '../middleware/rateLimitMiddleware';
 
 const router = Router();
+
+const otpEmailKey = (req: Request) => `${String(req.body?.email || 'unknown').trim().toLowerCase()}:${req.ip || 'unknown'}`;
+
+const resendOtpRateLimit = createRateLimit({
+    keyPrefix: 'otp:resend',
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 3,
+    message: 'Too many OTP resend requests. Please wait a few minutes.',
+    keyGenerator: otpEmailKey
+});
+
+const verifyOtpRateLimit = createRateLimit({
+    keyPrefix: 'otp:verify',
+    windowMs: 5 * 60 * 1000,
+    maxRequests: 8,
+    message: 'Too many OTP verify attempts. Please try again later.',
+    keyGenerator: otpEmailKey
+});
 
 router.post('/signup', authController.signUp);
 
 // Verify OTP and activate account
-router.post('/verify-otp', authController.verifyOTP);
+router.post('/verify-otp', verifyOtpRateLimit, authController.verifyOTP);
 
 // Resend OTP
-router.post('/resend-otp', authController.resendOTP);
+router.post('/resend-otp', resendOtpRateLimit, authController.resendOTP);
 
 // Login
 router.post('/login', authController.loginUser);
@@ -20,7 +39,7 @@ router.post('/login', authController.loginUser);
 router.post('/forgot-password', authController.forgotPassword);
 
 // Verify Reset OTP
-router.post('/verify-reset-otp', authController.verifyResetOTP);
+router.post('/verify-reset-otp', verifyOtpRateLimit, authController.verifyResetOTP);
 
 // Reset Password with Token (after OTP verified)
 router.post('/reset-password-token', authController.resetPasswordWithToken);

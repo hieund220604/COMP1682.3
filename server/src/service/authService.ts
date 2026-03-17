@@ -83,7 +83,7 @@ export const authService = {
         if (!user) {
             throw new Error('User not found');
         }
-        if (!emailService.verifyOTP(email, otp)) {
+        if (!(await emailService.verifyOTP(email, otp))) {
             throw new Error('Invalid or expired OTP');
         }
         user.status = 'active';
@@ -221,7 +221,7 @@ export const authService = {
         if (!user) {
             throw new Error('User not found');
         }
-        if (!emailService.verifyOTP(email, otp)) {
+        if (!(await emailService.verifyOTP(email, otp))) {
             throw new Error('Invalid or expired OTP');
         }
         // Generate a short-lived reset token
@@ -326,7 +326,7 @@ export const authService = {
         const user = await User.findById(userId);
         if (!user) throw new Error('User not found');
 
-        if (!emailService.verifyOTP(user.email, otp)) {
+        if (!(await emailService.verifyOTP(user.email, otp))) {
             throw new Error('Invalid or expired OTP');
         }
 

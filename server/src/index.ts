@@ -26,6 +26,7 @@ import invoiceRoutes from './route/invoiceRoutes';
 import paymentRequestRoutes from './route/paymentRequestRoutes';
 import transferRoutes from './route/transferRoutes';
 import exchangeRateRoutes from './route/exchangeRateRoutes';
+import { connectRedis, disconnectRedis } from './redis';
 
 const app = express();
 const httpServer = createServer(app);
@@ -158,6 +159,7 @@ import { startScheduler } from './scheduler';
 const startServer = async () => {
     try {
         await connectDB();
+        await connectRedis();
 
         // Initialize Firebase (optional - won't crash if not configured)
         initializeFirebase();
@@ -184,12 +186,14 @@ const startServer = async () => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\n✓ Shutting down gracefully...');
+    await disconnectRedis();
     await disconnectDB();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     console.log('\n✓ Shutting down gracefully...');
+    await disconnectRedis();
     await disconnectDB();
     process.exit(0);
 });
