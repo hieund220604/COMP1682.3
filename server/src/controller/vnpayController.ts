@@ -4,6 +4,37 @@ import { ResponseUtil } from '../util/responseUtil';
 import { CreatePaymentRequest, PaymentResponse } from '../type/vnpay';
 import { ApiResponse } from '../type/group';
 
+const normalizeIpAddress = (rawIp?: string): string => {
+    if (!rawIp) return '127.0.0.1';
+
+    const firstIp = rawIp.split(',')[0]?.trim() || rawIp.trim();
+    if (firstIp.startsWith('::ffff:')) {
+        return firstIp.replace('::ffff:', '');
+    }
+
+    return firstIp;
+};
+
+const resolveVNPayReturnUrl = () => {
+    const configuredUrl = process.env.VNPAY_RETURN_URL?.trim();
+    const fallbackLocalUrl = 'http://localhost:8080/api/payments/vnpay-return';
+
+    if (configuredUrl) {
+        try {
+            new URL(configuredUrl);
+            return configuredUrl;
+        } catch (_error) {
+            throw new Error('VNPAY_RETURN_URL is invalid. Please provide a valid absolute URL.');
+        }
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('VNPAY_RETURN_URL is required in production. This URL must be approved by VNPay merchant config.');
+    }
+
+    return fallbackLocalUrl;
+};
+
 export const vnpayController = {
     async createPayment(
         req: Request<{}, {}, { transferId: string }>,
@@ -20,11 +51,9 @@ export const vnpayController = {
                 return ResponseUtil.validationError(res, 'Transfer ID is required');
             }
 
-            // Get client IP
-            const ipAddr = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1';
-
-            // Get return URL from env
-            const returnUrl = process.env.VNPAY_RETURN_URL || 'http://localhost:8080/api/payments/vnpay-return';
+            // VNPay expects clean IP format and a stable callback URL.
+            const ipAddr = normalizeIpAddress(req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1');
+            const returnUrl = resolveVNPayReturnUrl();
 
             const payment = await vnpayService.createPaymentUrl(transferId, returnUrl, ipAddr);
             ResponseUtil.success(res, payment, 'Payment URL created successfully');
@@ -52,11 +81,9 @@ export const vnpayController = {
                 return ResponseUtil.validationError(res, 'Amount must be greater than 0');
             }
 
-            // Get client IP
-            const ipAddr = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1';
-
-            // Get return URL from env
-            const returnUrl = process.env.VNPAY_RETURN_URL || 'http://localhost:8080/api/payments/vnpay-return';
+            // VNPay expects clean IP format and a stable callback URL.
+            const ipAddr = normalizeIpAddress(req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1');
+            const returnUrl = resolveVNPayReturnUrl();
 
             // Create TopUp record with current user's ID
             const topUpId = await require('../service/accountService').accountService.createTopUp(req.user.userId, amount);

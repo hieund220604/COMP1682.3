@@ -1,10 +1,52 @@
-import { VNPay, ProductCode, VnpLocale, dateFormat, HashAlgorithm } from 'vnpay';
+import { VNPay, ProductCode, VnpLocale, HashAlgorithm } from 'vnpay';
 import { transferService } from './transferService';
 import { accountService } from './accountService';
-import { TransferStatus } from '../models/Transfer';
 import { PaymentResponse } from '../type/vnpay';
 import { Transfer } from '../models/Transfer';
 import { TopUp } from '../models/TopUp';
+
+const formatVNPayDate = (date: Date): string => {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+    });
+
+    const parts = formatter.formatToParts(date);
+    const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${partMap.year}${partMap.month}${partMap.day}${partMap.hour}${partMap.minute}${partMap.second}`;
+};
+
+const normalizeOrderInfo = (value: string): string => {
+    const withoutAccent = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normalized = withoutAccent
+        .replace(/[^a-zA-Z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return normalized.slice(0, 255) || 'Thanh toan don hang';
+};
+
+const resolveAmountForVNPay = (amount: number): number => {
+    const normalized = Math.round(amount * 100);
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+        throw new Error('Invalid payment amount');
+    }
+    if (normalized.toString().length > 12) {
+        throw new Error('Payment amount exceeds VNPay limit');
+    }
+    return normalized;
+};
+
+const buildTxnRef = (prefix: 'TR' | 'TU', sourceId: string): string => {
+    const suffix = sourceId.replace(/[^a-zA-Z0-9]/g, '').slice(-8) || `${prefix}X`;
+    return `${prefix}${Date.now()}${suffix}`.slice(0, 100);
+};
 
 // Initialize VNPay instance
 const vnpay = new VNPay({
@@ -28,18 +70,20 @@ export const vnpayService = {
             throw new Error('Transfer is not in pending status');
         }
 
-        const txnRef = `${transferId.substring(0, 8)}_${Date.now()}`;
-        const createDate = dateFormat(new Date());
+        const txnRef = buildTxnRef('TR', transferId);
+        const createDate = Number(formatVNPayDate(new Date()));
+        const expireDate = Number(formatVNPayDate(new Date(Date.now() + 15 * 60 * 1000)));
 
         const paymentUrl = vnpay.buildPaymentUrl({
-            vnp_Amount: transfer.amount * 100, // VNPay requires amount in smallest unit (VND * 100)
+            vnp_Amount: resolveAmountForVNPay(transfer.amount),
             vnp_IpAddr: ipAddr,
             vnp_TxnRef: txnRef,
-            vnp_OrderInfo: `Thanh toan transfer ${transferId}`,
+            vnp_OrderInfo: normalizeOrderInfo(`Thanh toan transfer ${transferId}`),
             vnp_OrderType: ProductCode.Other,
             vnp_ReturnUrl: returnUrl,
             vnp_Locale: VnpLocale.VN,
-            vnp_CreateDate: createDate
+            vnp_CreateDate: createDate,
+            vnp_ExpireDate: expireDate,
         });
 
         await Transfer.findByIdAndUpdate(transferId, { vnpayTxnRef: txnRef });
@@ -53,18 +97,20 @@ export const vnpayService = {
     },
 
     async createTopUpUrl(topUpId: string, amount: number, returnUrl: string, ipAddr: string): Promise<PaymentResponse> {
-        const txnRef = `TU_${topUpId.substring(0, 8)}_${Date.now()}`;
-        const createDate = dateFormat(new Date());
+        const txnRef = buildTxnRef('TU', topUpId);
+        const createDate = Number(formatVNPayDate(new Date()));
+        const expireDate = Number(formatVNPayDate(new Date(Date.now() + 15 * 60 * 1000)));
 
         const paymentUrl = vnpay.buildPaymentUrl({
-            vnp_Amount: amount * 100, // VNPay requires amount in smallest unit (VND * 100)
+            vnp_Amount: resolveAmountForVNPay(amount),
             vnp_IpAddr: ipAddr,
             vnp_TxnRef: txnRef,
-            vnp_OrderInfo: `Nap tien tai khoan ${topUpId}`,
+            vnp_OrderInfo: normalizeOrderInfo(`Nap tien tai khoan ${topUpId}`),
             vnp_OrderType: ProductCode.Other,
             vnp_ReturnUrl: returnUrl,
             vnp_Locale: VnpLocale.VN,
-            vnp_CreateDate: createDate
+            vnp_CreateDate: createDate,
+            vnp_ExpireDate: expireDate,
         });
 
         await TopUp.findByIdAndUpdate(topUpId, { vnpayTxnRef: txnRef });
@@ -91,7 +137,7 @@ export const vnpayService = {
 
             const txnRef = query.vnp_TxnRef;
 
-            if (txnRef.startsWith('TU_')) {
+            if (txnRef.startsWith('TU')) {
                 const topUp = await TopUp.findOne({ vnpayTxnRef: txnRef });
 
                 if (!topUp) {
@@ -138,7 +184,7 @@ export const vnpayService = {
             const txnRef = query.vnp_TxnRef;
             const vnpAmount = parseInt(query.vnp_Amount || '0') / 100;
 
-            if (txnRef.startsWith('TU_')) {
+            if (txnRef.startsWith('TU')) {
                 const topUp = await TopUp.findOne({ vnpayTxnRef: txnRef });
 
                 if (!topUp) {

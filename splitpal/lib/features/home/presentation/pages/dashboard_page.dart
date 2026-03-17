@@ -12,6 +12,7 @@ import '../../../../features/groups/presentation/pages/group_detail_page.dart';
 import '../../../../features/subscriptions/presentation/pages/subscription_detail_page.dart';
 import '../../../../features/home/presentation/pages/home_shell_page.dart';
 import '../../../../features/exchange/presentation/pages/currency_converter_page.dart';
+import 'wallet_operations_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -25,8 +26,8 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-       context.read<GroupProvider>().fetchGroupsAndInvites();
-       context.read<SubscriptionProvider>().fetchSubscriptions();
+      context.read<GroupProvider>().fetchGroupsAndInvites();
+      context.read<SubscriptionProvider>().fetchSubscriptions();
     });
   }
 
@@ -73,10 +74,7 @@ class _Header extends StatelessWidget {
   final ColorScheme colorScheme;
   final TextTheme textTheme;
 
-  const _Header({
-    required this.colorScheme,
-    required this.textTheme,
-  });
+  const _Header({required this.colorScheme, required this.textTheme});
 
   @override
   Widget build(BuildContext context) {
@@ -90,21 +88,19 @@ class _Header extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 28, // Slightly larger
-            backgroundImage: photoUrl != null 
-                ? NetworkImage(photoUrl) 
-                : null,
-                child: photoUrl == null ? const Icon(Icons.person) : null,
+            backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+            child: photoUrl == null ? const Icon(Icons.person) : null,
           ),
           const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hi $name', 
+                'Hi $name',
                 style: textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: colorScheme.onSurface 
-                )
+                  color: colorScheme.onSurface,
+                ),
               ),
             ],
           ),
@@ -142,7 +138,7 @@ class _WalletBalanceCard extends StatelessWidget {
             color: colorScheme.primary.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -150,7 +146,11 @@ class _WalletBalanceCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.account_balance_wallet, color: colorScheme.onPrimary.withOpacity(0.8), size: 20),
+              Icon(
+                Icons.account_balance_wallet,
+                color: colorScheme.onPrimary.withOpacity(0.8),
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Wallet Balance',
@@ -170,13 +170,45 @@ class _WalletBalanceCard extends StatelessWidget {
               fontSize: 32,
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const WalletOperationsPage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_card),
+                  label: const Text('Top up'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const WalletOperationsPage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.outbox_outlined),
+                  label: const Text('Withdraw'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
-
-
 
 class _SharedGroups extends StatelessWidget {
   const _SharedGroups();
@@ -199,84 +231,102 @@ class _SharedGroups extends StatelessWidget {
         const SizedBox(height: 8),
         SizedBox(
           height: 170,
-          child: groups.isEmpty 
-          ? const Center(child: Text('No active groups'))
-          : ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(right: 8),
-            itemBuilder: (context, index) {
-              final g = groups[index];
-              // Map dynamic data
-              final name = g['name'] ?? 'Group';
-              final membersCount = g['memberCount'] ?? (g['members'] as List?)?.length ?? 0;
-              final groupId = g['_id'] ?? g['id']; // Ensure ID is captured
-              
-              return GestureDetector(
-                onTap: () {
-                  if (groupId != null) {
-                    Navigator.push(
-                      context, 
-                      MaterialPageRoute(
-                        builder: (_) => GroupDetailPage(
-                          groupId: groupId, 
-                          groupName: name
-                        )
-                      )
-                    );
-                  }
-                },
-                child: Container(
-                  width: 180,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.15)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            height: 40,
-                            width: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
+          child: groups.isEmpty
+              ? const Center(child: Text('No active groups'))
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(right: 8),
+                  itemBuilder: (context, index) {
+                    final g = groups[index];
+                    // Map dynamic data
+                    final name = g['name'] ?? 'Group';
+                    final membersCount =
+                        g['memberCount'] ??
+                        (g['members'] as List?)?.length ??
+                        0;
+                    final groupId =
+                        g['_id'] ?? g['id']; // Ensure ID is captured
+
+                    return GestureDetector(
+                      onTap: () {
+                        if (groupId != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => GroupDetailPage(
+                                groupId: groupId,
+                                groupName: name,
+                              ),
                             ),
-                            child: const Icon(Icons.apartment, color: Colors.blue),
+                          );
+                        }
+                      },
+                      child: Container(
+                        width: 180,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).dividerColor.withOpacity(0.15),
                           ),
-                           const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
-                        ],
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  height: 40,
+                                  width: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.apartment,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.grey,
+                                  size: 14,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              name,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$membersCount members',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.grey),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      Text(
-                        name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$membersCount members',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemCount: groups.length,
                 ),
-              );
-            },
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemCount: groups.length,
-          ),
         ),
       ],
     );
@@ -291,8 +341,9 @@ class _SubscriptionForecastCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final subscriptions =
-        context.select((SubscriptionProvider p) => p.subscriptions);
+    final subscriptions = context.select(
+      (SubscriptionProvider p) => p.subscriptions,
+    );
     final isLoading = context.select((SubscriptionProvider p) => p.isLoading);
 
     final activeSubs = subscriptions
@@ -304,7 +355,7 @@ class _SubscriptionForecastCard extends StatelessWidget {
     final displayCurrency = hasSingleCurrency
         ? currencies.first
         : (context.select((AuthProvider p) => p.user?.currency) ??
-            AppConstants.defaultCurrency);
+              AppConstants.defaultCurrency);
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -409,8 +460,7 @@ class _SubscriptionForecastCard extends StatelessWidget {
                 children: List.generate(labels.length, (index) {
                   final v = values[index];
                   final double ratio = maxValue <= 0 ? 0.0 : (v / maxValue);
-                  final double barHeight =
-                      v == 0 ? 6.0 : (18.0 + ratio * 70.0);
+                  final double barHeight = v == 0 ? 6.0 : (18.0 + ratio * 70.0);
                   final color = scheme.primary.withOpacity(opacities[index]);
 
                   return Expanded(
@@ -476,24 +526,29 @@ class _UpcomingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subscriptions = context.select((SubscriptionProvider p) => p.subscriptions);
+    final subscriptions = context.select(
+      (SubscriptionProvider p) => p.subscriptions,
+    );
     final isLoading = context.select((SubscriptionProvider p) => p.isLoading);
 
     // Filter active subscriptions and sort by next billing date
-    final upcomingSubs = subscriptions
-        .where((sub) => sub.status == 'ACTIVE' || sub.status == 'PAST_DUE')
-        .toList()
-      ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    final upcomingSubs =
+        subscriptions
+            .where((sub) => sub.status == 'ACTIVE' || sub.status == 'PAST_DUE')
+            .toList()
+          ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
 
     return Column(
       children: [
         _SectionHeader(
           title: 'Upcoming',
           actionLabel: upcomingSubs.length > 2 ? 'See All' : null,
-          onAction: upcomingSubs.length > 2 ? () {
-            // Switch to Subscriptions tab (index 1)
-            SwitchTabNotification(1).dispatch(context);
-          } : null,
+          onAction: upcomingSubs.length > 2
+              ? () {
+                  // Switch to Subscriptions tab (index 1)
+                  SwitchTabNotification(1).dispatch(context);
+                }
+              : null,
         ),
         const SizedBox(height: 8),
         if (isLoading)
@@ -511,8 +566,8 @@ class _UpcomingList extends StatelessWidget {
               final now = DateTime.now();
               final daysUntil = sub.nextBillingDate.difference(now).inDays;
               final isDueSoon = daysUntil <= 3;
-              final statusText = sub.status == 'PAST_DUE' 
-                  ? 'Overdue' 
+              final statusText = sub.status == 'PAST_DUE'
+                  ? 'Overdue'
                   : (isDueSoon ? 'Due soon' : 'Auto-pay');
 
               return GestureDetector(
@@ -520,7 +575,8 @@ class _UpcomingList extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => SubscriptionDetailPage(subscriptionId: sub.id),
+                      builder: (_) =>
+                          SubscriptionDetailPage(subscriptionId: sub.id),
                     ),
                   );
                 },
@@ -530,7 +586,9 @@ class _UpcomingList extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.12)),
+                    border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.12),
+                    ),
                     boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
@@ -553,11 +611,18 @@ class _UpcomingList extends StatelessWidget {
                           children: [
                             Text(
                               DateFormat('MMM').format(sub.nextBillingDate),
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
                             ),
                             Text(
                               DateFormat('dd').format(sub.nextBillingDate),
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ],
                         ),
@@ -569,14 +634,16 @@ class _UpcomingList extends StatelessWidget {
                           children: [
                             Text(
                               sub.name,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
                               sub.description ?? sub.groupName ?? '',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.grey),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -588,16 +655,19 @@ class _UpcomingList extends StatelessWidget {
                         children: [
                           Text(
                             '${sub.currency} ${sub.amount.toStringAsFixed(0)}',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           Text(
                             statusText,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: sub.status == 'PAST_DUE' 
-                                  ? Colors.red 
-                                  : (isDueSoon ? Theme.of(context).colorScheme.primary : Colors.grey),
+                              color: sub.status == 'PAST_DUE'
+                                  ? Colors.red
+                                  : (isDueSoon
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey),
                             ),
                           ),
                         ],
@@ -607,15 +677,23 @@ class _UpcomingList extends StatelessWidget {
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: sub.status == 'PAST_DUE' 
-                              ? Colors.red 
-                              : (isDueSoon ? Theme.of(context).colorScheme.primary : Colors.grey),
+                          color: sub.status == 'PAST_DUE'
+                              ? Colors.red
+                              : (isDueSoon
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: (sub.status == 'PAST_DUE' ? Colors.red : Theme.of(context).colorScheme.primary).withOpacity(0.4),
+                              color:
+                                  (sub.status == 'PAST_DUE'
+                                          ? Colors.red
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary)
+                                      .withOpacity(0.4),
                               blurRadius: 8,
-                            )
+                            ),
                           ],
                         ),
                       ),
@@ -629,7 +707,6 @@ class _UpcomingList extends StatelessWidget {
     );
   }
 }
-
 
 class _SectionHeader extends StatelessWidget {
   final String title;
@@ -651,7 +728,9 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         action ??
             (actionLabel != null
@@ -690,10 +769,7 @@ class _CurrencyConverterCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Colors.teal.shade400,
-              Colors.teal.shade600,
-            ],
+            colors: [Colors.teal.shade400, Colors.teal.shade600],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
