@@ -25,17 +25,28 @@ class HomeShellPage extends StatefulWidget {
 
 class _HomeShellPageState extends State<HomeShellPage> {
   int _index = 0;
+  final List<int> _tabRefreshTokens = List<int>.filled(5, 0);
 
-  late final List<Widget> _pages = [
-    const DashboardPage(),
-    const SubscriptionsPage(),
-    const GroupsPage(),
-    const NotificationsPage(),
-    const ProfilePage(),
-  ];
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return DashboardPage(key: ValueKey('dashboard-${_tabRefreshTokens[0]}'));
+      case 1:
+        return SubscriptionsPage(key: ValueKey('subscriptions-${_tabRefreshTokens[1]}'));
+      case 2:
+        return GroupsPage(key: ValueKey('groups-${_tabRefreshTokens[2]}'));
+      case 3:
+        return NotificationsPage(key: ValueKey('notifications-${_tabRefreshTokens[3]}'));
+      default:
+        return ProfilePage(key: ValueKey('profile-${_tabRefreshTokens[4]}'));
+    }
+  }
 
   void _onTap(int i) {
-    setState(() => _index = i);
+    setState(() {
+      _index = i;
+      _tabRefreshTokens[i] += 1;
+    });
   }
 
   @override
@@ -46,7 +57,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
         return true;
       },
       child: Scaffold(
-        body: _pages[_index],
+        body: _buildPage(_index),
         bottomNavigationBar: _BottomNavBar(
           current: _index,
           onTap: _onTap,

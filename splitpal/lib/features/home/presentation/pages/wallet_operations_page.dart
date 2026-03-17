@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/di/injection_container.dart' as di;
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -16,7 +17,8 @@ class WalletOperationsPage extends StatefulWidget {
   State<WalletOperationsPage> createState() => _WalletOperationsPageState();
 }
 
-class _WalletOperationsPageState extends State<WalletOperationsPage> {
+class _WalletOperationsPageState extends State<WalletOperationsPage>
+  with WidgetsBindingObserver, RouteAware {
   final _topUpAmountController = TextEditingController();
 
   final _withdrawAmountController = TextEditingController();
@@ -31,20 +33,66 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
   bool _isOtpVerifying = false;
   bool _isOtpResending = false;
   bool _isHistoryLoading = false;
+  bool _awaitingVnpayCompletion = false;
+  bool _isPollingTopUpResult = false;
+
+  double? _topUpBalanceBefore;
+  double? _pendingTopUpAmount;
 
   String? _activeWithdrawalId;
   List<Map<String, dynamic>> _withdrawalHistory = const [];
+  ModalRoute<dynamic>? _route;
 
   DioClient get _dioClient => di.sl<DioClient>();
 
   @override
   void initState() {
     super.initState();
-    _loadWithdrawalHistory();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshData());
+  }
+
+  Future<void> _refreshData() async {
+    await context.read<AuthProvider>().getCurrentUser();
+    if (!mounted) return;
+    await _loadWithdrawalHistory();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPush() {
+    _refreshData();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshData();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingVnpayCompletion) {
+      _awaitingVnpayCompletion = false;
+      _pollTopUpResultAfterResume();
+    }
   }
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _topUpAmountController.dispose();
     _withdrawAmountController.dispose();
     _withdrawAccountNumberController.dispose();
@@ -83,6 +131,8 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
       return;
     }
 
+    final currentBalance = context.read<AuthProvider>().user?.balance ?? 0;
+
     setState(() => _isTopUpLoading = true);
     try {
       final response = await _dioClient.post(
@@ -119,6 +169,9 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
       }
 
       if (mounted) {
+        _awaitingVnpayCompletion = true;
+        _topUpBalanceBefore = currentBalance.toDouble();
+        _pendingTopUpAmount = amount;
         _showSnackBar('VNPay page opened. Complete payment to finish top-up.');
       }
     } catch (e) {
@@ -130,6 +183,45 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
       if (mounted) {
         setState(() => _isTopUpLoading = false);
       }
+    }
+  }
+
+  Future<void> _pollTopUpResultAfterResume() async {
+    if (_isPollingTopUpResult) return;
+
+    final amount = _pendingTopUpAmount;
+    final balanceBefore = _topUpBalanceBefore;
+    if (amount == null || balanceBefore == null) {
+      return;
+    }
+
+    _isPollingTopUpResult = true;
+    try {
+      final authProvider = context.read<AuthProvider>();
+      const maxAttempts = 10;
+      for (var attempt = 0; attempt < maxAttempts && mounted; attempt++) {
+        await authProvider.getCurrentUser();
+        if (!mounted) return;
+
+        final latestBalance = authProvider.user?.balance.toDouble() ?? 0;
+
+        if (latestBalance >= (balanceBefore + amount - 0.01)) {
+          _pendingTopUpAmount = null;
+          _topUpBalanceBefore = null;
+          _showSnackBar('Top-up successful. Your balance has been updated.');
+          return;
+        }
+
+        await Future.delayed(const Duration(seconds: 3));
+      }
+
+      if (mounted) {
+        _showSnackBar(
+          'Payment is being processed. Please pull to refresh in a few seconds.',
+        );
+      }
+    } finally {
+      _isPollingTopUpResult = false;
     }
   }
 
@@ -202,6 +294,7 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
   Future<void> _verifyWithdrawalOtp() async {
     final withdrawalId = _activeWithdrawalId;
     final otp = _withdrawOtpController.text.trim();
+    final authProvider = context.read<AuthProvider>();
 
     if (withdrawalId == null || withdrawalId.isEmpty) {
       _showSnackBar('No active withdrawal to verify.', isError: true);
@@ -224,7 +317,8 @@ class _WalletOperationsPageState extends State<WalletOperationsPage> {
       _withdrawOtpController.clear();
       setState(() => _activeWithdrawalId = null);
 
-      await context.read<AuthProvider>().getCurrentUser();
+      await authProvider.getCurrentUser();
+      if (!mounted) return;
       await _loadWithdrawalHistory();
     } catch (e) {
       _showSnackBar(

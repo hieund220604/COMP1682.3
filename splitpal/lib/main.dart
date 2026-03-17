@@ -8,6 +8,7 @@ import 'core/network/socket_client.dart';
 import 'core/config/gemini_config.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/notification_replay_service.dart';
+import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
@@ -216,6 +217,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       title: 'SplitPal',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      navigatorObservers: [appRouteObserver],
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
           if (authProvider.state == AuthState.initial ||

@@ -4,7 +4,7 @@ class ApiConstants {
   // NOTE: The Node server in this repo listens on port 8080 (see server/.env).
   // The Android emulator reaches the host via 10.0.2.2, so we point to 8080 here
   // to avoid connection timeouts when calling the backend from the app.
-  static const String baseUrl = 'http://10.0.2.2:8080';
+  static const String baseUrl = 'http://192.168.102.36:8080';
   static const String apiPrefix = '/api';
   static const String apiBaseUrl = '$baseUrl$apiPrefix';
 
@@ -76,8 +76,6 @@ class ApiConstants {
   // Account Endpoints
   static const String accountBalance = '/accounts/balance';
   static const String accountTopUp = '/accounts/top-up';
-  static String completeTopUp(String topUpId) =>
-      '/accounts/top-up/$topUpId/complete';
 
   // VNPay Endpoints
   static const String vnpayPayment = '/payments';

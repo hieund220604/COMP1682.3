@@ -13,9 +13,6 @@ router.get('/balance', accountController.getBalance);
 // Initiate Top-Up
 router.post('/top-up', accountController.initiateTopUp);
 
-// Complete Top-Up
-router.post('/top-up/:topUpId/complete', accountController.completeTopUp);
-
 // FCM Token Management
 router.put('/fcm-token', accountController.updateFcmToken);
 router.delete('/fcm-token', accountController.deleteFcmToken);

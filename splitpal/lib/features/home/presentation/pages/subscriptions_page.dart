@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:splitpal/core/navigation/app_route_observer.dart';
 import 'package:splitpal/features/groups/presentation/providers/group_provider.dart';
 import 'package:splitpal/features/subscriptions/domain/entities/subscription.dart';
 import 'package:splitpal/features/subscriptions/presentation/providers/subscription_provider.dart';
@@ -12,13 +13,46 @@ class SubscriptionsPage extends StatefulWidget {
   State<SubscriptionsPage> createState() => _SubscriptionsPageState();
 }
 
-class _SubscriptionsPageState extends State<SubscriptionsPage> {
+class _SubscriptionsPageState extends State<SubscriptionsPage> with RouteAware {
+  ModalRoute<dynamic>? _route;
+
+  Future<void> _refreshData() async {
+    await context.read<SubscriptionProvider>().fetchSubscriptions();
+  }
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => context.read<SubscriptionProvider>().fetchSubscriptions(),
-    );
+    Future.microtask(_refreshData);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPush() {
+    _refreshData();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshData();
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
   }
 
   Future<void> _processCharges() async {

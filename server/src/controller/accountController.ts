@@ -2,9 +2,46 @@ import { Request, Response } from 'express';
 import { accountService } from '../service/accountService';
 import { vnpayService } from '../service/vnpayService';
 import { ResponseUtil } from '../util/responseUtil';
-import { CreateTopUpRequest, TopUpResponse, TopUpStatus } from '../type/account';
+import { TopUpResponse, TopUpStatus } from '../type/account';
 import { ApiResponse } from '../type/group';
 import { User } from '../models/User';
+
+const normalizeIpAddress = (rawIp?: string): string => {
+    if (!rawIp) return '127.0.0.1';
+
+    const firstIp = rawIp.split(',')[0]?.trim() || rawIp.trim();
+    if (firstIp.startsWith('::ffff:')) {
+        return firstIp.replace('::ffff:', '');
+    }
+
+    return firstIp;
+};
+
+const resolveVNPayReturnUrl = () => {
+    const configuredUrl = process.env.VNPAY_RETURN_URL?.trim();
+
+    if (!configuredUrl) {
+        throw new Error('VNPAY_RETURN_URL is required. This must be the approved URL in your VNPay merchant configuration.');
+    }
+
+    let parsed: URL;
+    try {
+        parsed = new URL(configuredUrl);
+    } catch (_error) {
+        throw new Error('VNPAY_RETURN_URL is invalid. Please provide a valid absolute URL.');
+    }
+
+    const isLocalHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (isLocalHost && process.env.VNPAY_ALLOW_LOCAL_RETURN_URL !== 'true') {
+        throw new Error('VNPAY_RETURN_URL is localhost, which is typically not approved by VNPay. Use a public HTTPS domain (or tunnel) and register it with VNPay.');
+    }
+
+    if (parsed.hostname.includes('vnpayment.vn')) {
+        throw new Error('VNPAY_RETURN_URL must be your merchant callback URL, not a VNPay URL. Example: https://your-domain/api/payments/vnpay-return');
+    }
+
+    return configuredUrl;
+};
 
 export const accountController = {
     async getBalance(
@@ -46,12 +83,8 @@ export const accountController = {
                 return ResponseUtil.validationError(res, 'Amount must be greater than 0');
             }
 
-            // Get client IP
-            const ipAddr = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1';
-
-            // Auto-generate returnUrl from environment or use default
-            const baseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-            const returnUrl = `${baseUrl}/topup/return`;
+            const ipAddr = normalizeIpAddress(req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1');
+            const returnUrl = resolveVNPayReturnUrl();
 
             // Create pending top-up record
             const topUpId = await accountService.createTopUp(req.user.userId, amount);
@@ -78,20 +111,11 @@ export const accountController = {
         res: Response
     ): Promise<void> {
         try {
-            if (!req.user) {
-                return ResponseUtil.unauthorized(res);
-            }
-
-            const { topUpId } = req.params;
-            const { vnpayTxnRef } = req.body;
-
-            if (!vnpayTxnRef) {
-                return ResponseUtil.validationError(res, 'VNPay transaction reference is required');
-            }
-
-            const result = await accountService.completeTopUp(topUpId, vnpayTxnRef);
-
-            ResponseUtil.success(res, result, 'Top-up completed successfully');
+            ResponseUtil.error(
+                res,
+                'Deprecated endpoint. Top-up completion is now handled by VNPay IPN only.',
+                410
+            );
 
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to complete top-up');

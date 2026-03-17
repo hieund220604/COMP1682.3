@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
 import '../../../../features/groups/presentation/providers/group_provider.dart';
@@ -21,14 +22,52 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with RouteAware {
+  ModalRoute<dynamic>? _route;
+
+  Future<void> _refreshData() async {
+    await context.read<AuthProvider>().getCurrentUser();
+    if (!mounted) return;
+
+    await Future.wait([
+      context.read<GroupProvider>().fetchGroupsAndInvites(),
+      context.read<SubscriptionProvider>().fetchSubscriptions(),
+    ]);
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GroupProvider>().fetchGroupsAndInvites();
-      context.read<SubscriptionProvider>().fetchSubscriptions();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshData());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPush() {
+    _refreshData();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshData();
+  }
+
+  @override
+  void dispose() {
+    appRouteObserver.unsubscribe(this);
+    super.dispose();
   }
 
   @override

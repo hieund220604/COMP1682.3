@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/icons/app_icons.dart';
+import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_empty_state.dart';
@@ -19,20 +20,47 @@ class GroupsPage extends StatefulWidget {
   State<GroupsPage> createState() => _GroupsPageState();
 }
 
-class _GroupsPageState extends State<GroupsPage> {
+class _GroupsPageState extends State<GroupsPage> with RouteAware {
   final TextEditingController _searchController = TextEditingController();
   bool _showInvites = true;
+  ModalRoute<dynamic>? _route;
+
+  Future<void> _refreshData() async {
+    await context.read<GroupProvider>().fetchGroupsAndInvites();
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GroupProvider>().fetchGroupsAndInvites();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshData());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPush() {
+    _refreshData();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshData();
   }
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _searchController.dispose();
     super.dispose();
   }

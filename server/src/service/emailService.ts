@@ -1,5 +1,5 @@
 
-import nodemailer from 'nodemailer';
+import nodemailer, { SendMailOptions } from 'nodemailer';
 import { createHash } from 'crypto';
 import { buildRedisKey, getRedis } from '../redis';
 
@@ -72,31 +72,59 @@ async function deleteOtpRecord(email: string): Promise<void> {
   }
 }
 
-// Configure your email service here
-const transporter = nodemailer.createTransport({
-  // For Gmail:
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || 'your-app-password',
-  },
-  // host: process.env.EMAIL_HOST,
-  // port: parseInt(process.env.EMAIL_PORT || '587'),
-  // secure: process.env.EMAIL_SECURE === 'true',
-  // auth: {
-  //   user: process.env.EMAIL_USER,
-  //   pass: process.env.EMAIL_PASSWORD,
-  // },
-});
+const emailUser = process.env.EMAIL_USER?.trim();
+const emailPassword = process.env.EMAIL_PASSWORD?.replace(/\s+/g, '');
+const emailFrom = process.env.EMAIL_FROM?.trim() || emailUser;
+const emailHost = process.env.EMAIL_HOST?.trim() || 'smtp.gmail.com';
+const emailPort = Number(process.env.EMAIL_PORT || 465);
+const emailSecure = process.env.EMAIL_SECURE
+  ? process.env.EMAIL_SECURE === 'true'
+  : emailPort === 465;
 
-// Verify connection configuration
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error('Email service incorrect configuration:', error);
-  } else {
-    console.log('Server is ready to take our messages. Email configured: ' + (process.env.EMAIL_USER ? 'Yes' : 'No'));
+const emailConfigured = Boolean(emailUser && emailPassword);
+
+const transportOptions = emailConfigured
+  ? {
+      host: emailHost,
+      port: emailPort,
+      secure: emailSecure,
+      auth: {
+        user: emailUser,
+        pass: emailPassword,
+      },
+    }
+  : {
+      jsonTransport: true,
+    };
+
+const transporter = nodemailer.createTransport(transportOptions as any);
+
+if (emailConfigured) {
+  transporter.verify((error) => {
+    if (error) {
+      console.error('Email service incorrect configuration:', error);
+    } else {
+      console.log(`Email service ready via ${emailHost}:${emailPort}`);
+    }
+  });
+} else {
+  console.warn('Email service disabled: missing EMAIL_USER or EMAIL_PASSWORD. OTP emails will not be delivered.');
+}
+
+async function sendMail(options: SendMailOptions): Promise<void> {
+  if (!emailConfigured) {
+    throw new Error('Email service is not configured. Set EMAIL_USER and EMAIL_PASSWORD (Gmail app password).');
   }
-});
+
+  try {
+    await transporter.sendMail(options);
+  } catch (error: any) {
+    if (error?.code === 'EAUTH') {
+      throw new Error('Email login failed (EAUTH). Verify EMAIL_USER and Gmail App Password (16 chars, no spaces).');
+    }
+    throw error;
+  }
+}
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -119,8 +147,8 @@ export const emailService = {
     // Log OTP to console for development/testing
     console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    await sendMail({
+      from: emailFrom,
       to: email,
       subject: '🔐 Your Verification Code - SplitPal',
       html: `
@@ -203,8 +231,8 @@ export const emailService = {
     // Log OTP to console for development/testing
     console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    await sendMail({
+      from: emailFrom,
       to: email,
       subject: '🔐 Your Verification Code - SplitPal',
       html: `
@@ -311,8 +339,8 @@ export const emailService = {
 
 
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      await sendMail({
+        from: emailFrom,
         to: email,
         subject: '🔑 Reset Your Password - SplitPal',
         html: `
@@ -413,8 +441,8 @@ export const emailService = {
    */
   async sendWelcomeEmail(email: string, displayName?: string): Promise<void> {
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      await sendMail({
+        from: emailFrom,
         to: email,
         subject: 'Welcome to SplitPal',
         html: `
@@ -434,8 +462,8 @@ export const emailService = {
 
   async sendNotificationEmail(email: string, displayName: string, title: string, message: string): Promise<void> {
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      await sendMail({
+        from: emailFrom,
         to: email,
         subject: `🔔 ${title} - SplitPal`,
         html: `<html><body style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;"><h2>Hi ${displayName},</h2><h3 style="color: #667eea;">${title}</h3><p>${message}</p><p style="color: #666; font-size: 14px;">Log in to SplitPal to view more details.</p><hr><p style="color: #999; font-size: 12px;">SplitPal</p></body></html>`
@@ -452,8 +480,8 @@ export const emailService = {
         console.error("EMAIL_USER not configured");
         return;
       }
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      await sendMail({
+        from: emailFrom,
         to: recipient,
         replyTo: fromEmail,
         subject: `[Contact Us] ${subject}`,
