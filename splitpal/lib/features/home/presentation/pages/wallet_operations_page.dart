@@ -9,6 +9,7 @@ import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import 'home_shell_page.dart';
 
 class WalletOperationsPage extends StatefulWidget {
   const WalletOperationsPage({super.key});
@@ -18,13 +19,17 @@ class WalletOperationsPage extends StatefulWidget {
 }
 
 class _WalletOperationsPageState extends State<WalletOperationsPage>
-  with WidgetsBindingObserver, RouteAware {
+    with WidgetsBindingObserver, RouteAware {
+  static const _withdrawalBank = _PinnedWithdrawalBank(
+    bankName: 'NCB',
+    accountNumber: '9704198526191432198',
+    accountName: 'NGUYEN VAN A',
+    issueDate: '07/15',
+  );
+
   final _topUpAmountController = TextEditingController();
 
   final _withdrawAmountController = TextEditingController();
-  final _withdrawAccountNumberController = TextEditingController();
-  final _withdrawBankNameController = TextEditingController();
-  final _withdrawAccountNameController = TextEditingController();
   final _withdrawTotpController = TextEditingController();
   final _withdrawOtpController = TextEditingController();
 
@@ -32,7 +37,6 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   bool _isWithdrawalLoading = false;
   bool _isOtpVerifying = false;
   bool _isOtpResending = false;
-  bool _isHistoryLoading = false;
   bool _awaitingVnpayCompletion = false;
   bool _isPollingTopUpResult = false;
 
@@ -40,7 +44,6 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   double? _pendingTopUpAmount;
 
   String? _activeWithdrawalId;
-  List<Map<String, dynamic>> _withdrawalHistory = const [];
   ModalRoute<dynamic>? _route;
 
   DioClient get _dioClient => di.sl<DioClient>();
@@ -53,9 +56,7 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   }
 
   Future<void> _refreshData() async {
-    await context.read<AuthProvider>().getCurrentUser();
-    if (!mounted) return;
-    await _loadWithdrawalHistory();
+    await context.read<AuthProvider>().getCurrentUser(silent: true);
   }
 
   @override
@@ -95,33 +96,9 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
     WidgetsBinding.instance.removeObserver(this);
     _topUpAmountController.dispose();
     _withdrawAmountController.dispose();
-    _withdrawAccountNumberController.dispose();
-    _withdrawBankNameController.dispose();
-    _withdrawAccountNameController.dispose();
     _withdrawTotpController.dispose();
     _withdrawOtpController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadWithdrawalHistory() async {
-    setState(() => _isHistoryLoading = true);
-    try {
-      final response = await _dioClient.get(ApiConstants.withdrawals);
-      final raw = response.data['data'];
-      final list = raw is List ? raw : <dynamic>[];
-      setState(() {
-        _withdrawalHistory = list
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
-      });
-    } catch (_) {
-      // Keep history panel silent on errors to avoid blocking core flows.
-    } finally {
-      if (mounted) {
-        setState(() => _isHistoryLoading = false);
-      }
-    }
   }
 
   Future<void> _startTopUp() async {
@@ -200,7 +177,7 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
       final authProvider = context.read<AuthProvider>();
       const maxAttempts = 10;
       for (var attempt = 0; attempt < maxAttempts && mounted; attempt++) {
-        await authProvider.getCurrentUser();
+        await authProvider.getCurrentUser(silent: true);
         if (!mounted) return;
 
         final latestBalance = authProvider.user?.balance.toDouble() ?? 0;
@@ -209,6 +186,12 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
           _pendingTopUpAmount = null;
           _topUpBalanceBefore = null;
           _showSnackBar('Top-up successful. Your balance has been updated.');
+          if (mounted) {
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              HomeShellPage.routeName,
+              (route) => false,
+            );
+          }
           return;
         }
 
@@ -232,25 +215,18 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
       return;
     }
 
-    final accountNumber = _withdrawAccountNumberController.text.trim();
-    final bankName = _withdrawBankNameController.text.trim();
-    final accountName = _withdrawAccountNameController.text.trim();
-
-    if (accountNumber.isEmpty || bankName.isEmpty || accountName.isEmpty) {
-      _showSnackBar('Please fill all withdrawal bank fields.', isError: true);
+    final requiresTotp =
+        context.read<AuthProvider>().user?.twoFactorEnabled ?? false;
+    final totpToken = _withdrawTotpController.text.trim();
+    if (requiresTotp && totpToken.isEmpty) {
+      _showSnackBar('Enter your 2FA code to continue.', isError: true);
       return;
     }
 
     setState(() => _isWithdrawalLoading = true);
     try {
-      final payload = <String, dynamic>{
-        'amount': amount,
-        'accountNumber': accountNumber,
-        'bankName': bankName,
-        'accountName': accountName,
-      };
+      final payload = <String, dynamic>{'amount': amount};
 
-      final totpToken = _withdrawTotpController.text.trim();
       if (totpToken.isNotEmpty) {
         payload['totpToken'] = totpToken;
       }
@@ -277,13 +253,21 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
         _activeWithdrawalId = withdrawalId;
       });
 
+      _withdrawOtpController.clear();
       _showSnackBar('OTP has been sent. Please verify to complete withdrawal.');
-      await _loadWithdrawalHistory();
     } catch (e) {
-      _showSnackBar(
-        _errorText(e, fallback: 'Failed to initiate withdrawal.'),
-        isError: true,
+      final errorText = _errorText(
+        e,
+        fallback: 'Failed to initiate withdrawal.',
       );
+      if (errorText.contains('Two-factor authentication required')) {
+        _showSnackBar(
+          'This account requires 2FA. Enter your authenticator code and try again.',
+          isError: true,
+        );
+        return;
+      }
+      _showSnackBar(errorText, isError: true);
     } finally {
       if (mounted) {
         setState(() => _isWithdrawalLoading = false);
@@ -317,9 +301,13 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
       _withdrawOtpController.clear();
       setState(() => _activeWithdrawalId = null);
 
-      await authProvider.getCurrentUser();
-      if (!mounted) return;
-      await _loadWithdrawalHistory();
+      await authProvider.getCurrentUser(silent: true);
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          HomeShellPage.routeName,
+          (route) => false,
+        );
+      }
     } catch (e) {
       _showSnackBar(
         _errorText(e, fallback: 'OTP verification failed.'),
@@ -409,13 +397,13 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
     final user = context.watch<AuthProvider>().user;
     final currency = user?.currency ?? 'VND';
     final balance = user?.balance ?? 0;
+    final requiresTotp = user?.twoFactorEnabled ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Wallet Operations')),
       body: RefreshIndicator(
         onRefresh: () async {
-          await context.read<AuthProvider>().getCurrentUser();
-          await _loadWithdrawalHistory();
+          await context.read<AuthProvider>().getCurrentUser(silent: true);
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -470,10 +458,14 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
             ),
             const SizedBox(height: 12),
             _SectionCard(
-              title: 'Withdraw to Bank',
-              subtitle: 'Request withdrawal then verify OTP from email.',
+              title: 'Withdraw to NCB',
+              subtitle:
+                  'Withdrawals are sent only to the configured NCB account below.',
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _BankDetailsCard(bank: _withdrawalBank),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _withdrawAmountController,
                     keyboardType: const TextInputType.numberWithOptions(
@@ -484,38 +476,31 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
                       prefixIcon: Icon(Icons.currency_exchange),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _withdrawAccountNumberController,
-                    decoration: const InputDecoration(
-                      labelText: 'Bank account number',
-                      prefixIcon: Icon(Icons.credit_card),
+                  const SizedBox(height: 12),
+                  if (requiresTotp) ...[
+                    TextField(
+                      controller: _withdrawTotpController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '2FA code',
+                        prefixIcon: Icon(Icons.security),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _withdrawBankNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Bank name',
-                      prefixIcon: Icon(Icons.account_balance),
+                  ] else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '2FA is not enabled on this account.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _withdrawAccountNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Account holder name',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _withdrawTotpController,
-                    decoration: const InputDecoration(
-                      labelText: '2FA token (optional)',
-                      prefixIcon: Icon(Icons.security),
-                    ),
-                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -594,37 +579,6 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: 'Recent Withdrawals',
-              child: _isHistoryLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _withdrawalHistory.isEmpty
-                  ? const Text('No withdrawal records yet.')
-                  : Column(
-                      children: _withdrawalHistory.take(5).map((item) {
-                        final amount =
-                            (item['amount'] as num?)?.toDouble() ?? 0;
-                        final recordCurrency =
-                            (item['currency'] as String?) ?? currency;
-                        final status = (item['status'] as String?) ?? 'UNKNOWN';
-                        final id = (item['id'] ?? item['_id'] ?? '').toString();
-
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            CurrencyFormatter.formatCurrency(
-                              amount,
-                              recordCurrency,
-                            ),
-                          ),
-                          subtitle: Text('ID: $id'),
-                          trailing: Text(status),
-                        );
-                      }).toList(),
-                    ),
-            ),
           ],
         ),
       ),
@@ -660,6 +614,136 @@ class _SectionCard extends StatelessWidget {
             const SizedBox(height: 12),
             child,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinnedWithdrawalBank {
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final String issueDate;
+
+  const _PinnedWithdrawalBank({
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    required this.issueDate,
+  });
+}
+
+class _BankDetailsCard extends StatelessWidget {
+  final _PinnedWithdrawalBank bank;
+
+  const _BankDetailsCard({required this.bank});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.surfaceContainerHighest,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Bank details',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              _Pill(label: bank.bankName),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _DetailRow(label: 'Card number', value: bank.accountNumber),
+          const SizedBox(height: 8),
+          _DetailRow(label: 'Cardholder', value: bank.accountName),
+          const SizedBox(height: 8),
+          _DetailRow(label: 'Issue date', value: bank.issueDate),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 4,
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 6,
+          child: SelectableText(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String label;
+
+  const _Pill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

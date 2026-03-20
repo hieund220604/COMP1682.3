@@ -19,12 +19,18 @@ class NotificationProvider with ChangeNotifier {
   NotificationStatus _status = NotificationStatus.initial;
   String? _errorMessage;
   StreamSubscription<NotificationEntity>? _notificationSubscription;
+  bool? _pushNotificationsEnabled;
+  bool _preferencesLoading = false;
+  bool _preferencesUpdating = false;
 
   List<NotificationEntity> get notifications => _notifications;
   int get unreadCount => _unreadCount;
   NotificationStatus get status => _status;
   String? get errorMessage => _errorMessage;
   bool get isLoading => _status == NotificationStatus.loading;
+  bool? get pushNotificationsEnabled => _pushNotificationsEnabled;
+  bool get isPreferencesLoading => _preferencesLoading;
+  bool get isPreferencesUpdating => _preferencesUpdating;
 
   void _subscribeToNotifications() {
     _notificationSubscription = repository.watchNotifications().listen(
@@ -162,6 +168,49 @@ class NotificationProvider with ChangeNotifier {
     result.fold(
       (failure) {},
       (_) {},
+    );
+  }
+
+  Future<void> loadNotificationPreferences() async {
+    _preferencesLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await repository.getNotificationPreferences();
+    _preferencesLoading = false;
+
+    result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        _pushNotificationsEnabled ??= true;
+        notifyListeners();
+      },
+      (enabled) {
+        _pushNotificationsEnabled = enabled;
+        notifyListeners();
+      },
+    );
+  }
+
+  Future<bool> updateNotificationPreference(bool enabled) async {
+    _preferencesUpdating = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await repository.updateNotificationPreferences(enabled);
+    _preferencesUpdating = false;
+
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) {
+        _pushNotificationsEnabled = enabled;
+        notifyListeners();
+        return true;
+      },
     );
   }
 

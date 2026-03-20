@@ -385,7 +385,7 @@ class _ManageSubscriptionsSlide extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              // Dots - Middle Active (Silver, Red, Silver) as per visual even if pages are 2
+              // Dots - First Active (Red, Silver)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -393,25 +393,16 @@ class _ManageSubscriptionsSlide extends StatelessWidget {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: colors['silver'],
+                      color: colors['alizarin'],
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    width: 32,
-                    height: 6, // line
-                    decoration: BoxDecoration(
-                      color: colors['alizarin'],
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                   const SizedBox(width: 8),
-                  Container(
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: colors['silver'],
+                      color: colors['silver']!.withOpacity(0.5),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -886,7 +877,7 @@ class _SmartAutoSplitSlide extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
             child: Column(
                 children: [
-                     // Dots - Last Active
+                     // Dots - Second Active (Silver, Red)
                     Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -895,14 +886,9 @@ class _SmartAutoSplitSlide extends StatelessWidget {
                                 decoration: BoxDecoration(color: colors['silver']!.withOpacity(0.5), shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                                width: 6, height: 6,
-                                decoration: BoxDecoration(color: colors['silver']!.withOpacity(0.5), shape: BoxShape.circle),
-                            ),
-                            const SizedBox(width: 8),
                              Container(
-                                width: 32, height: 6,
-                                decoration: BoxDecoration(color: colors['alizarin'], borderRadius: BorderRadius.circular(3)),
+                                width: 6, height: 6,
+                                decoration: BoxDecoration(color: colors['alizarin'], shape: BoxShape.circle),
                             ),
                         ],
                     ),

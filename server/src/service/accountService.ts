@@ -85,7 +85,7 @@ export const accountService = {
                 balanceBefore: balanceBefore,
                 balanceAfter: balanceBefore + amount,
                 currency: "VND",
-                description: "Nap tien qua VNPay",
+                description: "Top up via VNPay",
                 referenceId: topUpId,
                 referenceType: "TOP_UP"
             });

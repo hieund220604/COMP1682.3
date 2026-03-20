@@ -31,12 +31,13 @@ class _AuthPageState extends State<AuthPage> {
 
   Future<void> _handleSubmit() async {
     final authProvider = context.read<AuthProvider>();
+    final normalizedEmail = _emailController.text.trim().toLowerCase();
     authProvider.clearError();
     
     if (_isLoginMode) {
       // Login
       final error = await authProvider.login(
-        email: _emailController.text.trim(),
+        email: normalizedEmail,
         password: _passwordController.text,
       );
       
@@ -67,7 +68,7 @@ class _AuthPageState extends State<AuthPage> {
                   textColor: Colors.white,
                   onPressed: () async {
                     final success = await authProvider.resendOTP(
-                      email: _emailController.text.trim(),
+                      email: normalizedEmail,
                     );
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +90,7 @@ class _AuthPageState extends State<AuthPage> {
     } else {
       // Sign Up
       final success = await authProvider.signUp(
-        email: _emailController.text.trim(),
+        email: normalizedEmail,
         password: _passwordController.text,
         displayName: _displayNameController.text.trim().isEmpty 
           ? null 
@@ -104,7 +105,7 @@ class _AuthPageState extends State<AuthPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => VerifyOTPPage(email: _emailController.text.trim()),
+            builder: (_) => VerifyOTPPage(email: normalizedEmail),
           ),
         );
       } else if (authProvider.errorMessage != null) {

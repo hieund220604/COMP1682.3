@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/constants/app_colors.dart';
 import '../../../../core/navigation/app_route_observer.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/pages/setup_2fa_page.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
+import '../../../notifications/presentation/providers/notification_provider.dart';
 import 'edit_profile_page.dart';
 import 'change_password_page.dart';
 
@@ -19,7 +20,13 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
   ModalRoute<dynamic>? _route;
 
   Future<void> _refreshData() async {
-    await context.read<AuthProvider>().getCurrentUser();
+    final authProvider = context.read<AuthProvider>();
+    final notificationProvider = context.read<NotificationProvider>();
+
+    await Future.wait([
+      authProvider.getCurrentUser(silent: true),
+      notificationProvider.loadNotificationPreferences(),
+    ]);
   }
 
   @override
@@ -94,8 +101,21 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
       _ProfileSection(
         title: 'App Preferences',
         items: [
-          _ProfileItem(icon: Icons.notifications, title: 'Notifications', trailing: _SwitchMock(on: true)),
-          _ProfileItem(icon: Icons.palette, title: 'Theme', trailingText: 'Light'),
+          _ProfileItem(
+            icon: Icons.notifications,
+            title: 'Notifications',
+            trailing: const _NotificationPreferenceToggleItem(),
+          ),
+          _ProfileItem(
+            icon: Icons.dark_mode,
+            title: 'Dark Theme',
+            trailing: const _ThemeModeToggleItem(),
+          ),
+          _ProfileItem(
+            icon: Icons.list_alt,
+            title: 'Show Onboarding on Login',
+            trailing: _OnboardingToggleItem(),
+          ),
         ],
       ),
       _ProfileSection(
@@ -123,19 +143,21 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
                 children: [
                   const _AvatarBlock(),
                   const SizedBox(height: 12),
-                  ...sections.expand((s) => [
-                        Text(
-                          s.title.toUpperCase(),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                letterSpacing: 1.4,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.grey,
-                              ),
+                  ...sections.expand(
+                    (s) => [
+                      Text(
+                        s.title.toUpperCase(),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 6),
-                        _SettingsCard(items: s.items),
-                        const SizedBox(height: 14),
-                      ]),
+                      ),
+                      const SizedBox(height: 6),
+                      _SettingsCard(items: s.items),
+                      const SizedBox(height: 14),
+                    ],
+                  ),
                   _LogoutCard(),
                 ],
               ),
@@ -155,9 +177,12 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
         MaterialPageRoute(builder: (_) => const Setup2FAPage()),
       );
       if (result == true && mounted) {
+        final authProvider = context.read<AuthProvider>();
+        final messenger = ScaffoldMessenger.of(context);
+
         // Refresh user data
-        await context.read<AuthProvider>().getCurrentUser();
-        ScaffoldMessenger.of(context).showSnackBar(
+        await authProvider.getCurrentUser(silent: true);
+        messenger.showSnackBar(
           const SnackBar(content: Text('Two-Factor Authentication enabled!')),
         );
       }
@@ -205,17 +230,19 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
     if (mounted) {
       Navigator.pop(context); // Close loading
       if (success) {
-        await context.read<AuthProvider>().getCurrentUser();
+        await context.read<AuthProvider>().getCurrentUser(silent: true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Two-Factor Authentication disabled')),
           );
         }
       } else {
-        final errMsg = context.read<AuthProvider>().errorMessage ?? 'Failed to disable 2FA';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errMsg)),
-        );
+        final errMsg =
+            context.read<AuthProvider>().errorMessage ??
+            'Failed to disable 2FA';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errMsg)));
       }
     }
   }
@@ -233,12 +260,18 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
           children: [
             TextField(
               controller: subjectController,
-              decoration: const InputDecoration(labelText: 'Subject', hintText: 'What is this about?'),
+              decoration: const InputDecoration(
+                labelText: 'Subject',
+                hintText: 'What is this about?',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: messageController,
-              decoration: const InputDecoration(labelText: 'Message', hintText: 'How can we help?'),
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                hintText: 'How can we help?',
+              ),
               maxLines: 3,
             ),
           ],
@@ -250,26 +283,33 @@ class _ProfilePageState extends State<ProfilePage> with RouteAware {
           ),
           TextButton(
             onPressed: () async {
-               if (subjectController.text.isEmpty || messageController.text.isEmpty) {
-                 return;
-               }
-               Navigator.pop(context); // Close dialog first or show loading
-               
-               // Show loading snackbar or indicator... simplifying here
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sending message...')));
-               
-               final success = await context.read<AuthProvider>().contactUs(
-                 subject: subjectController.text,
-                 message: messageController.text,
-               );
-               
-               if (context.mounted) {
-                 if (success) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message sent successfully!')));
-                 } else {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send message')));
-                 }
-               }
+              if (subjectController.text.isEmpty ||
+                  messageController.text.isEmpty) {
+                return;
+              }
+              Navigator.pop(context); // Close dialog first or show loading
+
+              // Show loading snackbar or indicator... simplifying here
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Sending message...')),
+              );
+
+              final success = await context.read<AuthProvider>().contactUs(
+                subject: subjectController.text,
+                message: messageController.text,
+              );
+
+              if (context.mounted) {
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Message sent successfully!')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to send message')),
+                  );
+                }
+              }
             },
             child: const Text('Send'),
           ),
@@ -291,13 +331,12 @@ class _Header extends StatelessWidget {
             child: Text(
               'Profile',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.settings),
-          ),
+          IconButton(onPressed: () {}, icon: const Icon(Icons.settings)),
         ],
       ),
     );
@@ -313,11 +352,13 @@ class _AvatarBlock extends StatelessWidget {
     final user = context.watch<AuthProvider>().user;
     final displayName = user?.displayName ?? 'User';
     final email = user?.email ?? 'user@example.com';
-    final avatarUrl = user?.avatarUrl; 
+    final avatarUrl = user?.avatarUrl;
     // Default avatar if none provided
-    final imageProvider = (avatarUrl != null && avatarUrl.isNotEmpty) 
-        ? NetworkImage(avatarUrl) 
-        : const NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuDeRKKzK54qgIUcQmLhDNFm9iz3iKedfgpG5XJtx6M9mLfwAfHHXuKqMe2xw5nFQi60TkzfnwRzORGnSTF3Nm4BXQrH_cOYXtid4a5gsregQlOeX8anwVdDRMgL64oS_ellebq1pL6HqG-wrJ0esmwkZKwmOC3HILbQiFw_SbiJ03flJrrcB08OMKwcp7ssj1E30fZ2vuGRPYDD13BPKBH5XSJgRRQ8sRPY8o8N_yxmov82kvHVMbWVMfEeOXv2CjkBfJpeHw1o4rc'); // fallback image
+    final imageProvider = (avatarUrl != null && avatarUrl.isNotEmpty)
+        ? NetworkImage(avatarUrl)
+        : const NetworkImage(
+            'https://lh3.googleusercontent.com/aida-public/AB6AXuDeRKKzK54qgIUcQmLhDNFm9iz3iKedfgpG5XJtx6M9mLfwAfHHXuKqMe2xw5nFQi60TkzfnwRzORGnSTF3Nm4BXQrH_cOYXtid4a5gsregQlOeX8anwVdDRMgL64oS_ellebq1pL6HqG-wrJ0esmwkZKwmOC3HILbQiFw_SbiJ03flJrrcB08OMKwcp7ssj1E30fZ2vuGRPYDD13BPKBH5XSJgRRQ8sRPY8o8N_yxmov82kvHVMbWVMfEeOXv2CjkBfJpeHw1o4rc',
+          ); // fallback image
 
     return Column(
       children: [
@@ -328,12 +369,19 @@ class _AvatarBlock extends StatelessWidget {
               width: 108,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 4),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
-                image: DecorationImage(
-                  fit: BoxFit.cover,
-                  image: imageProvider,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.surface,
+                  width: 4,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withAlpha((0.28 * 255).round())
+                        : Colors.black12,
+                    blurRadius: 8,
+                  ),
+                ],
+                image: DecorationImage(fit: BoxFit.cover, image: imageProvider),
               ),
             ),
             Positioned(
@@ -344,17 +392,32 @@ class _AvatarBlock extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                  border: Border.all(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    width: 2,
+                  ),
                 ),
-                child: const Icon(Icons.edit, size: 16, color: Colors.white),
+                child: Icon(
+                  Icons.edit,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
               ),
-            )
+            ),
           ],
         ),
         const SizedBox(height: 10),
-        Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        Text(
+          displayName,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 4),
-        Text(email, style: const TextStyle(color: Colors.grey)),
+        Text(
+          email,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
         const SizedBox(height: 14),
       ],
     );
@@ -395,9 +458,17 @@ class _SettingsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.12)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withAlpha((0.12 * 255).round()),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.black.withAlpha((0.2 * 255).round())
+                : Colors.black12,
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -405,8 +476,13 @@ class _SettingsCard extends StatelessWidget {
           for (int i = 0; i < items.length; i++) ...[
             _SettingsRow(item: items[i]),
             if (i != items.length - 1)
-              Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.2)),
-          ]
+              Divider(
+                height: 1,
+                color: Theme.of(context)
+                    .dividerColor
+                    .withAlpha((0.2 * 255).round()),
+              ),
+          ],
         ],
       ),
     );
@@ -430,26 +506,41 @@ class _SettingsRow extends StatelessWidget {
               height: 42,
               width: 42,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withAlpha((0.08 * 255).round()),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(item.icon, color: Theme.of(context).colorScheme.primary),
+              child: Icon(
+                item.icon,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 item.title,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
             ),
             if (item.trailing != null) item.trailing!,
             if (item.trailingText != null)
               Text(
                 item.trailingText!,
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             if (item.trailing == null)
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
           ],
         ),
       ),
@@ -457,31 +548,206 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-class _SwitchMock extends StatelessWidget {
-  final bool on;
+class _OnboardingToggleItem extends StatefulWidget {
+  const _OnboardingToggleItem();
 
-  const _SwitchMock({required this.on});
+  @override
+  State<_OnboardingToggleItem> createState() => _OnboardingToggleItemState();
+}
+
+class _OnboardingToggleItemState extends State<_OnboardingToggleItem> {
+  bool? _isEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadToggleState();
+  }
+
+  Future<void> _loadToggleState() async {
+    final authProvider = context.read<AuthProvider>();
+    final enabled = await authProvider.getShowOnboardingOnLogin();
+    if (mounted) {
+      setState(() {
+        _isEnabled = enabled;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isEnabled == null) {
+      return _AppSwitch(
+        value: false,
+        loading: true,
+        onChanged: null,
+      );
+    }
+
+    return _AppSwitch(
+      value: _isEnabled!,
+      onChanged: (value) async {
+        setState(() {
+          _isEnabled = value;
+        });
+        final authProvider = context.read<AuthProvider>();
+        final messenger = ScaffoldMessenger.of(context);
+        await authProvider.setShowOnboardingOnLogin(value);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              value
+                  ? 'Onboarding will show on next login'
+                  : 'Onboarding disabled - access directly to home',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ThemeModeToggleItem extends StatelessWidget {
+  const _ThemeModeToggleItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final themeController = context.watch<ThemeController>();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          themeController.themeModeLabel,
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: 8),
+        _AppSwitch(
+          value: themeController.isDarkThemeEnabled,
+          onChanged: (value) async {
+            final messenger = ScaffoldMessenger.of(context);
+            await themeController.setDarkThemeEnabled(value);
+
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  value
+                      ? 'Dark theme enabled'
+                      : 'Theme set to follow your system preference',
+                ),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _NotificationPreferenceToggleItem extends StatefulWidget {
+  const _NotificationPreferenceToggleItem();
+
+  @override
+  State<_NotificationPreferenceToggleItem> createState() =>
+      _NotificationPreferenceToggleItemState();
+}
+
+class _NotificationPreferenceToggleItemState
+    extends State<_NotificationPreferenceToggleItem> {
+  @override
+  Widget build(BuildContext context) {
+    final notificationProvider = context.watch<NotificationProvider>();
+    final authProvider = context.read<AuthProvider>();
+
+    final isLoading = notificationProvider.isPreferencesLoading ||
+        notificationProvider.pushNotificationsEnabled == null;
+    final isUpdating = notificationProvider.isPreferencesUpdating;
+
+    return _AppSwitch(
+      value: notificationProvider.pushNotificationsEnabled ?? false,
+      loading: isLoading,
+      onChanged: (isLoading || isUpdating)
+          ? null
+          : (value) async {
+              final messenger = ScaffoldMessenger.of(context);
+              final theme = Theme.of(context);
+              final success = await notificationProvider
+                  .updateNotificationPreference(value);
+              if (!mounted) return;
+
+              if (success) {
+                await authProvider.getCurrentUser(silent: true);
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      value
+                          ? 'Push notifications enabled'
+                          : 'Push notifications disabled',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                final error = notificationProvider.errorMessage ??
+                    'Failed to update notifications';
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(error),
+                    backgroundColor: theme.colorScheme.error
+                        .withAlpha((0.9 * 255).round()),
+                  ),
+                );
+              }
+            },
+    );
+  }
+}
+
+class _AppSwitch extends StatelessWidget {
+  final bool value;
+  final bool loading;
+  final ValueChanged<bool>? onChanged;
+
+  const _AppSwitch({
+    required this.value,
+    this.loading = false,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 46,
-      height: 26,
-      decoration: BoxDecoration(
-        color: on ? colorScheme.primary : Colors.grey.shade400,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Container(
-        width: 18,
-        height: 18,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
+
+    if (loading) {
+      return SizedBox(
+        width: 38,
+        height: 24,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         ),
+      );
+    }
+
+    return Switch(
+      value: value,
+      onChanged: onChanged,
+      activeThumbColor: colorScheme.onPrimary,
+      activeTrackColor: colorScheme.primary,
+      inactiveThumbColor: colorScheme.outline,
+      inactiveTrackColor: colorScheme.surfaceContainerHigh,
+      trackOutlineColor: WidgetStatePropertyAll(
+        colorScheme.outlineVariant.withAlpha((0.8 * 255).round()),
       ),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }
@@ -489,16 +755,22 @@ class _SwitchMock extends StatelessWidget {
 class _LogoutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       children: [
         ElevatedButton.icon(
           onPressed: () => _handleLogout(context),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Theme.of(context).colorScheme.primary,
+            backgroundColor: colorScheme.surface,
+            foregroundColor: colorScheme.primary,
             minimumSize: const Size.fromHeight(54),
-            side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.25)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            side: BorderSide(
+              color: colorScheme.primary.withAlpha((0.25 * 255).round()),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             elevation: 0,
           ),
           icon: const Icon(Icons.logout),
@@ -508,10 +780,10 @@ class _LogoutCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'SplitPal Version 2.4.0 (Build 392)',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
-        )
+          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+        ),
       ],
     );
   }
@@ -550,12 +822,9 @@ class _LogoutCard extends StatelessWidget {
       if (context.mounted) {
         // Close loading dialog
         Navigator.pop(context);
-        
+
         // Navigate to auth page and clear stack
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/',
-          (route) => false,
-        );
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     }
   }

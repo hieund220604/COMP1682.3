@@ -9,6 +9,7 @@ class User extends Equatable {
   final String currency;
   final bool isActive;
   final bool twoFactorEnabled;
+  final bool pushNotificationsEnabled;
   final DateTime createdAt;
 
   const User({
@@ -20,6 +21,7 @@ class User extends Equatable {
     required this.currency,
     required this.isActive,
     this.twoFactorEnabled = false,
+    this.pushNotificationsEnabled = true,
     required this.createdAt,
   });
 
@@ -33,6 +35,7 @@ class User extends Equatable {
         currency,
         isActive,
         twoFactorEnabled,
+        pushNotificationsEnabled,
         createdAt,
       ];
 }

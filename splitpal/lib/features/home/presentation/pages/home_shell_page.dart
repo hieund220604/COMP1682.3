@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/icons/app_icons.dart';
+import '../../../notifications/presentation/providers/notification_provider.dart';
 import 'dashboard_page.dart';
 import 'subscriptions_page.dart';
 import 'groups_page.dart';
@@ -26,6 +28,15 @@ class HomeShellPage extends StatefulWidget {
 class _HomeShellPageState extends State<HomeShellPage> {
   int _index = 0;
   final List<int> _tabRefreshTokens = List<int>.filled(5, 0);
+
+  @override
+  void initState() {
+    super.initState();
+    // Load unread notifications count once the widget is ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().fetchUnreadCount();
+    });
+  }
 
   Widget _buildPage(int index) {
     switch (index) {
@@ -58,10 +69,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       },
       child: Scaffold(
         body: _buildPage(_index),
-        bottomNavigationBar: _BottomNavBar(
-          current: _index,
-          onTap: _onTap,
-        ),
+        bottomNavigationBar: _BottomNavBar(current: _index, onTap: _onTap),
       ),
     );
   }
@@ -78,31 +86,46 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: current,
-      onDestinationSelected: onTap,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(AppIcons.home),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(AppIcons.subscriptions),
-          label: 'Subs',
-        ),
-        NavigationDestination(
-          icon: Icon(AppIcons.groups),
-          label: 'Groups',
-        ),
-        NavigationDestination(
-          icon: Icon(AppIcons.notifications),
-          label: 'Activity',
-        ),
-        NavigationDestination(
-          icon: Icon(AppIcons.settings),
-          label: 'Settings',
-        ),
-      ],
+    return Consumer<NotificationProvider>(
+      builder: (context, notificationProvider, _) {
+        final unread = notificationProvider.unreadCount;
+
+        Widget _activityIcon() {
+          if (unread <= 0) return const Icon(AppIcons.notifications);
+          return Badge(
+            isLabelVisible: unread > 0,
+            label: Text(unread > 99 ? '99+' : '$unread'),
+            child: const Icon(AppIcons.notifications),
+          );
+        }
+
+        return NavigationBar(
+          selectedIndex: current,
+          onDestinationSelected: onTap,
+          destinations: [
+            const NavigationDestination(
+              icon: Icon(AppIcons.home),
+              label: 'Home',
+            ),
+            const NavigationDestination(
+              icon: Icon(AppIcons.subscriptions),
+              label: 'Subs',
+            ),
+            const NavigationDestination(
+              icon: Icon(AppIcons.groups),
+              label: 'Groups',
+            ),
+            NavigationDestination(
+              icon: _activityIcon(),
+              label: 'Activity',
+            ),
+            const NavigationDestination(
+              icon: Icon(AppIcons.settings),
+              label: 'Settings',
+            ),
+          ],
+        );
+      },
     );
   }
 }

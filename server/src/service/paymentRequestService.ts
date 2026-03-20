@@ -7,6 +7,7 @@ import { Group } from '../models/Group';
 import { User } from '../models/User';
 import { originalDebtService } from './originalDebtService';
 import { transactionService } from './transactionService';
+import { notificationService } from './notificationService';
 import { exchangeRateService } from './exchangeRateService';
 import { OriginalDebt } from '../models/OriginalDebt';
 import { debtSettlementEngine, RawDebt } from './debtSettlementEngine';
@@ -18,6 +19,7 @@ import {
 } from '../type/paymentRequest';
 import { UserSummary, UserDebtBreakdown } from '../type/invoice';
 import { TransactionType } from '../type/transaction';
+import { NotificationType } from '../models/Notification';
 import mongoose from 'mongoose';
 import { acquireLock } from '../util/lock';
 import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
@@ -495,7 +497,7 @@ export const paymentRequestService = {
                         balanceBefore: record.newFromBalance - record.amount,
                         balanceAfter: record.newFromBalance,
                         currency: 'VND',
-                        description: `Hoan tien tu ${toUser?.displayName || 'User'} (huy payment request)`,
+                        description: `Refund from ${toUser?.displayName || 'User'} (payment request cancelled)`,
                         referenceId: record.transferId,
                         referenceType: 'TRANSFER'
                     });
@@ -509,7 +511,7 @@ export const paymentRequestService = {
                         balanceBefore: record.newToBalance + record.amount,
                         balanceAfter: record.newToBalance,
                         currency: 'VND',
-                        description: `Tru tien hoan cho ${fromUser?.displayName || 'User'} (huy payment request)`,
+                        description: `Refund sent to ${fromUser?.displayName || 'User'} (payment request cancelled)`,
                         referenceId: record.transferId,
                         referenceType: 'TRANSFER'
                     });
@@ -523,6 +525,69 @@ export const paymentRequestService = {
 
         await invalidatePaymentRequestCache(groupId);
         await invalidateRelatedInvoiceCache(groupId);
+
+        const participantUserIds = Array.from(new Set(
+            transfers.flatMap(t => [t.fromUserId, t.toUserId])
+        ));
+
+        const canceller = await User.findById(userId).select('displayName email');
+        const cancellerName = canceller?.displayName || canceller?.email || 'An admin';
+
+        await Promise.all(
+            participantUserIds.map(participantId =>
+                notificationService.createNotification({
+                    userId: participantId,
+                    type: NotificationType.PAYMENT_REQUEST_CANCELLED,
+                    title: 'Payment Request Cancelled',
+                    message: `A payment request was cancelled by ${cancellerName}.`,
+                    data: {
+                        requestId,
+                        groupId,
+                        refundedTransfers: refundedCount,
+                        cancelledTransfers: cancelledCount
+                    }
+                })
+            )
+        );
+
+        if (refundRecords.length > 0) {
+            const userIds = Array.from(new Set(refundRecords.flatMap(r => [r.fromUserId, r.toUserId])));
+            const users = await User.find({ _id: { $in: userIds } }).select('_id displayName email');
+            const userNameMap = new Map(users.map(u => [u._id.toString(), u.displayName || u.email || 'User']));
+
+            for (const record of refundRecords) {
+                const fromUserName = userNameMap.get(record.fromUserId) || 'User';
+                const toUserName = userNameMap.get(record.toUserId) || 'User';
+
+                await notificationService.createNotification({
+                    userId: record.fromUserId,
+                    type: NotificationType.PAYMENT_REFUNDED,
+                    title: 'Refund Received',
+                    message: `You received ${record.amount.toLocaleString()} VND refunded from ${toUserName}.`,
+                    data: {
+                        requestId,
+                        transferId: record.transferId,
+                        groupId,
+                        amount: record.amount,
+                        refundDirection: 'IN'
+                    }
+                });
+
+                await notificationService.createNotification({
+                    userId: record.toUserId,
+                    type: NotificationType.PAYMENT_REFUNDED,
+                    title: 'Refund Processed',
+                    message: `${record.amount.toLocaleString()} VND was refunded to ${fromUserName}.`,
+                    data: {
+                        requestId,
+                        transferId: record.transferId,
+                        groupId,
+                        amount: record.amount,
+                        refundDirection: 'OUT'
+                    }
+                });
+            }
+        }
 
         return { refundedTransfers: refundedCount, cancelledTransfers: cancelledCount };
     },

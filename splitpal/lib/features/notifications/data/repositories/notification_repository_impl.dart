@@ -126,4 +126,30 @@ class NotificationRepositoryImpl implements NotificationRepository {
         .watchNotifications()
         .map((model) => model.toEntity());
   }
+
+  @override
+  Future<Either<Failure, bool>> getNotificationPreferences() async {
+    try {
+      final enabled = await remoteDataSource.getNotificationPreferences();
+      return Right(enabled);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(message: e.message));
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> updateNotificationPreferences(
+    bool enabled,
+  ) async {
+    try {
+      await remoteDataSource.updateNotificationPreferences(enabled);
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(message: e.message));
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
 }

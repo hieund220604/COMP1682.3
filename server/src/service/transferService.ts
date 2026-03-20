@@ -308,7 +308,7 @@ export const transferService = {
                 balanceBefore: newFromBalance + amount,
                 balanceAfter: newFromBalance,
                 currency: 'VND',
-                description: `Thanh toan cho ${toUser.displayName}`,
+                description: `Payment to ${toUser.displayName}`,
                 referenceId: transferId,
                 referenceType: 'TRANSFER'
             });
@@ -321,7 +321,7 @@ export const transferService = {
                 balanceBefore: newToBalance - amount,
                 balanceAfter: newToBalance,
                 currency: 'VND',
-                description: `Nhan tu ${fromUser.displayName}`,
+                description: `Received from ${fromUser.displayName}`,
                 referenceId: transferId,
                 referenceType: 'TRANSFER'
             });
@@ -460,7 +460,7 @@ export const transferService = {
                 balanceBefore: fromUserBalanceBefore,
                 balanceAfter: fromUserBalanceBefore - amount,
                 currency: 'VND',
-                description: `Tra no cho ${toUserName} (VNPay)`,
+                description: `Paid debt to ${toUserName} (VNPay)`,
                 referenceId: transferId,
                 referenceType: 'TRANSFER',
                 metadata: vnpayTxnRef ? { vnpayTxnRef } : undefined
@@ -474,7 +474,7 @@ export const transferService = {
                 balanceBefore: toUserBalanceBefore,
                 balanceAfter: toUserBalanceBefore + amount,
                 currency: 'VND',
-                description: `Nhan tu ${fromUserName} (VNPay)`,
+                description: `Received from ${fromUserName} (VNPay)`,
                 referenceId: transferId,
                 referenceType: 'TRANSFER',
                 metadata: vnpayTxnRef ? { vnpayTxnRef } : undefined

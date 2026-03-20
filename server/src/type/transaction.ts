@@ -1,3 +1,5 @@
+import { ClientSession } from 'mongoose';
+
 export enum TransactionType {
     TOP_UP = 'TOP_UP',
     WITHDRAWAL = 'WITHDRAWAL',
@@ -24,6 +26,7 @@ export interface CreateTransactionRequest {
     referenceId?: string;
     referenceType?: string;
     metadata?: any;
+    session?: ClientSession;
 }
 
 export interface TransactionResponse {

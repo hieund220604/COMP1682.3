@@ -10,6 +10,7 @@ export interface IUser extends Document {
     balance: number;
     currency: string;
     fcmToken?: string;
+    pushNotificationsEnabled: boolean;
     twoFactorSecret?: string;
     twoFactorEnabled: boolean;
     twoFactorBackupCodes?: string[];
@@ -54,6 +55,10 @@ const UserSchema = new Schema<IUser>({
     fcmToken: {
         type: String,
         default: null
+    },
+    pushNotificationsEnabled: {
+        type: Boolean,
+        default: true
     },
     twoFactorSecret: {
         type: String,

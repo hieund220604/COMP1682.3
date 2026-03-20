@@ -17,4 +17,9 @@ router.post('/top-up', accountController.initiateTopUp);
 router.put('/fcm-token', accountController.updateFcmToken);
 router.delete('/fcm-token', accountController.deleteFcmToken);
 
+// Push notification preference
+router.get('/notification-preferences', accountController.getNotificationPreferences);
+router.patch('/notification-preferences', accountController.updateNotificationPreferences);
+router.put('/notification-preferences', accountController.updateNotificationPreferences);
+
 export default router;

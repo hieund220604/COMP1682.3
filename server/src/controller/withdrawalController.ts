@@ -15,10 +15,10 @@ export const withdrawalController = {
                 return ResponseUtil.unauthorized(res);
             }
 
-            const { amount, accountNumber, bankName, accountName, totpToken } = req.body;
+            const { amount, totpToken } = req.body;
 
-            if (!amount || !accountNumber || !bankName || !accountName) {
-                return ResponseUtil.validationError(res, 'All fields are required: amount, accountNumber, bankName, accountName');
+            if (!amount) {
+                return ResponseUtil.validationError(res, 'Amount is required');
             }
 
             // 2FA guard
@@ -47,7 +47,7 @@ export const withdrawalController = {
             }
 
             // Verify withdrawal belongs to user
-            const withdrawal = await withdrawalService.getWithdrawalStatus(withdrawalId, req.user.userId);
+            await withdrawalService.getWithdrawalStatus(withdrawalId, req.user.userId);
 
             const result = await withdrawalService.resendOTP(withdrawalId, req.user.email);
             ResponseUtil.success(res, result, 'OTP resent successfully. Please check your email.');

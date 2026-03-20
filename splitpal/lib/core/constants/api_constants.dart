@@ -1,15 +1,25 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 // API Constants
 class ApiConstants {
   // Base URLs
-  // NOTE: The Node server in this repo listens on port 8080 (see server/.env).
-  // The Android emulator reaches the host via 10.0.2.2, so we point to 8080 here
-  // to avoid connection timeouts when calling the backend from the app.
-  static const String baseUrl = 'http://192.168.102.36:8080';
+    // Priority: .env API_BASE_URL -> --dart-define API_BASE_URL -> emulator default
+    static const String _fallbackBaseUrl = String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'http://10.0.2.2:8080',
+    );
+    static String get baseUrl {
+        final envBaseUrl = dotenv.env['API_BASE_URL']?.trim();
+        if (envBaseUrl != null && envBaseUrl.isNotEmpty) {
+            return envBaseUrl;
+        }
+        return _fallbackBaseUrl;
+    }
   static const String apiPrefix = '/api';
-  static const String apiBaseUrl = '$baseUrl$apiPrefix';
+    static String get apiBaseUrl => '$baseUrl$apiPrefix';
 
   // WebSocket
-  static const String socketUrl = baseUrl;
+    static String get socketUrl => baseUrl;
 
   // Auth Endpoints
   static const String authSignup = '/auth/signup';
@@ -76,6 +86,8 @@ class ApiConstants {
   // Account Endpoints
   static const String accountBalance = '/accounts/balance';
   static const String accountTopUp = '/accounts/top-up';
+  static const String notificationPreferences =
+      '/accounts/notification-preferences';
 
   // VNPay Endpoints
   static const String vnpayPayment = '/payments';

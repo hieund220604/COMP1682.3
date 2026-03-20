@@ -10,6 +10,12 @@ function generateOTP(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+const DEFAULT_WITHDRAWAL_BANK = {
+    bankName: 'NCB',
+    accountNumber: '9704198526191432198',
+    accountName: 'NGUYEN VAN A'
+};
+
 function transformWithdrawal(withdrawal: any): WithdrawalResponse {
     return {
         id: withdrawal._id.toString(),
@@ -34,15 +40,15 @@ export const withdrawalService = {
             throw new Error('User not found');
         }
 
-        const userBalance = Number(user.balance);
         const requestAmount = Number(data.amount);
-
-        if (userBalance < requestAmount) {
-            throw new Error(`Insufficient balance. Available: ${userBalance}, Requested: ${requestAmount}`);
-        }
 
         if (requestAmount <= 0) {
             throw new Error('Amount must be greater than 0');
+        }
+
+        const userBalance = Number(user.balance);
+        if (userBalance < requestAmount) {
+            throw new Error(`Insufficient balance. Available: ${userBalance}, Requested: ${requestAmount}`);
         }
 
         const otp = generateOTP();
@@ -52,9 +58,9 @@ export const withdrawalService = {
             userId,
             amount: data.amount,
             currency: 'VND',
-            accountNumber: data.accountNumber,
-            bankName: data.bankName,
-            accountName: data.accountName,
+            accountNumber: DEFAULT_WITHDRAWAL_BANK.accountNumber,
+            bankName: DEFAULT_WITHDRAWAL_BANK.bankName,
+            accountName: DEFAULT_WITHDRAWAL_BANK.accountName,
             status: 'OTP_SENT',
             otp,
             otpExpiresAt
@@ -159,22 +165,23 @@ export const withdrawalService = {
 
                 balanceBefore = Number(userDoc.balance);
                 balanceAfter = balanceBefore - amount;
+
+                await transactionService.createTransaction({
+                    userId: withdrawal.userId,
+                    type: TransactionType.WITHDRAWAL,
+                    amount: amount,
+                    balanceBefore: balanceBefore,
+                    balanceAfter: balanceAfter,
+                    currency: 'VND',
+                    description: `Withdrawal to ${withdrawal.bankName} - ${withdrawal.accountNumber}`,
+                    referenceId: withdrawalId,
+                    referenceType: 'WITHDRAWAL',
+                    session
+                });
             });
         } finally {
             await session.endSession();
         }
-
-        await transactionService.createTransaction({
-            userId: withdrawal.userId,
-            type: TransactionType.WITHDRAWAL,
-            amount: amount,
-            balanceBefore: balanceBefore,
-            balanceAfter: balanceAfter,
-            currency: 'VND',
-            description: `Rut tien ve ${withdrawal.bankName} - ${withdrawal.accountNumber}`,
-            referenceId: withdrawalId,
-            referenceType: 'WITHDRAWAL'
-        });
 
         const updatedUser = await User.findById(withdrawal.userId);
 

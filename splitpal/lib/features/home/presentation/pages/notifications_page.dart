@@ -4,6 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:splitpal/core/navigation/app_route_observer.dart';
 import '../../../notifications/domain/entities/notification_entity.dart';
 import '../../../notifications/presentation/providers/notification_provider.dart';
+import '../../../groups/presentation/pages/group_detail_page.dart';
+import '../../../groups/presentation/pages/groups_page.dart';
+import '../../../groups/presentation/pages/accept_invite_page.dart';
+import '../../../invoices/presentation/pages/my_invoices_page.dart';
+import 'transaction_history_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -176,11 +181,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               itemBuilder: (_, i) => _NotificationTile(
                 notification: provider.notifications[i],
-                onTap: () {
-                  if (!provider.notifications[i].read) {
-                    provider.markAsRead(provider.notifications[i].id);
-                  }
-                },
+                onTap: () => _handleNotificationTap(provider.notifications[i]),
                 onDelete: () {
                   provider.deleteNotification(provider.notifications[i].id);
                 },
@@ -192,6 +193,94 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
         },
       ),
     );
+  }
+
+  Future<void> _handleNotificationTap(NotificationEntity notification) async {
+    final provider = context.read<NotificationProvider>();
+
+    if (!notification.read) {
+      await provider.markAsRead(notification.id);
+    }
+
+    if (!mounted) return;
+
+    _navigateForNotification(notification);
+  }
+
+  void _navigateForNotification(NotificationEntity notification) {
+    final data = notification.data ?? const {};
+
+    // Balance-related notifications -> transaction history
+    if (_isBalanceNotification(notification.type)) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const TransactionHistoryPage()),
+      );
+      return;
+    }
+
+    // Invitation notifications -> invite accept flow first
+    if (notification.type == NotificationType.inviteReceived) {
+      final inviteToken = data['inviteToken'] as String?;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AcceptInvitePage(initialToken: inviteToken),
+        ),
+      );
+      return;
+    }
+
+    // Payment request cancelled -> invoices
+    if (notification.type == NotificationType.paymentRequestCancelled) {
+      Navigator.of(context).pushNamed(MyInvoicesPage.routeName);
+      return;
+    }
+
+    // Group-related notifications -> group detail/overview
+    if (_isGroupNotification(notification.type)) {
+      final groupId = data['groupId'] as String?;
+      final groupName = data['groupName'] as String? ?? 'Group';
+      if (groupId != null && groupId.isNotEmpty) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => GroupDetailPage(
+              groupId: groupId,
+              groupName: groupName,
+            ),
+          ),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const GroupsPage()),
+        );
+      }
+      return;
+    }
+
+    // Other types: no-op for now.
+  }
+
+  bool _isBalanceNotification(NotificationType type) {
+    switch (type) {
+      case NotificationType.balanceUpdated:
+      case NotificationType.paymentRefunded:
+      case NotificationType.paymentReceived:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _isGroupNotification(NotificationType type) {
+    switch (type) {
+      case NotificationType.expenseCreated:
+      case NotificationType.expenseUpdated:
+      case NotificationType.invoiceCreated:
+      case NotificationType.settlementCreated:
+      case NotificationType.groupJoined:
+        return true;
+      default:
+        return false;
+    }
   }
 }
 
@@ -223,6 +312,10 @@ class _NotificationTile extends StatelessWidget {
         return Icons.group_add;
       case NotificationType.balanceUpdated:
         return Icons.account_balance_wallet;
+      case NotificationType.paymentRequestCancelled:
+        return Icons.cancel_presentation;
+      case NotificationType.paymentRefunded:
+        return Icons.replay_circle_filled;
     }
   }
 
@@ -243,6 +336,10 @@ class _NotificationTile extends StatelessWidget {
         return Colors.teal;
       case NotificationType.balanceUpdated:
         return Colors.indigo;
+      case NotificationType.paymentRequestCancelled:
+        return Colors.deepOrange;
+      case NotificationType.paymentRefunded:
+        return Colors.green;
     }
   }
 

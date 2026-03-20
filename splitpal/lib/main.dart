@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -10,6 +13,8 @@ import 'core/services/fcm_service.dart';
 import 'core/services/notification_replay_service.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
+import 'core/utils/token_manager.dart';
 import 'features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
@@ -23,6 +28,82 @@ import 'features/notifications/presentation/providers/notification_provider.dart
 import 'features/onboarding/presentation/pages/onboarding_page.dart';
 import 'features/subscriptions/presentation/providers/subscription_provider.dart';
 import 'features/exchange/presentation/providers/exchange_provider.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+// Cache for onboarding preference to avoid repeated futures
+final Map<String, bool> _showOnboardingCache = {};
+
+/// Helper function to get home widget based on preference
+Widget _getHomeWidget(AuthProvider authProvider) {
+  final userId = authProvider.user?.id ?? '';
+  final cacheKey = 'user_$userId';
+
+  // Check cache first
+  if (_showOnboardingCache.containsKey(cacheKey)) {
+    return _showOnboardingCache[cacheKey]!
+        ? const OnboardingPage()
+        : const HomeShellPage();
+  }
+
+  // Load preference asynchronously
+  return FutureBuilder<bool>(
+    future: authProvider.getShowOnboardingOnLogin().then((value) {
+      _showOnboardingCache[cacheKey] = value;
+      return value;
+    }),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      return snapshot.data! ? const OnboardingPage() : const HomeShellPage();
+    },
+  );
+}
+
+/// StatefulWidget to handle onboarding toggle state caching
+class _AuthenticatedHome extends StatefulWidget {
+  const _AuthenticatedHome();
+
+  @override
+  State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
+}
+
+class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
+  late Future<bool> _showOnboardingFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cache the future to avoid infinite rebuilds
+    _showOnboardingFuture = Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).getShowOnboardingOnLogin();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _showOnboardingFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.data == true) {
+          // Show onboarding if enabled
+          return const OnboardingPage();
+        } else {
+          // Skip onboarding, go directly to home
+          return const HomeShellPage();
+        }
+      },
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,10 +133,13 @@ void main() async {
     );
   }
 
+  final themeController = ThemeController(tokenManager: di.sl<TokenManager>());
+
   runApp(
     MyApp(
       fcmService: fcmService,
       notificationReplayService: notificationReplayService,
+      themeController: themeController,
     ),
   );
 }
@@ -63,11 +147,13 @@ void main() async {
 class MyApp extends StatefulWidget {
   final FcmService? fcmService;
   final NotificationReplayService notificationReplayService;
+  final ThemeController themeController;
 
   const MyApp({
     super.key,
     this.fcmService,
     required this.notificationReplayService,
+    required this.themeController,
   });
 
   @override
@@ -79,6 +165,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: widget.themeController),
         ChangeNotifierProvider(
           create: (_) => di.sl<AuthProvider>()..checkAuthStatus(),
         ),
@@ -113,6 +200,13 @@ class _AppInitializer extends StatefulWidget {
 }
 
 class _AppInitializerState extends State<_AppInitializer> {
+  static const String _walletDeepLinkScheme = 'splitpal';
+  static const String _walletDeepLinkHost = 'wallet';
+
+  final AppLinks _appLinks = AppLinks();
+
+  StreamSubscription<Uri>? _deepLinkSubscription;
+  Uri? _pendingDeepLinkUri;
   bool _fcmInitialized = false;
   bool _isUpdatingFcmToken = false;
   bool _isReplayingUnread = false;
@@ -123,7 +217,71 @@ class _AppInitializerState extends State<_AppInitializer> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _setupAuthListener();
+      _initializeDeepLinks();
     });
+  }
+
+  Future<void> _initializeDeepLinks() async {
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        _tryHandleWalletDeepLink(initialUri);
+      }
+    } catch (e) {
+      print('Failed to read initial deep link: $e');
+    }
+
+    _deepLinkSubscription = _appLinks.uriLinkStream.listen(
+      _tryHandleWalletDeepLink,
+      onError: (Object error) {
+        print('Failed to listen deep link stream: $error');
+      },
+    );
+  }
+
+  bool _isWalletHomeDeepLink(Uri uri) {
+    final normalizedPath = uri.path.trim().toLowerCase();
+    final isHomePath =
+        normalizedPath.isEmpty ||
+        normalizedPath == '/' ||
+        normalizedPath == '/home';
+
+    return uri.scheme.toLowerCase() == _walletDeepLinkScheme &&
+        uri.host.toLowerCase() == _walletDeepLinkHost &&
+        isHomePath;
+  }
+
+  void _tryHandleWalletDeepLink(Uri uri) {
+    if (!_isWalletHomeDeepLink(uri)) {
+      return;
+    }
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated) {
+      _pendingDeepLinkUri = uri;
+      return;
+    }
+
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) {
+      _pendingDeepLinkUri = uri;
+      return;
+    }
+
+    _pendingDeepLinkUri = null;
+    navigator.pushNamedAndRemoveUntil(
+      HomeShellPage.routeName,
+      (route) => false,
+    );
+  }
+
+  void _consumePendingDeepLinkIfAny() {
+    final pendingDeepLinkUri = _pendingDeepLinkUri;
+    if (pendingDeepLinkUri == null) {
+      return;
+    }
+
+    _tryHandleWalletDeepLink(pendingDeepLinkUri);
   }
 
   void _setupAuthListener() {
@@ -133,6 +291,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       if (authProvider.isAuthenticated) {
         di.sl<SocketClient>().connect();
         _updateFcmToken();
+        _consumePendingDeepLinkIfAny();
 
         final userId = authProvider.user?.id;
         if (userId != null) {
@@ -150,6 +309,7 @@ class _AppInitializerState extends State<_AppInitializer> {
     if (authProvider.isAuthenticated) {
       di.sl<SocketClient>().connect();
       _updateFcmToken();
+      _consumePendingDeepLinkIfAny();
 
       final userId = authProvider.user?.id;
       if (userId != null) {
@@ -212,11 +372,22 @@ class _AppInitializerState extends State<_AppInitializer> {
   }
 
   @override
+  void dispose() {
+    _deepLinkSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final themeController = context.watch<ThemeController>();
+
     return MaterialApp(
       title: 'SplitPal',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeController.themeMode,
+      navigatorKey: appNavigatorKey,
       navigatorObservers: [appRouteObserver],
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
@@ -228,7 +399,9 @@ class _AppInitializerState extends State<_AppInitializer> {
           }
 
           if (authProvider.isAuthenticated) {
-            return const OnboardingPage();
+            // Always go to HomeShellPage when authenticated
+            // Onboarding preference only applies on fresh app startup (different user)
+            return const HomeShellPage();
           }
 
           if (authProvider.state == AuthState.requires2FA) {

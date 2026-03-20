@@ -1,9 +1,9 @@
 export interface CreateWithdrawalRequest {
     amount: number;
-    accountNumber: string;
-    bankName: string;
-    accountName: string;
     totpToken?: string;
+    accountNumber?: string;
+    bankName?: string;
+    accountName?: string;
 }
 
 export interface VerifyOtpRequest {

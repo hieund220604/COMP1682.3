@@ -30,6 +30,12 @@ abstract class NotificationRepository {
   /// Delete FCM token
   Future<Either<Failure, void>> deleteFcmToken();
 
+  /// Get push notification preference
+  Future<Either<Failure, bool>> getNotificationPreferences();
+
+  /// Update push notification preference
+  Future<Either<Failure, void>> updateNotificationPreferences(bool enabled);
+
   /// Listen to real-time notification updates (Stream)
   Stream<NotificationEntity> watchNotifications();
 }

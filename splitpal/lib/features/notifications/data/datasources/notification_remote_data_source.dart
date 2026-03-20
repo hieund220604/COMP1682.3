@@ -1,3 +1,4 @@
+import '../../../../core/constants/api_constants.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/notification_model.dart';
@@ -21,6 +22,10 @@ abstract class NotificationRemoteDataSource {
   Future<void> updateFcmToken(String token);
 
   Future<void> deleteFcmToken();
+
+  Future<bool> getNotificationPreferences();
+
+  Future<void> updateNotificationPreferences(bool enabled);
 }
 
 class NotificationRemoteDataSourceImpl
@@ -169,6 +174,45 @@ class NotificationRemoteDataSourceImpl
 
       if (response.statusCode != 200) {
         throw ServerException(message: 'Failed to delete FCM token');
+      }
+    } catch (e) {
+      throw ServerException(message: e.toString());
+    }
+  }
+
+  @override
+  Future<bool> getNotificationPreferences() async {
+    try {
+      final response =
+          await dioClient.get(ApiConstants.notificationPreferences);
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map && data.containsKey('data')) {
+          final prefs = data['data'] as Map<String, dynamic>;
+          return (prefs['pushNotificationsEnabled'] as bool?) ?? true;
+        }
+        return true;
+      } else {
+        throw ServerException(message: 'Failed to fetch notification preferences');
+      }
+    } catch (e) {
+      throw ServerException(message: e.toString());
+    }
+  }
+
+  @override
+  Future<void> updateNotificationPreferences(bool enabled) async {
+    try {
+      final response = await dioClient.patch(
+        ApiConstants.notificationPreferences,
+        data: {'pushNotificationsEnabled': enabled},
+      );
+
+      if (response.statusCode != 200) {
+        throw ServerException(
+          message: 'Failed to update notification preferences',
+        );
       }
     } catch (e) {
       throw ServerException(message: e.toString());

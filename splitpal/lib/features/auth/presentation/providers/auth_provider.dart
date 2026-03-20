@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/error/failures.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/usecases/get_current_user.dart';
@@ -16,6 +17,7 @@ import '../../domain/usecases/verify_setup_2fa.dart';
 import '../../domain/usecases/verify_2fa_login.dart';
 import '../../domain/usecases/disable_2fa.dart';
 import '../../domain/usecases/get_2fa_status.dart';
+import '../../../../core/di/injection_container.dart';
 
 enum AuthState {
   initial,
@@ -215,18 +217,28 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Get Current User
-  Future<void> getCurrentUser() async {
-    _setState(AuthState.loading);
+  Future<void> getCurrentUser({bool silent = false}) async {
+    // Avoid forcing a full-app rebuild when we just need fresh user data.
+    if (!silent) {
+      _setState(AuthState.loading);
+    }
 
     final result = await _getCurrentUserUseCase();
 
     result.fold(
       (failure) {
-        _setError(failure.message ?? 'Failed to get user');
-        _setState(AuthState.unauthenticated);
+        _errorMessage = failure.message;
+
+        if (!silent || failure is UnauthorizedFailure) {
+          _setState(AuthState.unauthenticated);
+        } else {
+          // Keep current auth view; just notify listeners about the error.
+          notifyListeners();
+        }
       },
       (user) {
         _user = user;
+        // Stay in authenticated state to avoid navigation reset loops.
         _setState(AuthState.authenticated);
       },
     );
@@ -414,7 +426,7 @@ class AuthProvider extends ChangeNotifier {
       },
       (data) {
         // Refresh user to reflect twoFactorEnabled = true
-        getCurrentUser();
+        getCurrentUser(silent: true);
         return data;
       },
     );
@@ -431,7 +443,7 @@ class AuthProvider extends ChangeNotifier {
       },
       (_) {
         // Refresh user to reflect twoFactorEnabled = false
-        getCurrentUser();
+        getCurrentUser(silent: true);
         return true;
       },
     );
@@ -444,5 +456,37 @@ class AuthProvider extends ChangeNotifier {
       (failure) => false,
       (enabled) => enabled,
     );
+  }
+
+  /// Set whether to show onboarding on login
+  Future<void> setShowOnboardingOnLogin(bool show) async {
+    try {
+      final prefs = sl<SharedPreferences>();
+      await prefs.setBool('show_onboarding_on_login', show);
+      // Don't call notifyListeners() - this setting takes effect on next login
+    } catch (e) {
+      print('Error setting onboarding preference: $e');
+    }
+  }
+
+  /// Get whether to show onboarding on login
+  Future<bool> getShowOnboardingOnLogin() async {
+    try {
+      final prefs = sl<SharedPreferences>();
+      return prefs.getBool('show_onboarding_on_login') ?? true; // Default to true
+    } catch (e) {
+      print('Error getting onboarding preference: $e');
+      return true;
+    }
+  }
+
+  /// Sync method to get cached onboarding preference (for startup routing)
+  bool shouldShowOnboarding() {
+    try {
+      final prefs = sl<SharedPreferences>();
+      return prefs.getBool('show_onboarding_on_login') ?? true;
+    } catch (e) {
+      return true;
+    }
   }
 }

@@ -7,34 +7,58 @@ import 'app_typography.dart';
 @immutable
 class AppTheme {
   static ThemeData light() {
-    final baseScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.pomegranate,
+    return _buildTheme(
       brightness: Brightness.light,
+      scaffoldBackgroundColor: AppColors.background,
+      surfaceColor: Colors.white,
+      colorScheme: _buildColorScheme(
+        brightness: Brightness.light,
+        surface: Colors.white,
+        onSurface: AppColors.midnightBlue,
+        outline: AppColors.silver,
+        surfaceContainerLowest: const Color(0xFFF8FAFC),
+        surfaceContainerLow: const Color(0xFFF1F5F9),
+        surfaceContainer: const Color(0xFFE2E8F0),
+        surfaceContainerHigh: const Color(0xFFCBD5E1),
+        surfaceContainerHighest: const Color(0xFFB8C4D2),
+        onSurfaceVariant: AppColors.asbestos,
+        outlineVariant: const Color(0xFFD2D8DE),
+      ),
     );
+  }
 
-    final colorScheme = baseScheme.copyWith(
-      // Stronger brand red (more saturated than Alizarin).
-      primary: AppColors.pomegranate,
-      onPrimary: Colors.white,
-      secondary: AppColors.alizarin,
-      onSecondary: Colors.white,
-      // Semantic success (used for "you get back", "settled", etc).
-      tertiary: const Color(0xFF16A34A),
-      onTertiary: Colors.white,
-      tertiaryContainer: const Color(0xFFDCFCE7),
-      onTertiaryContainer: const Color(0xFF14532D),
-      // Keep error distinct from primary.
-      error: baseScheme.error,
-      onError: baseScheme.onError,
-      surface: Colors.white,
-      onSurface: AppColors.midnightBlue,
-      outline: AppColors.silver,
+  static ThemeData dark() {
+    return _buildTheme(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF0B1220),
+      surfaceColor: const Color(0xFF111827),
+      colorScheme: _buildColorScheme(
+        brightness: Brightness.dark,
+        surface: const Color(0xFF111827),
+        onSurface: const Color(0xFFF8FAFC),
+        outline: const Color(0xFF334155),
+        surfaceContainerLowest: const Color(0xFF0F172A),
+        surfaceContainerLow: const Color(0xFF111827),
+        surfaceContainer: const Color(0xFF1E293B),
+        surfaceContainerHigh: const Color(0xFF273449),
+        surfaceContainerHighest: const Color(0xFF334155),
+        onSurfaceVariant: const Color(0xFFCBD5E1),
+        outlineVariant: const Color(0xFF334155),
+      ),
     );
+  }
 
+  static ThemeData _buildTheme({
+    required Brightness brightness,
+    required ColorScheme colorScheme,
+    required Color scaffoldBackgroundColor,
+    required Color surfaceColor,
+  }) {
     final base = ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: scaffoldBackgroundColor,
       fontFamily: 'BeVietnamPro',
     );
 
@@ -45,33 +69,39 @@ class AppTheme {
 
     final cardShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppRadii.md),
-      side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.6)),
+      side: BorderSide(
+        color: colorScheme.outlineVariant.withAlpha((0.6 * 255).round()),
+      ),
     );
 
     return base.copyWith(
       textTheme: textTheme,
-      dividerColor: colorScheme.outlineVariant.withOpacity(0.6),
+      dividerColor: colorScheme.outlineVariant.withAlpha((0.6 * 255).round()),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: surfaceColor,
         elevation: 0,
         indicatorColor: colorScheme.primary.withAlpha(28),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
             size: 24,
           );
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return textTheme.labelSmall?.copyWith(
-            color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            color: selected
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           );
         }),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: surfaceColor,
         foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -83,7 +113,8 @@ class AppTheme {
         unselectedLabelColor: colorScheme.onSurfaceVariant,
         indicatorColor: colorScheme.primary,
         indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: colorScheme.outlineVariant.withOpacity(0.6),
+        dividerColor:
+            colorScheme.outlineVariant.withAlpha((0.6 * 255).round()),
         labelStyle: textTheme.labelLarge,
         unselectedLabelStyle: textTheme.labelLarge,
       ),
@@ -96,7 +127,9 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
         filled: true,
-        fillColor: colorScheme.surfaceContainerLowest,
+        fillColor: brightness == Brightness.dark
+            ? colorScheme.surfaceContainerHigh
+            : colorScheme.surfaceContainerLowest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
           borderSide: BorderSide(color: colorScheme.outlineVariant),
@@ -123,14 +156,40 @@ class AppTheme {
         ),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: colorScheme.onSurface,
+        backgroundColor: brightness == Brightness.dark
+            ? colorScheme.surfaceContainerHighest
+            : colorScheme.onSurface,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: colorScheme.surface,
+          color: brightness == Brightness.dark
+              ? colorScheme.onSurface
+              : colorScheme.surface,
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.md),
         ),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.primary;
+          }
+          return colorScheme.surfaceContainerHigh;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.primary
+                .withAlpha((0.35 * 255).round());
+          }
+          return colorScheme.outlineVariant;
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.onPrimary;
+          }
+          return colorScheme.outline;
+        }),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colorScheme.surface,
@@ -172,6 +231,54 @@ class AppTheme {
           ),
         ),
       ),
+    );
+  }
+
+  static ColorScheme _buildColorScheme({
+    required Brightness brightness,
+    required Color surface,
+    required Color onSurface,
+    required Color outline,
+    required Color surfaceContainerLowest,
+    required Color surfaceContainerLow,
+    required Color surfaceContainer,
+    required Color surfaceContainerHigh,
+    required Color surfaceContainerHighest,
+    required Color onSurfaceVariant,
+    required Color outlineVariant,
+  }) {
+    final baseScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.pomegranate,
+      brightness: brightness,
+    );
+
+    return baseScheme.copyWith(
+      primary: AppColors.pomegranate,
+      onPrimary: Colors.white,
+      secondary: AppColors.alizarin,
+      onSecondary: Colors.white,
+      tertiary: brightness == Brightness.dark
+          ? const Color(0xFF22C55E)
+          : const Color(0xFF16A34A),
+      onTertiary: Colors.white,
+      tertiaryContainer: brightness == Brightness.dark
+          ? const Color(0xFF14532D)
+          : const Color(0xFFDCFCE7),
+      onTertiaryContainer: brightness == Brightness.dark
+          ? const Color(0xFFDCFCE7)
+          : const Color(0xFF14532D),
+      error: baseScheme.error,
+      onError: baseScheme.onError,
+      surface: surface,
+      onSurface: onSurface,
+      outline: outline,
+      surfaceContainerLowest: surfaceContainerLowest,
+      surfaceContainerLow: surfaceContainerLow,
+      surfaceContainer: surfaceContainer,
+      surfaceContainerHigh: surfaceContainerHigh,
+      surfaceContainerHighest: surfaceContainerHighest,
+      onSurfaceVariant: onSurfaceVariant,
+      outlineVariant: outlineVariant,
     );
   }
 

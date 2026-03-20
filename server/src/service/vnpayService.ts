@@ -23,7 +23,7 @@ const normalizeOrderInfo = (value: string): string => {
         .replace(/\s+/g, ' ')
         .trim();
 
-    return normalized.slice(0, 255) || 'Thanh toan don hang';
+    return normalized.slice(0, 255) || 'Order payment';
 };
 
 const resolveAmountForVNPay = (amount: number): number => {
@@ -168,7 +168,7 @@ export const vnpayService = {
             vnp_CurrCode: VNPAY_CURR_CODE,
             vnp_IpAddr: ipAddr,
             vnp_Locale: VNPAY_LOCALE,
-            vnp_OrderInfo: normalizeOrderInfo(`Thanh toan transfer ${transferId}`),
+            vnp_OrderInfo: normalizeOrderInfo(`Payment for transfer ${transferId}`),
             vnp_OrderType: VNPAY_ORDER_TYPE,
             vnp_ReturnUrl: returnUrl,
             vnp_TxnRef: txnRef,
@@ -197,7 +197,7 @@ export const vnpayService = {
             vnp_CurrCode: VNPAY_CURR_CODE,
             vnp_IpAddr: ipAddr,
             vnp_Locale: VNPAY_LOCALE,
-            vnp_OrderInfo: normalizeOrderInfo(`Nap tien tai khoan ${topUpId}`),
+            vnp_OrderInfo: normalizeOrderInfo(`Top up account ${topUpId}`),
             vnp_OrderType: VNPAY_ORDER_TYPE,
             vnp_ReturnUrl: returnUrl,
             vnp_TxnRef: txnRef,

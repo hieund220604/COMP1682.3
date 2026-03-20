@@ -28,7 +28,7 @@ export const transactionService = {
      * Create a new transaction record
      */
     async createTransaction(data: CreateTransactionRequest): Promise<TransactionResponse> {
-        const transaction = await Transaction.create({
+        const payload = {
             userId: data.userId,
             groupId: data.groupId,
             type: data.type,
@@ -39,7 +39,11 @@ export const transactionService = {
             description: data.description,
             referenceId: data.referenceId,
             referenceType: data.referenceType
-        });
+        };
+
+        const [transaction] = data.session
+            ? await Transaction.create([payload], { session: data.session })
+            : await Transaction.create([payload]);
 
         return transformTransaction(transaction);
     },

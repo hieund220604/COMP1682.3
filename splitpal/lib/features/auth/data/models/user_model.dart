@@ -14,6 +14,7 @@ class UserModel extends User {
     required super.currency,
     required super.isActive,
     super.twoFactorEnabled = false,
+    super.pushNotificationsEnabled = true,
     required super.createdAt,
   });
 
@@ -49,6 +50,8 @@ class UserModel extends User {
       currency: currencyRaw as String? ?? 'VND',
       isActive: isActive,
       twoFactorEnabled: json['twoFactorEnabled'] as bool? ?? false,
+      pushNotificationsEnabled:
+          json['pushNotificationsEnabled'] as bool? ?? true,
       createdAt: createdAt,
     );
   }
@@ -62,6 +65,7 @@ class UserModel extends User {
         'currency': currency,
         'isActive': isActive,
         'twoFactorEnabled': twoFactorEnabled,
+        'pushNotificationsEnabled': pushNotificationsEnabled,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -75,6 +79,7 @@ class UserModel extends User {
         currency: currency,
         isActive: isActive,
         twoFactorEnabled: twoFactorEnabled,
+        pushNotificationsEnabled: pushNotificationsEnabled,
         createdAt: createdAt,
       );
 }

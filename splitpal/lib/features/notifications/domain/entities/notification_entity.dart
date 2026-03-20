@@ -8,7 +8,9 @@ enum NotificationType {
   paymentReceived('PAYMENT_RECEIVED'),
   inviteReceived('INVITE_RECEIVED'),
   groupJoined('GROUP_JOINED'),
-  balanceUpdated('BALANCE_UPDATED');
+  balanceUpdated('BALANCE_UPDATED'),
+  paymentRequestCancelled('PAYMENT_REQUEST_CANCELLED'),
+  paymentRefunded('PAYMENT_REFUNDED');
 
   const NotificationType(this.value);
   final String value;

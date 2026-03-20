@@ -13,6 +13,7 @@ import '../../../../features/groups/presentation/pages/group_detail_page.dart';
 import '../../../../features/subscriptions/presentation/pages/subscription_detail_page.dart';
 import '../../../../features/home/presentation/pages/home_shell_page.dart';
 import '../../../../features/exchange/presentation/pages/currency_converter_page.dart';
+import 'transaction_history_page.dart';
 import 'wallet_operations_page.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -26,7 +27,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   ModalRoute<dynamic>? _route;
 
   Future<void> _refreshData() async {
-    await context.read<AuthProvider>().getCurrentUser();
+    await context.read<AuthProvider>().getCurrentUser(silent: true);
     if (!mounted) return;
 
     await Future.wait([
@@ -162,88 +163,112 @@ class _WalletBalanceCard extends StatelessWidget {
     final currency = user?.currency ?? 'USD';
     final balanceStr = '$currency ${balance.toStringAsFixed(2)}';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colorScheme.primary, colorScheme.primary.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const TransactionHistoryPage(),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.account_balance_wallet,
-                color: colorScheme.onPrimary.withOpacity(0.8),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Wallet Balance',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onPrimary.withOpacity(0.8),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [colorScheme.primary, colorScheme.primary.withOpacity(0.8)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 12),
-          Text(
-            balanceStr,
-            style: textTheme.displaySmall?.copyWith(
-              color: colorScheme.onPrimary,
-              fontWeight: FontWeight.w900,
-              fontSize: 32,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.primary.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const WalletOperationsPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.add_card),
-                  label: const Text('Top up'),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.account_balance_wallet,
+                  color: colorScheme.onPrimary.withOpacity(0.8),
+                  size: 20,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const WalletOperationsPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.outbox_outlined),
-                  label: const Text('Withdraw'),
+                const SizedBox(width: 8),
+                Text(
+                  'Wallet Balance',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onPrimary.withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
+                const Spacer(),
+                Icon(
+                  Icons.history,
+                  color: colorScheme.onPrimary.withOpacity(0.9),
+                  size: 18,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              balanceStr,
+              style: textTheme.displaySmall?.copyWith(
+                color: colorScheme.onPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: 32,
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tap to view transaction history',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onPrimary.withOpacity(0.85),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WalletOperationsPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.add_card),
+                    label: const Text('Top up'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WalletOperationsPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.outbox_outlined),
+                    label: const Text('Withdraw'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

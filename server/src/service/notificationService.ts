@@ -51,6 +51,8 @@ export const notificationService = {
                 console.warn(`FCM skip: user not found (${input.userId})`);
             } else if (!user.fcmToken) {
                 console.log(`FCM skip: user ${input.userId} has no fcmToken`);
+            } else if (user.pushNotificationsEnabled === false) {
+                console.log(`FCM skip: user ${input.userId} has disabled push notifications`);
             } else if (!isFirebaseInitialized()) {
                 console.warn('FCM skip: Firebase Admin is not initialized');
             } else {

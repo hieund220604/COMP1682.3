@@ -5,6 +5,7 @@ import { ResponseUtil } from '../util/responseUtil';
 import { TopUpResponse, TopUpStatus } from '../type/account';
 import { ApiResponse } from '../type/group';
 import { User } from '../models/User';
+import { validateVNPayCallbackUrl } from '../util/vnpayUrlValidation';
 
 const normalizeIpAddress = (rawIp?: string): string => {
     if (!rawIp) return '127.0.0.1';
@@ -24,23 +25,7 @@ const resolveVNPayReturnUrl = () => {
         throw new Error('VNPAY_RETURN_URL is required. This must be the approved URL in your VNPay merchant configuration.');
     }
 
-    let parsed: URL;
-    try {
-        parsed = new URL(configuredUrl);
-    } catch (_error) {
-        throw new Error('VNPAY_RETURN_URL is invalid. Please provide a valid absolute URL.');
-    }
-
-    const isLocalHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-    if (isLocalHost && process.env.VNPAY_ALLOW_LOCAL_RETURN_URL !== 'true') {
-        throw new Error('VNPAY_RETURN_URL is localhost, which is typically not approved by VNPay. Use a public HTTPS domain (or tunnel) and register it with VNPay.');
-    }
-
-    if (parsed.hostname.includes('vnpayment.vn')) {
-        throw new Error('VNPAY_RETURN_URL must be your merchant callback URL, not a VNPay URL. Example: https://your-domain/api/payments/vnpay-return');
-    }
-
-    return configuredUrl;
+    return validateVNPayCallbackUrl(configuredUrl, 'VNPAY_RETURN_URL');
 };
 
 export const accountController = {
@@ -176,6 +161,71 @@ export const accountController = {
 
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to delete FCM token');
+        }
+    },
+
+    /**
+     * Get push notification preference
+     * GET /api/accounts/notification-preferences
+     */
+    async getNotificationPreferences(
+        req: Request,
+        res: Response
+    ): Promise<void> {
+        try {
+            if (!req.user) {
+                return ResponseUtil.unauthorized(res);
+            }
+
+            const user = await User.findById(req.user.userId).select('_id pushNotificationsEnabled');
+            if (!user) {
+                return ResponseUtil.notFound(res, 'User not found');
+            }
+
+            ResponseUtil.success(res, {
+                pushNotificationsEnabled: user.pushNotificationsEnabled !== false
+            }, 'Notification preferences retrieved successfully');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to get notification preferences');
+        }
+    },
+
+    /**
+     * Update push notification preference
+     * PATCH /api/accounts/notification-preferences
+     */
+    async updateNotificationPreferences(
+        req: Request<{}, {}, { pushNotificationsEnabled?: boolean; enabled?: boolean }>,
+        res: Response
+    ): Promise<void> {
+        try {
+            if (!req.user) {
+                return ResponseUtil.unauthorized(res);
+            }
+
+            const rawPreference = typeof req.body.pushNotificationsEnabled === 'boolean'
+                ? req.body.pushNotificationsEnabled
+                : req.body.enabled;
+
+            if (typeof rawPreference !== 'boolean') {
+                return ResponseUtil.validationError(res, 'pushNotificationsEnabled must be a boolean');
+            }
+
+            const user = await User.findByIdAndUpdate(
+                req.user.userId,
+                { pushNotificationsEnabled: rawPreference },
+                { new: true }
+            ).select('_id pushNotificationsEnabled');
+
+            if (!user) {
+                return ResponseUtil.notFound(res, 'User not found');
+            }
+
+            ResponseUtil.success(res, {
+                pushNotificationsEnabled: user.pushNotificationsEnabled !== false
+            }, 'Notification preferences updated successfully');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to update notification preferences');
         }
     }
 };

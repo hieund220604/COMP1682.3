@@ -4,6 +4,9 @@ import { User } from '../models/User';
 import { emailService } from './emailService';
 import { JWTPayLoad } from '../type/auth';
 
+const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+const toPushNotificationsEnabled = (value: boolean | undefined): boolean => value !== false;
+
 export const authService = {
     async hashPassword(password: string): Promise<string> {
         const salt = await bcrypt.genSalt(10);
@@ -31,7 +34,8 @@ export const authService = {
     },
 
     async SignUpUser(email: string, password: string, displayName?: string): Promise<any> {
-        const existingUser = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const existingUser = await User.findOne({ email: normalizedEmail });
 
         // If user exists:
         if (existingUser) {
@@ -50,12 +54,13 @@ export const authService = {
             await existingUser.save();
 
             // Resend OTP
-            await emailService.sendOTP(email);
+            await emailService.sendOTP(normalizedEmail);
 
             return {
                 userId: existingUser._id.toString(),
                 email: existingUser.email,
                 displayName: existingUser.displayName,
+                pushNotificationsEnabled: toPushNotificationsEnabled(existingUser.pushNotificationsEnabled),
                 message: 'Account already exists but was inactive. A new verification code has been sent to your email.'
             };
         }
@@ -63,39 +68,42 @@ export const authService = {
         // New User creation
         const hashedPassword = await this.hashPassword(password);
         const newUser = await User.create({
-            email,
+            email: normalizedEmail,
             passwordHash: hashedPassword,
-            displayName: displayName || email.split('@')[0],
+            displayName: displayName || normalizedEmail.split('@')[0],
             status: "inactive"
         });
-        await emailService.sendOTP(email);
+        await emailService.sendOTP(normalizedEmail);
         return {
             userId: newUser._id.toString(),
             email: newUser.email,
             displayName: newUser.displayName,
             avatarUrl: newUser.avatarUrl,
+            pushNotificationsEnabled: toPushNotificationsEnabled(newUser.pushNotificationsEnabled),
             message: 'User registered successfully. Please verify your email to activate your account.'
         };
     },
 
     async verifyOTP(email: string, otp: string): Promise<any> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             throw new Error('User not found');
         }
-        if (!(await emailService.verifyOTP(email, otp))) {
+        if (!(await emailService.verifyOTP(normalizedEmail, otp))) {
             throw new Error('Invalid or expired OTP');
         }
         user.status = 'active';
         await user.save();
 
-        await emailService.sendWelcomeEmail(email, user.displayName || '');
+        await emailService.sendWelcomeEmail(normalizedEmail, user.displayName || '');
         return {
             user: {
                 userId: user._id.toString(),
                 email: user.email,
                 displayName: user.displayName,
                 avatarUrl: user.avatarUrl,
+                pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
                 message: 'Email verified successfully. Your account is now active.'
             },
             token: this.generateToken(user._id.toString(), user.email)
@@ -103,7 +111,8 @@ export const authService = {
     },
 
     async loginUser(email: string, password: string): Promise<any> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             throw new Error('Invalid email or password');
         }
@@ -132,6 +141,7 @@ export const authService = {
                     email: user.email,
                     displayName: user.displayName,
                     twoFactorEnabled: true,
+                    pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
                 },
             };
         }
@@ -146,19 +156,21 @@ export const authService = {
                 balance: user.balance,
                 currency: user.currency,
                 twoFactorEnabled: false,
+                pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
             },
             token
         };
     },
 
     async passwordResetRequest(email: string): Promise<string> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             return 'If the email is registered, a password reset link has been sent.';
         }
         const resetOptions: any = { expiresIn: '1h' };
         const resetToken = jwt.sign({ userId: user._id.toString(), email: user.email, type: 'reset' }, process.env.JWT_SECRET || 'default_secret', resetOptions);
-        await emailService.sendPasswordResetEmail(email, resetToken);
+        await emailService.sendPasswordResetEmail(normalizedEmail, resetToken);
         return 'If the email is registered, a password reset link has been sent.';
     },
 
@@ -190,20 +202,22 @@ export const authService = {
     },
 
     async resendOTP(email: string): Promise<string> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             throw new Error('User not found');
         }
         if (user.status === 'active') {
             throw new Error('Account is already active');
         }
-        await emailService.sendOTP(email);
+        await emailService.sendOTP(normalizedEmail);
         return 'A new OTP has been sent to your email.';
     },
 
     // Forgot Password - Send OTP to existing user
     async forgotPasswordOTP(email: string): Promise<string> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             // Return generic message for security (don't reveal if email exists)
             return 'If the email is registered, an OTP has been sent.';
@@ -211,17 +225,18 @@ export const authService = {
         if (user.status !== 'active') {
             throw new Error('Account is not active. Please verify your email first.');
         }
-        await emailService.sendOTP(email);
+        await emailService.sendOTP(normalizedEmail);
         return 'An OTP has been sent to your email for password reset.';
     },
 
     // Verify OTP for password reset (doesn't activate account, just validates OTP)
     async verifyResetOTP(email: string, otp: string): Promise<{ valid: boolean; resetToken: string }> {
-        const user = await User.findOne({ email });
+        const normalizedEmail = normalizeEmail(email);
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             throw new Error('User not found');
         }
-        if (!(await emailService.verifyOTP(email, otp))) {
+        if (!(await emailService.verifyOTP(normalizedEmail, otp))) {
             throw new Error('Invalid or expired OTP');
         }
         // Generate a short-lived reset token
@@ -261,7 +276,7 @@ export const authService = {
     },
 
     async getUserProfilebyID(userId: string): Promise<any> {
-        const user = await User.findById(userId).select('_id email displayName avatarUrl status balance currency twoFactorEnabled createdAt updatedAt');
+        const user = await User.findById(userId).select('_id email displayName avatarUrl status balance currency pushNotificationsEnabled twoFactorEnabled createdAt updatedAt');
         if (!user) {
             throw new Error('User not found');
         }
@@ -273,6 +288,7 @@ export const authService = {
             status: user.status,
             balance: user.balance,
             currency: user.currency,
+            pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
             twoFactorEnabled: user.twoFactorEnabled || false,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt
@@ -284,7 +300,7 @@ export const authService = {
             userId,
             data,
             { new: true }
-        ).select('_id email displayName avatarUrl balance currency');
+        ).select('_id email displayName avatarUrl balance currency pushNotificationsEnabled');
 
         if (!user) {
             throw new Error('User not found');
@@ -296,7 +312,8 @@ export const authService = {
             displayName: user.displayName,
             avatarUrl: user.avatarUrl,
             balance: user.balance,
-            currency: user.currency
+            currency: user.currency,
+            pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled)
         };
     },
 
