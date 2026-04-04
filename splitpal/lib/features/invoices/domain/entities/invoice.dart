@@ -90,6 +90,7 @@ class PaymentRequest {
   final DateTime issuedAt;
   final DateTime? paidAt;
   final DateTime? cancelledAt;
+  final DateTime? expiresAt;
   final DateTime createdAt;
 
   PaymentRequest({
@@ -101,6 +102,7 @@ class PaymentRequest {
     required this.issuedAt,
     this.paidAt,
     this.cancelledAt,
+    this.expiresAt,
     required this.createdAt,
   });
 }

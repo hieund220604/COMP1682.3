@@ -15,6 +15,8 @@ import 'package:splitpal/features/invoices/presentation/providers/invoice_provid
 import 'package:splitpal/features/invoices/presentation/widgets/payment_request_section.dart';
 import 'package:splitpal/features/subscriptions/presentation/widgets/create_subscription_sheet.dart';
 import 'package:splitpal/features/subscriptions/presentation/widgets/subscription_list.dart';
+import 'package:splitpal/core/network/dio_client.dart';
+import 'package:splitpal/core/constants/api_constants.dart';
 
 import 'widgets/group_header.dart';
 import 'widgets/group_invoices_tab.dart';
@@ -36,6 +38,9 @@ class GroupDetailPage extends StatefulWidget {
 }
 
 class _GroupDetailPageState extends State<GroupDetailPage> {
+  Map<String, dynamic>? _dashboard;
+  final DioClient _dio = di.sl<DioClient>();
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +52,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
           );
       context.read<InvoiceProvider>().loadInvoices(widget.groupId);
       context.read<InvoiceProvider>().loadMyBalance(widget.groupId);
+      _fetchDashboard();
     });
   }
 
@@ -56,6 +62,19 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
           widget.groupId,
           currentUserId: userId,
         );
+    await _fetchDashboard();
+  }
+
+  Future<void> _fetchDashboard() async {
+    try {
+      final response = await _dio.get(ApiConstants.dashboardGroup(widget.groupId));
+      if (!mounted) return;
+      setState(() {
+        _dashboard = response.data['data'] as Map<String, dynamic>?;
+      });
+    } catch (_) {
+      // swallow errors; overview tab still works without dashboard
+    }
   }
 
   void _openInvite() {
@@ -279,6 +298,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 currency: currency,
                 role: resolvedRole,
                 isOwnerOrAdmin: isOwnerOrAdmin,
+                dashboard: _dashboard,
                 onRefresh: _refreshGroup,
                 onOpenChat: _openGroupChat,
                 onInvite: isOwnerOrAdmin ? _openInvite : null,

@@ -149,7 +149,9 @@ export const paymentRequestService = {
                     createdBy: userId,
                     invoiceIds,
                     status: 'ISSUED',
-                    issuedAt: new Date()
+                    issuedAt: new Date(),
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    lastReminderAt: null
                 }], { session }).then(res => res[0]);
 
                 // Lock all invoices
@@ -282,6 +284,8 @@ export const paymentRequestService = {
             invoiceIds: request.invoiceIds,
             status: request.status,
             issuedAt: request.issuedAt,
+            expiresAt: request.expiresAt ?? undefined,
+            lastReminderAt: request.lastReminderAt ?? undefined,
             paidAt: request.paidAt ?? undefined,
             cancelledAt: request.cancelledAt ?? undefined,
             createdAt: request.createdAt,
@@ -326,6 +330,8 @@ export const paymentRequestService = {
                 invoiceIds: req.invoiceIds,
                 status: req.status,
                 issuedAt: req.issuedAt,
+                expiresAt: req.expiresAt ?? undefined,
+                lastReminderAt: req.lastReminderAt ?? undefined,
                 paidAt: req.paidAt ?? undefined,
                 cancelledAt: req.cancelledAt ?? undefined,
                 createdAt: req.createdAt,
@@ -344,20 +350,23 @@ export const paymentRequestService = {
      * - ISSUED: just cancel pending transfers  
      * - PARTIALLY_PAID: refund completed transfers, cancel pending ones
      */
-    async cancelPaymentRequest(userId: string, groupId: string, requestId: string): Promise<{ refundedTransfers: number; cancelledTransfers: number }> {
-        const membership = await GroupMember.findOne({ groupId, userId, leftAt: null });
-        if (!membership) {
-            throw new Error('NOT_GROUP_MEMBER');
-        }
-        if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
-            // Regular members can trigger cancel if they have a pending transfer
-            const userHasPendingTransfer = await Transfer.findOne({
-                paymentRequestId: requestId,
-                fromUserId: userId,
-                status: 'PENDING'
-            });
-            if (!userHasPendingTransfer) {
-                throw new Error('Only the payer with a pending transfer or group admin can cancel');
+    async cancelPaymentRequest(userId: string, groupId: string, requestId: string, options?: { force?: boolean; reason?: 'EXPIRED' | 'CANCELLED' }): Promise<{ refundedTransfers: number; cancelledTransfers: number }> {
+        const reason = options?.reason || 'CANCELLED';
+        if (!options?.force) {
+            const membership = await GroupMember.findOne({ groupId, userId, leftAt: null });
+            if (!membership) {
+                throw new Error('NOT_GROUP_MEMBER');
+            }
+            if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+                // Regular members can trigger cancel if they have a pending transfer
+                const userHasPendingTransfer = await Transfer.findOne({
+                    paymentRequestId: requestId,
+                    fromUserId: userId,
+                    status: 'PENDING'
+                });
+                if (!userHasPendingTransfer) {
+                    throw new Error('Only the payer with a pending transfer or group admin can cancel');
+                }
             }
         }
 
@@ -526,12 +535,17 @@ export const paymentRequestService = {
         await invalidatePaymentRequestCache(groupId);
         await invalidateRelatedInvoiceCache(groupId);
 
-        const participantUserIds = Array.from(new Set(
-            transfers.flatMap(t => [t.fromUserId, t.toUserId])
-        ));
+        const participantUserIds = Array.from(new Set([
+            ...transfers.flatMap(t => [t.fromUserId, t.toUserId]),
+            request.createdBy,
+            ...refundRecords.flatMap(r => [r.fromUserId, r.toUserId])
+        ]));
 
         const canceller = await User.findById(userId).select('displayName email');
         const cancellerName = canceller?.displayName || canceller?.email || 'An admin';
+        const cancelMessage = reason === 'EXPIRED'
+            ? 'Payment request expired and was cancelled automatically.'
+            : `A payment request was cancelled by ${cancellerName}.`;
 
         await Promise.all(
             participantUserIds.map(participantId =>
@@ -539,7 +553,7 @@ export const paymentRequestService = {
                     userId: participantId,
                     type: NotificationType.PAYMENT_REQUEST_CANCELLED,
                     title: 'Payment Request Cancelled',
-                    message: `A payment request was cancelled by ${cancellerName}.`,
+                    message: cancelMessage,
                     data: {
                         requestId,
                         groupId,
@@ -692,5 +706,63 @@ export const paymentRequestService = {
         await PaymentRequest.findByIdAndUpdate(requestId, update);
         await invalidatePaymentRequestCache(request.groupId);
         await invalidateRelatedInvoiceCache(request.groupId);
+    },
+
+    async processExpirationsAndReminders(): Promise<void> {
+        const now = new Date();
+        const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+        const activeRequests = await PaymentRequest.find({
+            status: { $in: ['ISSUED', 'PARTIALLY_PAID'] }
+        });
+
+        for (const req of activeRequests) {
+            if (req.expiresAt && req.expiresAt <= now) {
+                try {
+                    await this.cancelPaymentRequest(
+                        req.createdBy || 'SYSTEM',
+                        req.groupId,
+                        req._id.toString(),
+                        { force: true, reason: 'EXPIRED' }
+                    );
+                } catch (error) {
+                    console.error('Failed to auto-cancel expired payment request', req._id.toString(), error);
+                }
+                continue;
+            }
+
+            const shouldRemind = req.expiresAt
+                && (!req.lastReminderAt || (now.getTime() - req.lastReminderAt.getTime()) >= REMINDER_INTERVAL_MS);
+
+            if (shouldRemind) {
+                const transfers = await Transfer.find({ paymentRequestId: req._id.toString() });
+                const participantIds = Array.from(new Set([
+                    req.createdBy,
+                    ...transfers.flatMap(t => [t.fromUserId, t.toUserId])
+                ]));
+
+                const daysLeft = req.expiresAt
+                    ? Math.max(0, Math.ceil((req.expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+                    : null;
+
+                await Promise.all(participantIds.map(uid =>
+                    notificationService.createNotification({
+                        userId: uid,
+                        type: NotificationType.PAYMENT_REQUEST_REMINDER,
+                        title: 'Payment Request Reminder',
+                        message: daysLeft && daysLeft > 0
+                            ? `Payment request expires in ${daysLeft} day(s).`
+                            : 'Payment request is about to expire.',
+                        data: {
+                            requestId: req._id.toString(),
+                            groupId: req.groupId,
+                            expiresAt: req.expiresAt
+                        }
+                    })
+                ));
+
+                await PaymentRequest.findByIdAndUpdate(req._id, { lastReminderAt: now });
+            }
+        }
     }
 };

@@ -505,10 +505,33 @@ export const groupService = {
             throw new Error('Admin cannot grant ADMIN role.');
         }
 
+        const previousRole = targetMember.role;
+
         await GroupMember.findByIdAndUpdate(memberId, { role: newRole });
         await invalidateGroupCache(groupId);
 
-        const user = await User.findById(targetMember.userId).select('_id email displayName avatarUrl');
+        const [targetUser, actorUser] = await Promise.all([
+            User.findById(targetMember.userId).select('_id email displayName avatarUrl'),
+            User.findById(userId).select('_id email displayName')
+        ]);
+
+        if (targetUser) {
+            const actorName = actorUser?.displayName || actorUser?.email || 'A group admin';
+            const roleMessage = `${previousRole} → ${newRole}`;
+            await notificationService.createNotification({
+                userId: targetMember.userId,
+                type: NotificationType.ROLE_CHANGED,
+                title: 'Vai trò của bạn trong nhóm đã thay đổi',
+                message: `${actorName} đã cập nhật vai trò của bạn: ${roleMessage}`,
+                data: {
+                    groupId,
+                    memberId: targetMember.userId,
+                    previousRole,
+                    newRole,
+                    actorId: userId
+                }
+            });
+        }
 
         return {
             id: targetMember._id.toString(),
@@ -517,7 +540,7 @@ export const groupService = {
             role: newRole,
             joinedAt: targetMember.joinedAt,
             leftAt: targetMember.leftAt ?? undefined,
-            user: transformUser(user!)
+            user: transformUser(targetUser!)
         };
     },
 

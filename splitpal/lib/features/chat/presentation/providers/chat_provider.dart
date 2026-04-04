@@ -36,6 +36,16 @@ class ChatProvider extends ChangeNotifier {
   String? get groupId => _groupId;
   String? get currentUserId => _currentUserId;
 
+  Future<Map<String, dynamic>> extractInvoiceSuggestion(String text) async {
+    if (text.trim().isEmpty) {
+      throw Exception('Message is empty');
+    }
+    return await remoteDataSource.extractInvoiceSuggestion(
+      text: text.trim(),
+      groupId: _groupId,
+    );
+  }
+
   Future<void> init(String groupId, {String? currentUserId}) async {
     if (_groupId == groupId && _listenersAttached && _messages.isNotEmpty) {
       return;

@@ -9,7 +9,8 @@
     "start": "npm run build && node dist/index.js",
     "lint": "eslint src --ext .ts",
     "test:concurrency": "ts-node scripts/concurrency-smoke.ts",
-    "seed": "ts-node src/seed.ts"
+    "seed": "ts-node src/seed.ts",
+    "seed:test": "ts-node scripts/seed-test-data.ts"
   },
   "keywords": [
     "express",

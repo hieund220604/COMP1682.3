@@ -181,6 +181,23 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
                                 color: scheme.onSurfaceVariant,
                               ),
                         ),
+                        if (detail.expiresAt != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            detail.expiresAt!.isBefore(DateTime.now())
+                                ? 'Expired at ${_fmtDateTime(detail.expiresAt!)}'
+                                : 'Expires: ${_fmtDateTime(detail.expiresAt!)}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: detail.expiresAt!.isBefore(DateTime.now())
+                                      ? scheme.error
+                                      : scheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           children: [
@@ -867,6 +884,7 @@ class _PaymentRequestDetail {
   final List<String> invoiceIds;
   final String status;
   final DateTime issuedAt;
+  final DateTime? expiresAt;
   final DateTime createdAt;
   final double totalAmount;
   final int totalTransfers;
@@ -881,6 +899,7 @@ class _PaymentRequestDetail {
     required this.invoiceIds,
     required this.status,
     required this.issuedAt,
+    this.expiresAt,
     required this.createdAt,
     required this.totalAmount,
     required this.totalTransfers,
@@ -903,6 +922,7 @@ class _PaymentRequestDetail {
       status: (json['status'] ?? 'ISSUED').toString(),
       issuedAt: DateTime.tryParse((json['issuedAt'] ?? '').toString()) ??
           DateTime.now(),
+      expiresAt: DateTime.tryParse((json['expiresAt'] ?? '').toString()),
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
@@ -1040,4 +1060,3 @@ List<T> _parseList<T>(dynamic raw, T Function(dynamic e) mapper) {
   if (raw is! List) return const [];
   return raw.map(mapper).toList(growable: false);
 }
-

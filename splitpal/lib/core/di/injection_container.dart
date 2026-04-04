@@ -76,6 +76,20 @@ import '../../features/exchange/data/datasources/exchange_remote_datasource.dart
 import '../../features/exchange/data/repositories/exchange_repository_impl.dart';
 import '../../features/exchange/domain/repositories/exchange_repository.dart';
 import '../../features/exchange/presentation/providers/exchange_provider.dart';
+import '../../features/receipts/data/datasources/receipt_remote_datasource.dart';
+import '../../features/receipts/data/repositories/receipt_repository_impl.dart';
+import '../../features/receipts/domain/repositories/receipt_repository.dart';
+import '../../features/receipts/domain/usecases/create_receipt.dart';
+import '../../features/receipts/domain/usecases/create_tag.dart';
+import '../../features/receipts/domain/usecases/delete_receipt.dart';
+import '../../features/receipts/domain/usecases/delete_tag.dart';
+import '../../features/receipts/domain/usecases/get_day_receipts.dart';
+import '../../features/receipts/domain/usecases/get_month_summary.dart';
+import '../../features/receipts/domain/usecases/get_tags.dart';
+import '../../features/receipts/domain/usecases/update_receipt.dart';
+import '../../features/receipts/domain/usecases/update_tag.dart';
+import '../../features/receipts/presentation/providers/receipt_provider.dart';
+import '../utils/upload_repository.dart';
 import '../network/dio_client.dart';
 import '../network/socket_client.dart';
 import '../utils/token_manager.dart';
@@ -125,6 +139,7 @@ Future<void> init() async {
   _initNotification();
   _initChat();
   _initExchange();
+  _initReceipt();
 }
 
 // ============================================================
@@ -387,5 +402,47 @@ void _initExchange() {
   // Provider
   sl.registerFactory(
     () => ExchangeProvider(repository: sl()),
+  );
+}
+
+// ============================================================
+// Receipt Diary Feature
+// ============================================================
+void _initReceipt() {
+  // Data source
+  sl.registerLazySingleton<ReceiptRemoteDataSource>(
+    () => ReceiptRemoteDataSourceImpl(dioClient: sl()),
+  );
+
+  // Repository
+  sl.registerLazySingleton<ReceiptRepository>(
+    () => ReceiptRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Use cases
+  sl.registerLazySingleton(() => GetMonthSummary(sl()));
+  sl.registerLazySingleton(() => GetDayReceipts(sl()));
+  sl.registerLazySingleton(() => CreateReceipt(sl()));
+  sl.registerLazySingleton(() => UpdateReceipt(sl()));
+  sl.registerLazySingleton(() => DeleteReceipt(sl()));
+  sl.registerLazySingleton(() => GetTags(sl()));
+  sl.registerLazySingleton(() => CreateTag(sl()));
+  sl.registerLazySingleton(() => UpdateTag(sl()));
+  sl.registerLazySingleton(() => DeleteTag(sl()));
+
+  // Provider
+  sl.registerFactory(
+    () => ReceiptProvider(
+      getMonthSummaryUseCase: sl(),
+      getDayReceiptsUseCase: sl(),
+      createReceiptUseCase: sl(),
+      updateReceiptUseCase: sl(),
+      deleteReceiptUseCase: sl(),
+      getTagsUseCase: sl(),
+      createTagUseCase: sl(),
+      updateTagUseCase: sl(),
+      deleteTagUseCase: sl(),
+      uploadRepository: UploadRepository(dioClient: sl()),
+    ),
   );
 }

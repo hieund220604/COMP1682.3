@@ -1,4 +1,5 @@
 import { subscriptionService } from './service/subscriptionService';
+import { paymentRequestService } from './service/paymentRequestService';
 
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -22,6 +23,7 @@ async function runJob() {
         if (result.totalSubscriptions > 0) {
             console.log(`[Scheduler] Subscription renewals processed: ${result.successfulCharges} success, ${result.failedCharges} failed out of ${result.totalSubscriptions}`);
         }
+        await paymentRequestService.processExpirationsAndReminders();
     } catch (error) {
         console.error('[Scheduler] Error processing subscription renewals:', error);
     }

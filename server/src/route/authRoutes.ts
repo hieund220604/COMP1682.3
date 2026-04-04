@@ -3,6 +3,7 @@ import { authController } from '../controller/authController';
 import { twoFactorController } from '../controller/twoFactorController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { createRateLimit } from '../middleware/rateLimitMiddleware';
+import { loginGuard } from '../middleware/loginGuardMiddleware';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.post('/verify-otp', verifyOtpRateLimit, authController.verifyOTP);
 router.post('/resend-otp', resendOtpRateLimit, authController.resendOTP);
 
 // Login
-router.post('/login', authController.loginUser);
+router.post('/login', loginGuard, authController.loginUser);
 
 // Forgot Password - Send OTP
 router.post('/forgot-password', authController.forgotPassword);

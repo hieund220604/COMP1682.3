@@ -9,6 +9,8 @@ export interface IPaymentRequest extends Document {
     invoiceIds: string[];     // List of invoices in this request
     status: PaymentRequestStatus;
     issuedAt: Date;
+    expiresAt?: Date;
+    lastReminderAt?: Date | null;
     paidAt?: Date;
     cancelledAt?: Date;
     createdAt: Date;
@@ -38,6 +40,15 @@ const PaymentRequestSchema = new Schema<IPaymentRequest>({
     issuedAt: {
         type: Date,
         default: Date.now
+    },
+    expiresAt: {
+        type: Date,
+        default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        index: true
+    },
+    lastReminderAt: {
+        type: Date,
+        default: null
     },
     paidAt: {
         type: Date,

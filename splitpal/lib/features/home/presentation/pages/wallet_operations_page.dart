@@ -11,8 +11,15 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import 'home_shell_page.dart';
 
+enum WalletOperationMode { topup, withdraw }
+
 class WalletOperationsPage extends StatefulWidget {
-  const WalletOperationsPage({super.key});
+  const WalletOperationsPage({
+    super.key,
+    this.mode = WalletOperationMode.topup,
+  });
+
+  final WalletOperationMode mode;
 
   @override
   State<WalletOperationsPage> createState() => _WalletOperationsPageState();
@@ -32,6 +39,8 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   final _withdrawAmountController = TextEditingController();
   final _withdrawTotpController = TextEditingController();
   final _withdrawOtpController = TextEditingController();
+  final _topUpFocusNode = FocusNode();
+  final _withdrawFocusNode = FocusNode();
 
   bool _isTopUpLoading = false;
   bool _isWithdrawalLoading = false;
@@ -45,6 +54,9 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
 
   String? _activeWithdrawalId;
   ModalRoute<dynamic>? _route;
+  final _listController = ScrollController();
+  final _topUpSectionKey = GlobalKey();
+  final _withdrawSectionKey = GlobalKey();
 
   DioClient get _dioClient => di.sl<DioClient>();
 
@@ -52,7 +64,10 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshData();
+      _scrollToInitialMode();
+    });
   }
 
   Future<void> _refreshData() async {
@@ -98,7 +113,29 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
     _withdrawAmountController.dispose();
     _withdrawTotpController.dispose();
     _withdrawOtpController.dispose();
+    _topUpFocusNode.dispose();
+    _withdrawFocusNode.dispose();
+    _listController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollToInitialMode() async {
+    final key = widget.mode == WalletOperationMode.withdraw
+        ? _withdrawSectionKey
+        : _topUpSectionKey;
+    final targetContext = key.currentContext;
+    if (targetContext != null) {
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+      );
+    }
+    if (widget.mode == WalletOperationMode.withdraw) {
+      _withdrawFocusNode.requestFocus();
+    } else {
+      _topUpFocusNode.requestFocus();
+    }
   }
 
   Future<void> _startTopUp() async {
@@ -407,6 +444,7 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
+          controller: _listController,
           children: [
             _SectionCard(
               title: 'Current Balance',
@@ -418,165 +456,173 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
               ),
             ),
             const SizedBox(height: 12),
-            _SectionCard(
-              title: 'Top Up via VNPay',
-              subtitle:
-                  'Create VNPay payment link and complete payment in browser.',
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _topUpAmountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      prefixIcon: Icon(Icons.payments_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _isTopUpLoading ? null : _startTopUp,
-                      icon: _isTopUpLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.open_in_new),
-                      label: Text(
-                        _isTopUpLoading
-                            ? 'Creating link...'
-                            : 'Top Up with VNPay',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SectionCard(
-              title: 'Withdraw to NCB',
-              subtitle:
-                  'Withdrawals are sent only to the configured NCB account below.',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _BankDetailsCard(bank: _withdrawalBank),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _withdrawAmountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      prefixIcon: Icon(Icons.currency_exchange),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (requiresTotp) ...[
+            KeyedSubtree(
+              key: _topUpSectionKey,
+              child: _SectionCard(
+                title: 'Top Up via VNPay',
+                subtitle:
+                    'Create VNPay payment link and complete payment in browser.',
+                child: Column(
+                  children: [
                     TextField(
-                      controller: _withdrawTotpController,
-                      keyboardType: TextInputType.number,
+                      controller: _topUpAmountController,
+                      focusNode: _topUpFocusNode,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                        labelText: '2FA code',
-                        prefixIcon: Icon(Icons.security),
+                        labelText: 'Amount',
+                        prefixIcon: Icon(Icons.payments_outlined),
                       ),
                     ),
-                  ] else
-                    Container(
+                    const SizedBox(height: 12),
+                    SizedBox(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '2FA is not enabled on this account.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _isWithdrawalLoading
-                          ? null
-                          : _initiateWithdrawal,
-                      child: Text(
-                        _isWithdrawalLoading
-                            ? 'Requesting...'
-                            : 'Request withdrawal OTP',
-                      ),
-                    ),
-                  ),
-                  if (_activeWithdrawalId != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Active withdrawal: $_activeWithdrawalId',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _withdrawOtpController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'OTP from email',
-                              prefixIcon: Icon(Icons.password),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FilledButton.tonal(
-                                  onPressed: _isOtpResending
-                                      ? null
-                                      : _resendWithdrawalOtp,
-                                  child: Text(
-                                    _isOtpResending
-                                        ? 'Resending...'
-                                        : 'Resend OTP',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: _isOtpVerifying
-                                      ? null
-                                      : _verifyWithdrawalOtp,
-                                  child: Text(
-                                    _isOtpVerifying
-                                        ? 'Verifying...'
-                                        : 'Verify OTP',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      child: FilledButton.icon(
+                        onPressed: _isTopUpLoading ? null : _startTopUp,
+                        icon: _isTopUpLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.open_in_new),
+                        label: Text(
+                          _isTopUpLoading
+                              ? 'Creating link...'
+                              : 'Top Up with VNPay',
+                        ),
                       ),
                     ),
                   ],
-                ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            KeyedSubtree(
+              key: _withdrawSectionKey,
+              child: _SectionCard(
+                title: 'Withdraw to NCB',
+                subtitle:
+                    'Withdrawals are sent only to the configured NCB account below.',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _BankDetailsCard(bank: _withdrawalBank),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _withdrawAmountController,
+                      focusNode: _withdrawFocusNode,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount',
+                        prefixIcon: Icon(Icons.currency_exchange),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (requiresTotp) ...[
+                      TextField(
+                        controller: _withdrawTotpController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: '2FA code',
+                          prefixIcon: Icon(Icons.security),
+                        ),
+                      ),
+                    ] else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '2FA is not enabled on this account.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _isWithdrawalLoading
+                            ? null
+                            : _initiateWithdrawal,
+                        child: Text(
+                          _isWithdrawalLoading
+                              ? 'Requesting...'
+                              : 'Request withdrawal OTP',
+                        ),
+                      ),
+                    ),
+                    if (_activeWithdrawalId != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Active withdrawal: $_activeWithdrawalId',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _withdrawOtpController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'OTP from email',
+                                prefixIcon: Icon(Icons.password),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.tonal(
+                                    onPressed: _isOtpResending
+                                        ? null
+                                        : _resendWithdrawalOtp,
+                                    child: Text(
+                                      _isOtpResending
+                                          ? 'Resending...'
+                                          : 'Resend OTP',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: _isOtpVerifying
+                                        ? null
+                                        : _verifyWithdrawalOtp,
+                                    child: Text(
+                                      _isOtpVerifying
+                                          ? 'Verifying...'
+                                          : 'Verify OTP',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import 'package:splitpal/core/config/gemini_config.dart';
 import 'package:splitpal/core/constants/app_constants.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
@@ -14,7 +13,6 @@ import 'package:splitpal/features/invoices/domain/entities/invoice.dart';
 import 'package:splitpal/features/invoices/presentation/pages/payment_request_detail_page.dart';
 import 'package:splitpal/features/invoices/presentation/pages/transfer_payment_page.dart';
 import 'package:splitpal/features/invoices/presentation/providers/invoice_provider.dart';
-import 'package:splitpal/features/invoices/presentation/widgets/debt_reminder_dialog.dart';
 
 class PaymentRequestSection extends StatefulWidget {
   final String groupId;
@@ -125,15 +123,6 @@ class _PaymentRequestSectionState extends State<PaymentRequestSection> {
                     ),
                     const SizedBox(height: AppSpacing.xl),
                   ],
-
-                  // AI Debt Reminder Section (uses ALL pendingTransfers,
-                  // internally filters for incoming where toUserId == me)
-                  if (GeminiConfig.isConfigured)
-                    _buildDebtReminderSection(
-                      context,
-                      pendingTransfers,
-                      currency: currency,
-                    ),
 
                   // My Pending Transfers (only OUTGOING - transfers I owe)
                   Text(
@@ -287,6 +276,18 @@ class _PaymentRequestSectionState extends State<PaymentRequestSection> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
+          if (request.expiresAt != null) ...[
+            Text(
+              _formatExpiry(request.expiresAt!),
+              style: textTheme.bodySmall?.copyWith(
+                color: request.expiresAt!.isBefore(DateTime.now())
+                    ? scheme.error
+                    : scheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           Row(
             children: [
               Icon(
@@ -459,134 +460,21 @@ class _PaymentRequestSectionState extends State<PaymentRequestSection> {
     return DateFormat(AppConstants.displayDateTimeFormat).format(date);
   }
 
-  /// Builds the AI Debt Reminder section.
-  /// Groups pending transfers where others owe the current user
-  /// and shows an AI reminder button for each debtor.
-  Widget _buildDebtReminderSection(
-    BuildContext context,
-    List<Transfer> pendingTransfers, {
-    required String currency,
-  }) {
-    final currentUserId = context.read<AuthProvider>().user?.id;
-    if (currentUserId == null) return const SizedBox.shrink();
-
-    // Filter transfers where current user is the RECEIVER (others owe me)
-    final transfersOwedToMe = pendingTransfers
-        .where((t) => t.toUserId == currentUserId && t.status == 'PENDING')
-        .toList();
-
-    if (transfersOwedToMe.isEmpty) return const SizedBox.shrink();
-
-    // Group by debtor (fromUserId)
-    final Map<String, List<Transfer>> groupedByDebtor = {};
-    for (final t in transfersOwedToMe) {
-      groupedByDebtor.putIfAbsent(t.fromUserId, () => []).add(t);
+  String _formatExpiry(DateTime expiresAt) {
+    final now = DateTime.now();
+    if (expiresAt.isBefore(now)) {
+      return 'Expired';
     }
-
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.auto_awesome, color: scheme.primary, size: 20),
-            const SizedBox(width: 6),
-            Text(
-              'AI Nhắc Nợ',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        ...groupedByDebtor.entries.map((entry) {
-          final debtorTransfers = entry.value;
-          final debtorName = debtorTransfers.first.fromName.isNotEmpty
-              ? debtorTransfers.first.fromName
-              : 'User';
-          final totalAmount =
-              debtorTransfers.fold<double>(0, (s, t) => s + t.amount);
-
-          return AppCard(
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        scheme.primary.withOpacity(0.15),
-                        scheme.primary.withOpacity(0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.person_outline,
-                    color: scheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        debtorName,
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Nợ ${CurrencyFormatter.formatCurrency(totalAmount, currency)} • ${debtorTransfers.length} khoản',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () {
-                    DebtReminderDialog.show(
-                      context,
-                      debtorName: debtorName,
-                      transfers: debtorTransfers,
-                      currency: currency,
-                      groupId: widget.groupId,
-                    );
-                  },
-                  icon: const Icon(Icons.auto_awesome, size: 14),
-                  label: const Text('Nhắc nợ'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-        const SizedBox(height: AppSpacing.xl),
-      ],
-    );
+    final diff = expiresAt.difference(now);
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final minutes = diff.inMinutes % 60;
+    if (days > 0) {
+      return 'Expires in $days d ${hours} h';
+    }
+    if (hours > 0) {
+      return 'Expires in $hours h ${minutes} m';
+    }
+    return 'Expires in ${diff.inMinutes} m';
   }
 }

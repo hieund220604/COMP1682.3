@@ -22,17 +22,18 @@ class _GroupsPageState extends State<GroupsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text(
           'Your Groups',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: theme.colorScheme.onSurface),
         actions: [
           IconButton(
             onPressed: () {
@@ -56,11 +57,53 @@ class _GroupsPageState extends State<GroupsPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.group_off, size: 64, color: Colors.grey[300]),
+                  Icon(Icons.group_off, size: 64, color: theme.colorScheme.outlineVariant),
                   const SizedBox(height: 16),
                   Text(
                     'No groups found',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tạo nhóm mới hoặc nhập mã mời để bắt đầu.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CreateGroupPage()),
+                          );
+                        },
+                        child: const Text('Tạo nhóm'),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final token = await _promptInviteToken(context);
+                          if (token?.isNotEmpty ?? false) {
+                            final success = await context.read<GroupProvider>().joinGroup(token!.trim());
+                            if (!context.mounted) return;
+                            final snackBar = SnackBar(
+                              content: Text(
+                                success ? 'Joined group successfully' : 'Failed to join group',
+                              ),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                          }
+                        },
+                        child: const Text('Nhập mã mời'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -88,10 +131,10 @@ class _GroupsPageState extends State<GroupsPage> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: theme.colorScheme.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.apartment, color: Colors.blue),
+                    child: Icon(Icons.apartment, color: theme.colorScheme.primary),
                   ),
                   title: Text(
                     name,
@@ -117,5 +160,34 @@ class _GroupsPageState extends State<GroupsPage> {
         },
       ),
     );
+  }
+
+  Future<String?> _promptInviteToken(BuildContext context) async {
+    final controller = TextEditingController();
+    final token = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nhập mã mời'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Invite token',
+            prefixIcon: Icon(Icons.key),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Tham gia'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return token;
   }
 }

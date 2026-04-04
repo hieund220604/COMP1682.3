@@ -28,6 +28,8 @@ import 'features/notifications/presentation/providers/notification_provider.dart
 import 'features/onboarding/presentation/pages/onboarding_page.dart';
 import 'features/subscriptions/presentation/providers/subscription_provider.dart';
 import 'features/exchange/presentation/providers/exchange_provider.dart';
+import 'features/receipts/presentation/providers/receipt_provider.dart';
+import 'features/receipts/presentation/pages/receipt_calendar_page.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -174,6 +176,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => di.sl<InvoiceProvider>()),
         ChangeNotifierProvider(create: (_) => di.sl<NotificationProvider>()),
         ChangeNotifierProvider(create: (_) => di.sl<ExchangeProvider>()),
+        ChangeNotifierProvider(create: (_) => di.sl<ReceiptProvider>()),
         // OCR Provider (only if Gemini API configured)
         if (GeminiConfig.isConfigured)
           ChangeNotifierProvider(create: (_) => di.sl<OcrProvider>()),
@@ -415,6 +418,7 @@ class _AppInitializerState extends State<_AppInitializer> {
         OnboardingPage.routeName: (_) => const OnboardingPage(),
         HomeShellPage.routeName: (_) => const HomeShellPage(),
         MyInvoicesPage.routeName: (_) => const MyInvoicesPage(),
+        ReceiptCalendarPage.routeName: (_) => const ReceiptCalendarPage(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == InvoiceDetailPage.routeName) {

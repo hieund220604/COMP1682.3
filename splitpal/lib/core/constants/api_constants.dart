@@ -114,10 +114,17 @@ class ApiConstants {
   static String billingHistory(String id) => '/subscriptions/$id/billing-history';
   static const String processCharges = '/subscriptions/process-charges';
 
+  // AI Endpoints
+  static const String aiExtractInvoice = '/ai/extract-invoice';
+
   // Transaction Endpoints
   static const String transactions = '/transactions';
   static String transactionById(String id) => '/transactions/$id';
   static const String transactionSummary = '/transactions/summary';
+
+  // Dashboard
+  static const String dashboardHome = '/dashboard/home';
+  static String dashboardGroup(String groupId) => '/dashboard/group/$groupId';
 
   // Chat Endpoints
   static String chatMessages(String groupId) =>

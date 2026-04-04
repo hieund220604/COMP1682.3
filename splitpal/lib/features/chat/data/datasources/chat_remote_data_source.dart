@@ -18,6 +18,11 @@ abstract class ChatRemoteDataSource {
     String? fileName,
     String? replyToId,
   });
+
+  Future<Map<String, dynamic>> extractInvoiceSuggestion({
+    required String text,
+    String? groupId,
+  });
 }
 
 class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
@@ -85,6 +90,32 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       } else {
         throw ServerException(message: 'Failed to send message');
       }
+    } catch (e) {
+      throw ServerException(message: e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> extractInvoiceSuggestion({
+    required String text,
+    String? groupId,
+  }) async {
+    try {
+      final response = await dioClient.post(
+        ApiConstants.aiExtractInvoice,
+        data: {
+          'text': text,
+          if (groupId != null) 'groupId': groupId,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final payload =
+            (data is Map && data.containsKey('data')) ? data['data'] : data;
+        return Map<String, dynamic>.from(payload ?? {});
+      }
+      throw ServerException(message: 'Failed to extract invoice');
     } catch (e) {
       throw ServerException(message: e.toString());
     }

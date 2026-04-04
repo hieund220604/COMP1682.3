@@ -48,17 +48,17 @@ class AppConstants {
   static const String socketError = 'error';
 
   // Error Messages
-  static const String errorNetwork = 'Network error. Please check your connection.';
-  static const String errorServer = 'Server error. Please try again later.';
-  static const String errorUnauthorized = 'Unauthorized. Please login again.';
-  static const String errorUnknown = 'An unknown error occurred.';
-  static const String errorValidation = 'Invalid input. Please check your data.';
+  static const String errorNetwork = 'Không thể kết nối. Vui lòng kiểm tra mạng hoặc địa chỉ máy chủ.';
+  static const String errorServer = 'Lỗi máy chủ. Vui lòng thử lại sau.';
+  static const String errorUnauthorized = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+  static const String errorUnknown = 'Đã xảy ra lỗi không xác định.';
+  static const String errorValidation = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.';
 
   // Success Messages
-  static const String successLogin = 'Login successful';
-  static const String successSignup = 'Account created successfully';
-  static const String successLogout = 'Logout successful';
-  static const String successUpdate = 'Update successful';
-  static const String successDelete = 'Delete successful';
-  static const String successCreate = 'Create successful';
+  static const String successLogin = 'Đăng nhập thành công';
+  static const String successSignup = 'Tạo tài khoản thành công';
+  static const String successLogout = 'Đăng xuất thành công';
+  static const String successUpdate = 'Cập nhật thành công';
+  static const String successDelete = 'Xóa thành công';
+  static const String successCreate = 'Tạo mới thành công';
 }

@@ -3,6 +3,7 @@ import { authService } from '../service/authService';
 import { twoFactorService } from '../service/twoFactorService';
 import { SignUpRequest, LoginRequest, VerifyOTPRequest, ResetPasswordRequest, VeriftEmailRequest, AuthResponse } from '../type/auth';
 import { ResponseUtil } from '../util/responseUtil';
+import { recordLoginFailure, recordLoginSuccess } from '../middleware/loginGuardMiddleware';
 
 export const authController = {
     async signUp(req: Request<{}, {}, SignUpRequest>, res: Response<AuthResponse>): Promise<void> {
@@ -60,6 +61,7 @@ export const authController = {
                 return ResponseUtil.validationError(res, 'Email and password are required');
             }
             const result = await authService.loginUser(email, password);
+            await recordLoginSuccess(req);
 
             // If 2FA is required, return tempToken instead of full auth
             if (result.requires2FA) {
@@ -73,6 +75,17 @@ export const authController = {
 
             ResponseUtil.success(res, { user: result }, 'Login successful');
         } catch (error) {
+            const failure = await recordLoginFailure(req);
+            if (failure.blocked) {
+                res.setHeader('Retry-After', failure.retryAfterSec);
+                return ResponseUtil.error(
+                    res,
+                    `Too many failed attempts. Please wait ${failure.retryAfterSec}s before retrying.`,
+                    429,
+                    'LOGIN_RATE_LIMIT'
+                );
+            }
+
             ResponseUtil.handleError(res, error, 'Invalid email or password');
         }
     },

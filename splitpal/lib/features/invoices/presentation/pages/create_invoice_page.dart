@@ -11,10 +11,18 @@ import '../../../groups/presentation/providers/group_provider.dart';
 
 class CreateInvoicePage extends StatefulWidget {
   final String groupId;
+  final String? prefillTitle;
+  final String? prefillNote;
+  final double? prefillAmount;
+  final String? prefillCurrency;
 
   const CreateInvoicePage({
     Key? key,
     required this.groupId,
+    this.prefillTitle,
+    this.prefillNote,
+    this.prefillAmount,
+    this.prefillCurrency,
   }) : super(key: key);
 
   @override
@@ -54,6 +62,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       _loadGroupMembers();
     });
     _addNewItem();
+    _applyPrefill();
   }
 
   @override
@@ -78,7 +87,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       
       setState(() {
         _groupBaseCurrency = baseCurrency;
-        _selectedCurrency = baseCurrency;
+        _selectedCurrency = widget.prefillCurrency?.isNotEmpty == true
+            ? widget.prefillCurrency!
+            : baseCurrency;
         _groupMembers = groupProvider.currentGroupMembers.map((member) {
           // Backend returns: { userId, user: { id, displayName, email, avatarUrl } }
           final user = member['user'];
@@ -113,6 +124,25 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
         splitType: 'EQUAL',
       ));
     });
+  }
+
+  void _applyPrefill() {
+    if (widget.prefillTitle != null && widget.prefillTitle!.isNotEmpty) {
+      _titleController.text = widget.prefillTitle!;
+    }
+    if (widget.prefillNote != null && widget.prefillNote!.isNotEmpty) {
+      _noteController.text = widget.prefillNote!;
+    }
+    if (widget.prefillCurrency != null && widget.prefillCurrency!.isNotEmpty) {
+      _selectedCurrency = widget.prefillCurrency!;
+    }
+    if (_items.isNotEmpty && widget.prefillAmount != null) {
+      _items.first.amountController.text =
+          widget.prefillAmount!.toStringAsFixed(2);
+    }
+    if (_items.isNotEmpty && widget.prefillTitle != null && widget.prefillTitle!.isNotEmpty) {
+      _items.first.nameController.text = widget.prefillTitle!;
+    }
   }
 
   void _removeItem(int index) {

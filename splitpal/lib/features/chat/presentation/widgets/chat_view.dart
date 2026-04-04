@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../data/models/chat_message.dart';
 import '../providers/chat_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../invoices/presentation/pages/create_invoice_page.dart';
 import '../../../../core/di/injection_container.dart' as di;
 import '../../../../core/utils/token_manager.dart';
 
@@ -72,6 +73,84 @@ class _ChatViewState extends State<ChatView> {
     return distance < 200;
   }
 
+  void _onMessageLongPress(ChatMessage message, ChatProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text('Create invoice using AI'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _createInvoiceFromMessage(message, provider);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createInvoiceFromMessage(
+      ChatMessage message, ChatProvider provider) async {
+    final content = message.content?.trim();
+    if (content == null || content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No text to extract from this message')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final suggestion = await provider.extractInvoiceSuggestion(content);
+      if (!mounted) return;
+
+      final title = (suggestion['title'] ?? suggestion['description'] ?? '') as String?;
+      final note = suggestion['note'] as String?;
+      final currency = (suggestion['currency'] ?? '').toString().isNotEmpty
+          ? suggestion['currency'].toString()
+          : null;
+      final amountVal = suggestion['amount'];
+      final amount = amountVal is num ? amountVal.toDouble() : null;
+
+      Navigator.of(context).pop(); // close loader
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateInvoicePage(
+            groupId: widget.groupId,
+            prefillTitle: title,
+            prefillNote: note,
+            prefillAmount: amount,
+            prefillCurrency: currency,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to extract invoice: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
@@ -120,7 +199,13 @@ class _ChatViewState extends State<ChatView> {
                     final isMe = currentUserId != null &&
                         (message.senderId == currentUserId ||
                             message.sender?.id == currentUserId);
-                    return _MessageBubble(message: message, isMe: isMe);
+                    return _MessageBubble(
+                      message: message,
+                      isMe: isMe,
+                      onLongPress: message.content == null
+                          ? null
+                          : () => _onMessageLongPress(message, provider),
+                    );
                   },
                 ),
               ),
@@ -209,10 +294,12 @@ class _ChatViewState extends State<ChatView> {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
+  final VoidCallback? onLongPress;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    this.onLongPress,
   });
 
   @override
@@ -230,7 +317,9 @@ class _MessageBubble extends StatelessWidget {
           if (!isMe) _avatar(),
           if (!isMe) const SizedBox(width: 8),
           Flexible(
-            child: Container(
+            child: GestureDetector(
+              onLongPress: onLongPress,
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: bubbleColor,
@@ -281,6 +370,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ),
           if (isMe) const SizedBox(width: 8),

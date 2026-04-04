@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:intl/intl.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
@@ -16,6 +17,7 @@ class GroupOverviewTab extends StatelessWidget {
   final String currency;
   final String? role;
   final bool isOwnerOrAdmin;
+  final Map<String, dynamic>? dashboard;
 
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenChat;
@@ -35,6 +37,7 @@ class GroupOverviewTab extends StatelessWidget {
     required this.currency,
     required this.role,
     required this.isOwnerOrAdmin,
+    this.dashboard,
     required this.onRefresh,
     required this.onOpenChat,
     this.onInvite,
@@ -177,6 +180,14 @@ class GroupOverviewTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (dashboard != null) ...[
+            _PaymentRequestOverview(dashboard: dashboard!),
+            const SizedBox(height: AppSpacing.lg),
+            _TransferPendingCard(dashboard: dashboard!),
+            const SizedBox(height: AppSpacing.lg),
+            _RecentTransfersCard(dashboard: dashboard!, members: members),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           MembersPreviewCard(
             members: members,
             currentUserRole: role,
@@ -231,6 +242,179 @@ class _RolePill extends StatelessWidget {
           fontWeight: FontWeight.w800,
           color: AppColors.pomegranate,
         ),
+      ),
+    );
+  }
+}
+
+class _PaymentRequestOverview extends StatelessWidget {
+  final Map<String, dynamic> dashboard;
+  const _PaymentRequestOverview({required this.dashboard});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final prs = (dashboard['paymentRequests'] as List?) ?? [];
+    if (prs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Payment requests', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.md),
+          ...prs.map((pr) {
+            final double total = (pr['totalAmount'] ?? 0).toDouble();
+            final double collected = (pr['collectedAmount'] ?? 0).toDouble();
+            final double pct = total == 0 ? 0 : (collected / total).clamp(0, 1);
+            final expiresAt = pr['expiresAt'] != null
+                ? DateTime.tryParse(pr['expiresAt'] as String)
+                : null;
+            final daysLeft =
+                expiresAt != null ? expiresAt.difference(DateTime.now()).inDays : null;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('PR ${pr['id']}'.substring(0, 8)),
+                    const Spacer(),
+                    if (daysLeft != null)
+                      Chip(
+                        backgroundColor: scheme.surfaceVariant,
+                        label: Text(
+                          daysLeft < 0 ? 'Expired' : '$daysLeft d left',
+                          style: TextStyle(
+                            color: daysLeft < 0 ? scheme.error : scheme.onSurface,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                LinearProgressIndicator(
+                  value: pct,
+                  minHeight: 6,
+                  color: scheme.primary,
+                  backgroundColor: scheme.surfaceVariant,
+                ),
+                const SizedBox(height: 4),
+                Text('${collected.toStringAsFixed(0)} / ${total.toStringAsFixed(0)}'),
+                const SizedBox(height: AppSpacing.md),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransferPendingCard extends StatelessWidget {
+  final Map<String, dynamic> dashboard;
+  const _TransferPendingCard({required this.dashboard});
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = dashboard['transfersPending'] as Map<String, dynamic>? ?? {};
+    final total = (pending['totalAmount'] ?? 0).toDouble();
+    final count = pending['count'] ?? 0;
+    if (count == 0) return const SizedBox.shrink();
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Pending transfers', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text('$count items'),
+            ],
+          ),
+          Text(total.toStringAsFixed(0)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentTransfersCard extends StatelessWidget {
+  final Map<String, dynamic> dashboard;
+  final List<dynamic> members;
+  const _RecentTransfersCard({
+    required this.dashboard,
+    required this.members,
+  });
+
+  String _getMemberName(dynamic id) {
+    if (id == null) return 'Unknown';
+    try {
+      final member = members.firstWhere((m) {
+        final user = m['user'];
+        return user != null && (user['id'] == id || user['_id'] == id);
+      }, orElse: () => null);
+      if (member != null && member['user'] != null) {
+        return member['user']['displayName'] ??
+            member['user']['name'] ??
+            id.toString();
+      }
+    } catch (_) {}
+    return id.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = (dashboard['recentTransfers'] as List?) ?? [];
+    if (list.isEmpty) return const SizedBox.shrink();
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Recent transfers', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.md),
+          ...list.map((t) {
+            final createdAt = t['createdAt'] != null
+                ? DateTime.tryParse(t['createdAt'] as String)
+                : null;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  const Icon(AppIcons.payments),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'From ${_getMemberName(t['fromUserId'])} to ${_getMemberName(t['toUserId'])}'),
+                        if (createdAt != null)
+                          Text(
+                            DateFormat('dd MMM, HH:mm').format(createdAt),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text('${t['amount']}'),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

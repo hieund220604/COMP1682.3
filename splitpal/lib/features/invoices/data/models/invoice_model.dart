@@ -168,6 +168,7 @@ class PaymentRequestModel extends PaymentRequest {
     required super.issuedAt,
     super.paidAt,
     super.cancelledAt,
+    super.expiresAt,
     required super.createdAt,
   });
 
@@ -189,6 +190,7 @@ class PaymentRequestModel extends PaymentRequest {
       issuedAt: DateTime.parse(json['issuedAt'] ?? DateTime.now().toIso8601String()),
       paidAt: json['paidAt'] != null ? DateTime.parse(json['paidAt']) : null,
       cancelledAt: json['cancelledAt'] != null ? DateTime.parse(json['cancelledAt']) : null,
+      expiresAt: json['expiresAt'] != null ? DateTime.parse(json['expiresAt']) : null,
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
     );
   }

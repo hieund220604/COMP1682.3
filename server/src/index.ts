@@ -21,11 +21,14 @@ import subscriptionRoutes from './route/subscriptionRoutes';
 import chatRoutes from './route/chatRoutes';
 import uploadRoutes from './route/uploadRoutes';
 import notificationRoutes from './route/notificationRoutes';
+import aiRoutes from './route/aiRoutes';
 // UpBill Routes
 import invoiceRoutes from './route/invoiceRoutes';
 import paymentRequestRoutes from './route/paymentRequestRoutes';
 import transferRoutes from './route/transferRoutes';
 import exchangeRateRoutes from './route/exchangeRateRoutes';
+import dashboardRoutes from './route/dashboardRoutes';
+import receiptRoutes from './route/receiptRoutes';
 import { connectRedis, disconnectRedis } from './redis';
 
 const app = express();
@@ -54,13 +57,16 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes); // New upload route
 app.use('/api/notifications', notificationRoutes); // Notification route
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files
+app.use('/api/ai', aiRoutes);
+app.use('/api/receipts', receiptRoutes);
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Serve uploaded files
 
 // UpBill Routes - mounted separately due to groupId param
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/payment-requests', paymentRequestRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/exchange', exchangeRateRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

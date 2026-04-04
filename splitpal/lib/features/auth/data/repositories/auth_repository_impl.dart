@@ -68,8 +68,8 @@ class AuthRepositoryImpl implements AuthRepository {
       return Left(UnauthorizedFailure(message: e.message));
     } catch (e) {
       final msg = (e is TypeError || e is FormatException)
-          ? 'Invalid response from server.'
-          : e.toString();
+          ? 'Phản hồi máy chủ không hợp lệ.'
+          : 'Đăng nhập thất bại. Vui lòng thử lại.';
       return Left(UnknownFailure(message: msg));
     }
   }

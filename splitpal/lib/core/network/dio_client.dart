@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_constants.dart';
 import '../error/exceptions.dart';
@@ -166,15 +168,18 @@ class DioClient {
 
   // Handle Dio errors and convert to custom exceptions
   Exception _handleDioError(DioException error) {
+    // Dev logging to track real root cause
+    debugPrint('[HTTP] ${error.type} | status=${error.response?.statusCode} | msg=${error.message} | err=${error.error}');
+
     switch (error.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return TimeoutException(message: 'Connection timeout');
+        return TimeoutException(message: 'Kết nối quá thời gian. Vui lòng thử lại.');
 
       case DioExceptionType.badResponse:
         final statusCode = error.response?.statusCode;
-        String message = 'Server error';
+        String message = 'Lỗi máy chủ';
         final data = error.response?.data;
         
         if (data is Map<String, dynamic>) {
@@ -208,13 +213,25 @@ class DioClient {
 
       case DioExceptionType.connectionError:
       case DioExceptionType.unknown:
+        // Try to surface clearer cause instead of generic “Network error”
+        final underlying = error.error;
+        if (underlying is SocketException) {
+          return NetworkException(
+            message: 'Không thể kết nối tới máy chủ. Kiểm tra API_BASE_URL hoặc mạng nội bộ.',
+          );
+        }
+        if (underlying is HandshakeException) {
+          return NetworkException(
+            message: 'Kết nối bảo mật thất bại (SSL). Kiểm tra chứng chỉ máy chủ.',
+          );
+        }
         return NetworkException(
-          message: 'Network error. Please check your connection.',
+          message: 'Không thể kết nối. Vui lòng kiểm tra mạng hoặc địa chỉ máy chủ.',
         );
 
       default:
         return ServerException(
-          message: 'An unknown error occurred',
+          message: 'Lỗi không xác định',
         );
     }
   }

@@ -14,6 +14,8 @@ export interface PaymentRequestResponse {
     invoiceIds: string[];
     status: PaymentRequestStatus;
     issuedAt: Date;
+    expiresAt?: Date;
+    lastReminderAt?: Date | null;
     paidAt?: Date;
     cancelledAt?: Date;
     createdAt: Date;

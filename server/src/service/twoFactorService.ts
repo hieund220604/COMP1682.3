@@ -116,7 +116,7 @@ export const twoFactorService = {
     },
 
     /**
-     * Verify a TOTP token (or backup code) for an already-enabled user.
+     * Verify a TOTP token (or batckup code) for an already-enabled user.
      * Returns true if valid.
      */
     async verify(userId: string, token: string): Promise<boolean> {
