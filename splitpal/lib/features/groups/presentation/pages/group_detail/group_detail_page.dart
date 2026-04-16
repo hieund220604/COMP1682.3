@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:splitpal/core/di/injection_container.dart' as di;
+import 'package:splitpal/core/app_services.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/widgets/app_empty_state.dart';
-import 'package:splitpal/features/auth/presentation/providers/auth_provider.dart';
-import 'package:splitpal/features/chat/presentation/providers/chat_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/features/chat/chat_provider.dart';
 import 'package:splitpal/features/chat/presentation/widgets/chat_view.dart';
-import 'package:splitpal/features/groups/presentation/pages/invite_member_page.dart';
-import 'package:splitpal/features/groups/presentation/providers/group_provider.dart';
+import 'package:splitpal/features/groups/presentation/widgets/invite_members_bottom_sheet.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 import 'package:splitpal/features/invoices/presentation/pages/create_invoice_page.dart';
-import 'package:splitpal/features/invoices/presentation/providers/invoice_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
 import 'package:splitpal/features/invoices/presentation/widgets/payment_request_section.dart';
 import 'package:splitpal/features/subscriptions/presentation/widgets/create_subscription_sheet.dart';
 import 'package:splitpal/features/subscriptions/presentation/widgets/subscription_list.dart';
-import 'package:splitpal/core/network/dio_client.dart';
 import 'package:splitpal/core/constants/api_constants.dart';
 
 import 'widgets/group_header.dart';
@@ -39,7 +38,6 @@ class GroupDetailPage extends StatefulWidget {
 
 class _GroupDetailPageState extends State<GroupDetailPage> {
   Map<String, dynamic>? _dashboard;
-  final DioClient _dio = di.sl<DioClient>();
 
   @override
   void initState() {
@@ -67,7 +65,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
 
   Future<void> _fetchDashboard() async {
     try {
-      final response = await _dio.get(ApiConstants.dashboardGroup(widget.groupId));
+      final response = await AppServices.dio.get(ApiConstants.dashboardGroup(widget.groupId));
       if (!mounted) return;
       setState(() {
         _dashboard = response.data['data'] as Map<String, dynamic>?;
@@ -78,12 +76,21 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
   }
 
   void _openInvite() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => InviteMemberPage(groupId: widget.groupId),
+    final groupProvider = context.read<GroupProvider>();
+    final group = groupProvider.currentGroup;
+    final joinCode = group?['joinCode']?.toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => InviteMembersBottomSheet(
+        groupId: widget.groupId,
+        groupName: widget.groupName,
+        joinCode: joinCode,
       ),
-    );
+    ).then((_) {
+      _refreshGroup();
+    });
   }
 
   void _openCreateInvoice() {
@@ -107,7 +114,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Payment request created')),
       );
-      // Refresh payment-related sections.
       await Future.wait([
         invoiceProvider.loadPaymentRequests(widget.groupId),
         invoiceProvider.loadMyTransfers(widget.groupId),
@@ -141,7 +147,11 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       context,
       MaterialPageRoute(
         builder: (_) => ChangeNotifierProvider(
-          create: (_) => di.sl<ChatProvider>(),
+          create: (_) => ChatProvider(
+            dio: AppServices.dio,
+            socketClient: AppServices.socket,
+            tokenManager: AppServices.tokenManager,
+          ),
           child: Scaffold(
             appBar: AppBar(title: Text('$groupName Chat')),
             body: ChatView(

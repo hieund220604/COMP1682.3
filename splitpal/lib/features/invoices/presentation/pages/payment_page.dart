@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/invoice_provider.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
 
 class PaymentPage extends StatefulWidget {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/entities/receipt.dart';
-import '../providers/receipt_provider.dart';
+import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import '../widgets/add_receipt_bottom_sheet.dart';
 import 'receipt_detail_page.dart';
 
@@ -50,10 +50,21 @@ class _DayReceiptsPageState extends State<DayReceiptsPage> {
   Widget build(BuildContext context) {
     final provider = context.watch<ReceiptProvider>();
     final receipts = provider.dayReceipts;
+    final totalDayAmount = receipts.fold<double>(0, (sum, r) => sum + r.totalAmount);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Receipts on ${widget.date}'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Receipts on ${widget.date}'),
+            if (totalDayAmount > 0)
+              Text(
+                'Daily Total: ${totalDayAmount.toStringAsFixed(0)} VND',
+                style: const TextStyle(fontSize: 14, color: Colors.amber, fontWeight: FontWeight.bold),
+              ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddSheet,
@@ -152,6 +163,14 @@ class _ReceiptCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (receipt.totalAmount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Amount: ${receipt.totalAmount.toStringAsFixed(0)} VND',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amber),
+                      ),
+                    ),
                   if ((receipt.note ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),

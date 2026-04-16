@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/di/injection_container.dart' as di;
+import 'package:splitpal/core/app_services.dart';
 import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import 'home_shell_page.dart';
 
 enum WalletOperationMode { topup, withdraw }
@@ -58,7 +58,7 @@ class _WalletOperationsPageState extends State<WalletOperationsPage>
   final _topUpSectionKey = GlobalKey();
   final _withdrawSectionKey = GlobalKey();
 
-  DioClient get _dioClient => di.sl<DioClient>();
+  DioClient get _dioClient => AppServices.dio;
 
   @override
   void initState() {

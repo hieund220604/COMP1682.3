@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/entities/receipt.dart';
-import '../providers/receipt_provider.dart';
+import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 
 class TagManagerPage extends StatefulWidget {
   const TagManagerPage({super.key});

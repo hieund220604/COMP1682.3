@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../data/models/chat_message.dart';
-import '../providers/chat_provider.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+
+import 'package:splitpal/features/chat/chat_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import '../../../invoices/presentation/pages/create_invoice_page.dart';
-import '../../../../core/di/injection_container.dart' as di;
+import 'package:splitpal/core/app_services.dart';
 import '../../../../core/utils/token_manager.dart';
+import 'package:splitpal/features/ai/ai_provider.dart';
 
 class ChatView extends StatefulWidget {
   final String groupId;
@@ -84,7 +85,7 @@ class _ChatViewState extends State<ChatView> {
               title: const Text('Create invoice using AI'),
               onTap: () {
                 Navigator.of(ctx).pop();
-                _createInvoiceFromMessage(message, provider);
+                _createInvoiceFromMessage(message);
               },
             ),
             ListTile(
@@ -98,8 +99,7 @@ class _ChatViewState extends State<ChatView> {
     );
   }
 
-  Future<void> _createInvoiceFromMessage(
-      ChatMessage message, ChatProvider provider) async {
+  Future<void> _createInvoiceFromMessage(ChatMessage message) async {
     final content = message.content?.trim();
     if (content == null || content.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -117,7 +117,8 @@ class _ChatViewState extends State<ChatView> {
     );
 
     try {
-      final suggestion = await provider.extractInvoiceSuggestion(content);
+      final aiProvider = context.read<AiProvider>();
+      final suggestion = await aiProvider.extractInvoiceFromText(content, groupId: widget.groupId);
       if (!mounted) return;
 
       final title = (suggestion['title'] ?? suggestion['description'] ?? '') as String?;
@@ -130,6 +131,16 @@ class _ChatViewState extends State<ChatView> {
 
       Navigator.of(context).pop(); // close loader
 
+      if (suggestion['extractedBy'] == 'regex') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Lỗi Gemini API (Rate Limit hoặc Quota). Đang dùng thuật toán dự phòng tạm thời!'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -139,6 +150,7 @@ class _ChatViewState extends State<ChatView> {
             prefillNote: note,
             prefillAmount: amount,
             prefillCurrency: currency,
+            prefillAiData: suggestion,
           ),
         ),
       );
@@ -195,7 +207,7 @@ class _ChatViewState extends State<ChatView> {
                     final message = provider.messages[index - offset];
                     final currentUserId = provider.currentUserId ??
                         context.read<AuthProvider>().user?.id ??
-                        di.sl<TokenManager>().getUserId();
+                        AppServices.tokenManager.getUserId();
                     final isMe = currentUserId != null &&
                         (message.senderId == currentUserId ||
                             message.sender?.id == currentUserId);

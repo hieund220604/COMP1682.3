@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/subscription_provider.dart';
+import 'package:splitpal/features/subscriptions/subscription_provider.dart';
 import '../pages/subscription_detail_page.dart';
 import 'subscription_card.dart';
 import 'create_subscription_sheet.dart';

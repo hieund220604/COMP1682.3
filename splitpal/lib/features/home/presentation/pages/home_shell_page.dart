@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/icons/app_icons.dart';
-import '../../../notifications/presentation/providers/notification_provider.dart';
+import 'package:splitpal/features/notifications/notification_provider.dart';
 import 'dashboard_page.dart';
 import 'subscriptions_page.dart';
 import 'groups_page.dart';

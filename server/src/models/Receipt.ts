@@ -4,6 +4,7 @@ export interface IReceipt extends Document {
     _id: Types.ObjectId;
     userId: string;
     imageUrl: string;
+    totalAmount?: number;
     note?: string;
     tags: Types.ObjectId[];
     receiptDate: Date; // normalized UTC midnight
@@ -22,6 +23,10 @@ const ReceiptSchema = new Schema<IReceipt>({
         type: String,
         required: true,
         trim: true,
+    },
+    totalAmount: {
+        type: Number,
+        default: 0,
     },
     note: {
         type: String,

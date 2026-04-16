@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/entities/receipt.dart';
-import '../providers/receipt_provider.dart';
+import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'day_receipts_page.dart';
 import 'tag_manager_page.dart';
 import '../widgets/add_receipt_bottom_sheet.dart';

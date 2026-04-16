@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../domain/entities/invoice.dart';
-import '../providers/invoice_provider.dart';
-import '../../../groups/presentation/providers/group_provider.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/models/invoice.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import 'payment_page.dart';
 
 class InvoiceDetailPage extends StatefulWidget {

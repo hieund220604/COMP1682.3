@@ -8,11 +8,11 @@ import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 
-import 'package:splitpal/features/auth/presentation/providers/auth_provider.dart';
-import 'package:splitpal/features/invoices/domain/entities/invoice.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/models/invoice.dart';
 import 'package:splitpal/features/invoices/presentation/pages/payment_request_detail_page.dart';
 import 'package:splitpal/features/invoices/presentation/pages/transfer_payment_page.dart';
-import 'package:splitpal/features/invoices/presentation/providers/invoice_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
 
 class PaymentRequestSection extends StatefulWidget {
   final String groupId;

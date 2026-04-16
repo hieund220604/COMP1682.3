@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:splitpal/core/navigation/app_route_observer.dart';
-import '../../../notifications/domain/entities/notification_entity.dart';
-import '../../../notifications/presentation/providers/notification_provider.dart';
+import 'package:splitpal/models/notification.dart';
+import 'package:splitpal/features/notifications/notification_provider.dart';
 import '../../../groups/presentation/pages/group_detail_page.dart';
 import '../../../groups/presentation/pages/groups_page.dart';
 import '../../../groups/presentation/pages/accept_invite_page.dart';
@@ -195,7 +195,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
     );
   }
 
-  Future<void> _handleNotificationTap(NotificationEntity notification) async {
+  Future<void> _handleNotificationTap(AppNotification notification) async {
     final provider = context.read<NotificationProvider>();
 
     if (!notification.read) {
@@ -207,7 +207,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
     _navigateForNotification(notification);
   }
 
-  void _navigateForNotification(NotificationEntity notification) {
+  void _navigateForNotification(AppNotification notification) {
     final data = notification.data ?? const {};
 
     // Balance-related notifications -> transaction history
@@ -285,7 +285,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
 }
 
 class _NotificationTile extends StatelessWidget {
-  final NotificationEntity notification;
+  final AppNotification notification;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 

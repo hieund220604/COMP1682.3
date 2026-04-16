@@ -39,11 +39,27 @@ async function invalidateGroupCache(groupId: string): Promise<void> {
     await deleteKeysByPrefix(buildRedisKey('cache', 'group', groupId));
 }
 
+function generateJoinCode(): string {
+    return crypto.randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
+}
+
+async function createUniqueJoinCode(): Promise<string> {
+    let code = generateJoinCode();
+    while (await Group.exists({ joinCode: code })) {
+        code = generateJoinCode();
+    }
+    return code;
+}
+
 export const groupService = {
     async createGroup(userId: string, data: CreateGroupRequest): Promise<GroupResponse> {
+        const joinCode = await createUniqueJoinCode();
+
         const group = await Group.create({
             name: data.name,
+            description: data.description || '',
             baseCurrency: data.baseCurrency || 'VND',
+            joinCode,
             createdBy: userId
         });
 
@@ -58,7 +74,8 @@ export const groupService = {
         return {
             id: group._id.toString(),
             name: group.name,
-            description: '',
+            description: group.description,
+            joinCode: group.joinCode,
             baseCurrency: group.baseCurrency,
             createdAt: group.createdAt,
             createdBy: group.createdBy,
@@ -105,7 +122,8 @@ export const groupService = {
         const response: GroupResponse = {
             id: group._id.toString(),
             name: group.name,
-            description: '',
+            description: group.description,
+            joinCode: group.joinCode,
             baseCurrency: group.baseCurrency,
             createdAt: group.createdAt,
             createdBy: group.createdBy,
@@ -135,16 +153,31 @@ export const groupService = {
 
         const groupResponses = await Promise.all(
             groups.map(async (group) => {
-                const memberCount = await GroupMember.countDocuments({ groupId: group._id.toString(), leftAt: null });
+                const members = await GroupMember.find({ groupId: group._id.toString(), leftAt: null });
+                const users = await User.find({ _id: { $in: members.map(m => m.userId) } }).select('_id email displayName avatarUrl');
+                const userMap = new Map();
+                users.forEach(u => userMap.set(u._id.toString(), u));
 
                 return {
                     id: group._id.toString(),
                     name: group.name,
-                    description: '',
+                    description: group.description,
+                    joinCode: group.joinCode,
                     baseCurrency: group.baseCurrency,
                     createdAt: group.createdAt,
                     createdBy: group.createdBy,
-                    memberCount
+                    memberCount: members.length,
+                    members: members
+                        .filter(m => userMap.has(m.userId))
+                        .map(m => ({
+                            id: m._id.toString(),
+                            userId: m.userId,
+                            groupId: m.groupId,
+                            role: m.role as GroupRole,
+                            joinedAt: m.joinedAt,
+                            leftAt: m.leftAt ?? undefined,
+                            user: transformUser(userMap.get(m.userId))
+                        }))
                 };
             })
         );
@@ -161,6 +194,7 @@ export const groupService = {
 
         await Group.findByIdAndUpdate(groupId, {
             name: data.name,
+            description: data.description,
             baseCurrency: data.baseCurrency
         });
 
@@ -430,6 +464,62 @@ export const groupService = {
                         groupId: invite.groupId,
                         newMemberId: userId,
                         groupName: group?.name
+                    }
+                });
+            }
+        }
+
+        return {
+            id: member._id.toString(),
+            userId: member.userId,
+            groupId: member.groupId,
+            role: member.role as GroupRole,
+            joinedAt: member.joinedAt,
+            leftAt: member.leftAt ?? undefined,
+            user: transformUser(user)
+        };
+    },
+
+    async joinByCode(userId: string, code: string): Promise<GroupMemberResponse> {
+        const group = await Group.findOne({ joinCode: code });
+
+        if (!group) {
+            throw new Error('Invalid join code or group does not exist.');
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new Error('User not found.');
+        }
+
+        const existingMember = await GroupMember.findOne({ groupId: group._id.toString(), userId, leftAt: null });
+
+        if (existingMember) {
+            throw new Error('You are already a member of this group.');
+        }
+
+        const member = await GroupMember.create({
+            groupId: group._id.toString(),
+            userId,
+            role: 'USER'
+        });
+
+        await invalidateGroupCache(group._id.toString());
+
+        // Notify all group members about the new member
+        const allMembers = await GroupMember.find({ groupId: group._id.toString(), leftAt: null });
+
+        for (const memberDoc of allMembers) {
+            if (memberDoc.userId !== userId) {
+                await notificationService.createNotification({
+                    userId: memberDoc.userId,
+                    type: NotificationType.GROUP_JOINED,
+                    title: 'New Member Joined',
+                    message: `${user.displayName || user.email} joined ${group.name}`,
+                    data: {
+                        groupId: group._id.toString(),
+                        newMemberId: userId,
+                        groupName: group.name
                     }
                 });
             }

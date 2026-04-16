@@ -1,11 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/entities/receipt.dart';
-import '../providers/receipt_provider.dart';
+import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import '../pages/tag_manager_page.dart';
 
 class AddReceiptBottomSheet extends StatefulWidget {
@@ -25,10 +26,14 @@ class AddReceiptBottomSheet extends StatefulWidget {
 class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
   final ImagePicker _picker = ImagePicker();
   File? _file;
+  Uint8List? _fileBytes;
+  String? _fileName;
   DateTime _selectedDate = DateTime.now();
   final TextEditingController _noteCtrl = TextEditingController();
+  final TextEditingController _amountCtrl = TextEditingController(text: '0');
   final Set<String> _selectedTagIds = {};
   bool _uploading = false;
+  bool _scanning = false;
 
   @override
   void initState() {
@@ -42,17 +47,42 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
   Future<void> _pick(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 85);
     if (picked != null) {
-      setState(() => _file = File(picked.path));
+      try {
+        final bytes = await picked.readAsBytes();
+        final file = File(picked.path);
+        setState(() {
+          _file = file;
+          _fileBytes = bytes;
+          _fileName = picked.name;
+          _scanning = true;
+        });
+        if (mounted) {
+          final amount = await context.read<ReceiptProvider>().scanReceiptWithAI(bytes, picked.name);
+          if (mounted) {
+            setState(() {
+               _scanning = false;
+               if (amount != null && amount > 0) {
+                 _amountCtrl.text = amount.toStringAsFixed(0);
+               }
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('Image pick error: $e');
+        setState(() => _scanning = false);
+      }
     }
   }
 
   Future<void> _save() async {
     final provider = context.read<ReceiptProvider>();
-    if (_file == null || _selectedTagIds.isEmpty) return;
+    if (_file == null || _fileBytes == null || _fileName == null || _selectedTagIds.isEmpty) return;
     setState(() => _uploading = true);
     final result = await provider.createReceiptFromFile(
-      file: _file!,
+      bytes: _fileBytes!,
+      fileName: _fileName!,
       receiptDate: _selectedDate,
+      totalAmount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       tagIds: _selectedTagIds.toList(),
     );
@@ -139,7 +169,9 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
           Positioned.fill(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              child: Image.file(_file!, fit: BoxFit.cover),
+              child: _fileBytes != null 
+                  ? Image.memory(_fileBytes!, fit: BoxFit.cover)
+                  : Image.file(_file!, fit: BoxFit.cover),
             ),
           ),
           Positioned(
@@ -209,24 +241,45 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                     Expanded(
-                       child: Container(
-                         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(30)),
-                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                         child: TextField(
-                           controller: _noteCtrl,
-                           style: const TextStyle(color: Colors.white, fontSize: 16),
-                           decoration: const InputDecoration(
-                             hintText: 'Add a note...',
-                             hintStyle: TextStyle(color: Colors.white70),
-                             border: InputBorder.none,
-                           )
-                         ),
-                       )
-                     ),
-                     const SizedBox(width: 12),
+                 const SizedBox(height: 12),
+                 Row(
+                   children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                          child: TextField(
+                            controller: _amountCtrl,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                            decoration: InputDecoration(
+                              hintText: 'Total Amount',
+                              hintStyle: const TextStyle(color: Colors.grey),
+                              border: InputBorder.none,
+                              prefixIcon: _scanning 
+                                  ? Container(width: 16, height: 16, padding: const EdgeInsets.all(12), child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.orange))
+                                  : const Icon(Icons.attach_money, color: Colors.orange, size: 20),
+                            )
+                          ),
+                        )
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                          child: TextField(
+                            controller: _noteCtrl,
+                            style: const TextStyle(color: Colors.black, fontSize: 16),
+                            decoration: const InputDecoration(
+                              hintText: 'Add a note...',
+                              hintStyle: TextStyle(color: Colors.grey),
+                              border: InputBorder.none,
+                            )
+                          ),
+                        )
+                      ),
+                      const SizedBox(width: 12),
                      GestureDetector(
                        onTap: canSave ? _save : null,
                        child: CircleAvatar(

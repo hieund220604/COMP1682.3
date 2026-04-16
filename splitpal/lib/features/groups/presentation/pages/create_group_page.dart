@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
-import '../providers/group_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 
 class CreateGroupPage extends StatefulWidget {
   static const routeName = '/create-group';

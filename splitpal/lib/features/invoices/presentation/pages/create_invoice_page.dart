@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/config/gemini_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../domain/repositories/invoice_repository.dart';
-import '../../domain/services/gemini_ocr_service.dart';
-import '../providers/invoice_provider.dart';
-import '../widgets/invoice_ocr_picker.dart';
-import '../../../groups/presentation/providers/group_provider.dart';
+import 'package:splitpal/models/invoice.dart';
+import 'package:splitpal/features/ai/ai_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/ai/presentation/widgets/invoice_ocr_picker.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/core/app_services.dart';
 
 class CreateInvoicePage extends StatefulWidget {
   final String groupId;
@@ -15,6 +16,7 @@ class CreateInvoicePage extends StatefulWidget {
   final String? prefillNote;
   final double? prefillAmount;
   final String? prefillCurrency;
+  final Map<String, dynamic>? prefillAiData;
 
   const CreateInvoicePage({
     Key? key,
@@ -23,6 +25,7 @@ class CreateInvoicePage extends StatefulWidget {
     this.prefillNote,
     this.prefillAmount,
     this.prefillCurrency,
+    this.prefillAiData,
   }) : super(key: key);
 
   @override
@@ -46,6 +49,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     'SGD', 'AUD', 'CAD', 'CHF', 'HKD', 'INR', 'MYR', 'PHP',
     'TWD', 'NZD', 'SEK',
   ];
+  static const _supportedSplitTypes = ['EQUAL', 'PERCENTAGE', 'CUSTOM'];
 
   static const _currencyFlags = {
     'VND': '🇻🇳', 'USD': '🇺🇸', 'EUR': '🇪🇺', 'GBP': '🇬🇧',
@@ -101,6 +105,10 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           };
         }).toList();
         _isLoadingMembers = false;
+        
+        if (widget.prefillAiData != null && widget.prefillAiData!['items'] != null) {
+            _applyAiData(widget.prefillAiData!);
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -136,12 +144,142 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     if (widget.prefillCurrency != null && widget.prefillCurrency!.isNotEmpty) {
       _selectedCurrency = widget.prefillCurrency!;
     }
-    if (_items.isNotEmpty && widget.prefillAmount != null) {
+    if (_items.isNotEmpty && widget.prefillAmount != null && widget.prefillAiData == null) {
       _items.first.amountController.text =
           widget.prefillAmount!.toStringAsFixed(2);
     }
-    if (_items.isNotEmpty && widget.prefillTitle != null && widget.prefillTitle!.isNotEmpty) {
+    if (_items.isNotEmpty && widget.prefillTitle != null && widget.prefillTitle!.isNotEmpty && widget.prefillAiData == null) {
       _items.first.nameController.text = widget.prefillTitle!;
+    }
+  }
+
+  String? _findUserId(String nameText) {
+    if (nameText.toLowerCase() == 'người gửi' || nameText.toLowerCase() == 'tôi' || nameText.toLowerCase() == 'mình' || nameText.toLowerCase() == 'me') {
+      final currentUserId = context.read<AuthProvider>().user?.id ?? AppServices.tokenManager.getUserId();
+      if (currentUserId != null) return currentUserId;
+    }
+    for (var member in _groupMembers) {
+      final mName = (member['name'] as String).toLowerCase();
+      if (mName.contains(nameText.toLowerCase()) || nameText.toLowerCase().contains(mName)) {
+        return member['id'] as String;
+      }
+    }
+    return null;
+  }
+
+  void _applyAiData(Map<String, dynamic> data) {
+    final rawItems = data['items'] as List<dynamic>? ?? [];
+    final rootSplitMethod = (data['splitMethod'] as String?)?.toUpperCase() ?? 'EQUAL';
+    final rootSplitDetails = data['splitDetails'] as Map<String, dynamic>? ?? {};
+
+    // Helper to map backend's text format to UI's splitType ENUM
+    String mapSplitType(String sm) {
+        if (sm == 'CUSTOM_AMOUNT') return 'CUSTOM';
+        if (sm == 'PERCENTAGE' || sm == 'SHARES') return 'PERCENTAGE';
+        return 'EQUAL'; // Currently UI supports EQUAL, PERCENTAGE, CUSTOM
+    }
+
+    // Clear initial blank item created in initState
+    if (_items.length == 1 && _items.first.nameController.text.isEmpty) {
+        _items.first.dispose();
+      _items.clear();
+    }
+
+    if (rawItems.isEmpty && data['amountTotal'] != null) {
+      final amount = data['amountTotal'] is num ? (data['amountTotal'] as num).toDouble() : 0.0;
+      final newItem = InvoiceItemData(
+        nameController: TextEditingController(
+            text: _titleController.text.isNotEmpty ? _titleController.text : 'Ghi chú hóa đơn'),
+        amountController: TextEditingController(text: amount.toStringAsFixed(2)),
+        splitType: 'EQUAL',
+        assignedTo: _groupMembers.isNotEmpty ? [_groupMembers[0]['id']] : [],
+      );
+      _items.add(newItem);
+    }
+
+    for (var raw in rawItems) {
+      final name = raw['name'] ?? 'Item';
+      final itemAmount = raw['amount'] is num ? (raw['amount'] as num).toDouble() : 0.0;
+      final assigneesList = raw['assignees'] as List<dynamic>? ?? [];
+      final shared = raw['shared'] == true;
+
+      final newItem = InvoiceItemData(
+        nameController: TextEditingController(text: name),
+        amountController: TextEditingController(text: itemAmount.toStringAsFixed(2)),
+        splitType: mapSplitType(rootSplitMethod),
+        assignedTo: [],
+      );
+
+      bool hasAssignedSpecifics = false;
+
+      if (rootSplitMethod == 'CUSTOM_AMOUNT') {
+        final customList = rootSplitDetails['customAmounts'] as List<dynamic>? ?? [];
+        for (var customObj in customList) {
+          final amountVal = customObj['amount'] is num ? (customObj['amount'] as num).toDouble() : 0.0;
+          final personName = customObj['name'] as String? ?? '';
+          final uid = _findUserId(personName);
+          if (uid != null && !newItem.assignedTo.contains(uid)) {
+            newItem.assignedTo.add(uid);
+            newItem.splitControllers[uid] = TextEditingController(text: amountVal.toStringAsFixed(2));
+            hasAssignedSpecifics = true;
+          }
+        }
+      } else if (rootSplitMethod == 'PERCENTAGE') {
+        final percentList = rootSplitDetails['percentages'] as List<dynamic>? ?? [];
+        for (var pObj in percentList) {
+          final percentVal = pObj['percentage'] is num ? (pObj['percentage'] as num).toDouble() : 0.0;
+          final personName = pObj['name'] as String? ?? '';
+          final uid = _findUserId(personName);
+          if (uid != null && !newItem.assignedTo.contains(uid)) {
+            newItem.assignedTo.add(uid);
+            newItem.splitControllers[uid] = TextEditingController(text: percentVal.toStringAsFixed(2));
+            hasAssignedSpecifics = true;
+          }
+        }
+      } else if (rootSplitMethod == 'SHARES') {
+        final shareList = rootSplitDetails['shares'] as List<dynamic>? ?? [];
+        double totalShares = 0.0;
+        for (var sObj in shareList) {
+            totalShares += sObj['share'] is num ? (sObj['share'] as num).toDouble() : 0.0;
+        }
+        if (totalShares > 0) {
+            for (var sObj in shareList) {
+                final shareVal = sObj['share'] is num ? (sObj['share'] as num).toDouble() : 0.0;
+                final personName = sObj['name'] as String? ?? '';
+                final uid = _findUserId(personName);
+                if (uid != null && !newItem.assignedTo.contains(uid)) {
+                    final percentStr = ((shareVal / totalShares) * 100).toStringAsFixed(2);
+                    newItem.assignedTo.add(uid);
+                    newItem.splitControllers[uid] = TextEditingController(text: percentStr);
+                    hasAssignedSpecifics = true;
+                }
+            }
+        }
+      }
+      
+      if (!hasAssignedSpecifics && assigneesList.isNotEmpty) {
+        for (var pName in assigneesList) {
+          final uid = _findUserId(pName.toString());
+          if (uid != null && !newItem.assignedTo.contains(uid)) {
+            newItem.assignedTo.add(uid);
+            hasAssignedSpecifics = true;
+          }
+        }
+      } 
+      
+      if (!hasAssignedSpecifics && shared) {
+        // assign to all
+        newItem.assignedTo.clear();
+        newItem.assignedTo.addAll(_groupMembers.map((e) => e['id'] as String));
+      }
+
+      if (newItem.assignedTo.isEmpty && _groupMembers.isNotEmpty) {
+        // Fallback default assigned to sender/first
+        final senderUid = _findUserId('me');
+        newItem.assignedTo.add(senderUid ?? _groupMembers[0]['id']);
+      }
+
+      _items.add(newItem);
     }
   }
 
@@ -172,8 +310,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     }
 
     final items = _items.map((item) {
+      final splitType = _normalizeSplitType(item.splitType);
       List<InvoiceItemSplitCreate> splits = [];
-      if (item.splitType != 'EQUAL') {
+      if (splitType != 'EQUAL') {
         splits = item.assignedTo.map((userId) {
           final controller = item.splitControllers[userId];
           return InvoiceItemSplitCreate(
@@ -185,7 +324,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       return InvoiceItemCreate(
         name: item.nameController.text,
         amount: double.parse(item.amountController.text),
-        splitType: item.splitType,
+        splitType: splitType,
         assignedTo: item.assignedTo,
         splits: splits,
       );
@@ -221,16 +360,6 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   void _showOcrPicker() {
-    if (!GeminiConfig.isConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('OCR is not configured. Please set GEMINI_API_KEY in .env'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
     InvoiceOcrPicker.showOcrBottomSheet(
       context,
       onDataExtracted: _handleOcrConfirm,
@@ -699,6 +828,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   Widget _buildItemCard(int index, InvoiceItemData item) {
+    final activeSplitType = _normalizeSplitType(item.splitType);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
@@ -882,8 +1013,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: ['EQUAL', 'PERCENTAGE', 'CUSTOM', 'WEIGHT'].map((type) {
-              final selected = item.splitType == type;
+            children: _supportedSplitTypes.map((type) {
+              final selected = activeSplitType == type;
               return ChoiceChip(
                 label: Text(
                   _splitTypeLabel(type),
@@ -906,9 +1037,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           ),
 
           // Per-user split inputs (only for non-EQUAL modes)
-          if (item.splitType != 'EQUAL' && item.assignedTo.isNotEmpty) ...[
+          if (activeSplitType != 'EQUAL' && item.assignedTo.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _buildLabel(_splitTypeHint(item.splitType), false),
+            _buildLabel(_splitTypeHint(activeSplitType), false),
             const SizedBox(height: 10),
             ...item.assignedTo.map((userId) {
               final memberName = (_groupMembers.firstWhere(
@@ -939,9 +1070,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                         controller: controller,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
-                          hintText: item.splitType == 'WEIGHT' ? '1' : '0',
+                          hintText: '0',
                           hintStyle: TextStyle(color: AppColors.silver),
-                          suffix: item.splitType == 'PERCENTAGE'
+                          suffix: activeSplitType == 'PERCENTAGE'
                               ? const Text('%', style: TextStyle(color: AppColors.midnightBlue))
                               : null,
                           filled: true,
@@ -962,7 +1093,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             }).toList(),
             // Live validation hint
             Builder(builder: (_) {
-              final hint = _computeSplitValidationHint(item);
+              final hint = _computeSplitValidationHint(item, activeSplitType);
               if (hint == null) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -987,7 +1118,6 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       case 'EQUAL': return 'Equal';
       case 'PERCENTAGE': return 'Percentage';
       case 'CUSTOM': return 'Custom Amount';
-      case 'WEIGHT': return 'Shares';
       default: return type;
     }
   }
@@ -996,14 +1126,20 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     switch (type) {
       case 'PERCENTAGE': return 'Percentage per person (total must = 100%)';
       case 'CUSTOM': return 'Exact amount per person';
-      case 'WEIGHT': return 'Shares per person (proportional split)';
       default: return '';
     }
   }
 
-  /// Returns a live hint string for PERCENTAGE/CUSTOM splits, null for WEIGHT/EQUAL.
-  String? _computeSplitValidationHint(InvoiceItemData item) {
-    if (item.splitType == 'PERCENTAGE') {
+  String _normalizeSplitType(String type) {
+    if (_supportedSplitTypes.contains(type)) {
+      return type;
+    }
+    return 'EQUAL';
+  }
+
+  /// Returns a live hint string for PERCENTAGE/CUSTOM splits, null otherwise.
+  String? _computeSplitValidationHint(InvoiceItemData item, String splitType) {
+    if (splitType == 'PERCENTAGE') {
       final total = item.assignedTo.fold<double>(0, (sum, uid) {
         final c = item.splitControllers[uid];
         return sum + (double.tryParse(c?.text.trim() ?? '') ?? 0);
@@ -1011,7 +1147,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       if ((total - 100).abs() < 0.01) return '✓ Total: ${total.toStringAsFixed(1)}%';
       return 'Total: ${total.toStringAsFixed(1)}% (must equal 100%)';
     }
-    if (item.splitType == 'CUSTOM') {
+    if (splitType == 'CUSTOM') {
       final itemAmount = double.tryParse(item.amountController.text.trim()) ?? 0;
       final total = item.assignedTo.fold<double>(0, (sum, uid) {
         final c = item.splitControllers[uid];

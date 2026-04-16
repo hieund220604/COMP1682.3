@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/di/injection_container.dart' as di;
+import 'package:splitpal/core/app_services.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/utils/currency_formatter.dart';
 
@@ -16,7 +16,7 @@ class TransactionHistoryPage extends StatefulWidget {
 class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
   static const int _pageSize = 20;
 
-  final DioClient _dioClient = di.sl<DioClient>();
+  final DioClient _dioClient = AppServices.dio;
 
   final List<Map<String, dynamic>> _transactions = [];
   bool _isLoading = false;

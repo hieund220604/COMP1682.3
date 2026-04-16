@@ -35,15 +35,34 @@ function transformUser(user: any) {
 function calculateNextBillingDate(fromDate: Date, cycle: BillingCycle): Date {
     const next = new Date(fromDate);
     switch (cycle) {
+        case BillingCycle.DAILY:
+            next.setDate(next.getDate() + 1);
+            break;
         case BillingCycle.WEEKLY:
             next.setDate(next.getDate() + 7);
             break;
-        case BillingCycle.MONTHLY:
+        case BillingCycle.MONTHLY: {
+            // Save original day to detect overflow (e.g. Jan 31 → should be Feb 28, not Mar 3)
+            const originalDay = fromDate.getDate();
             next.setMonth(next.getMonth() + 1);
+            // If JS overflowed to next month (e.g. Feb 31 → Mar 3), clamp to last day of target month
+            // setDate(0) = last day of previous month (relative to current next value)
+            if (next.getDate() !== originalDay) {
+                next.setDate(0);
+            }
             break;
-        case BillingCycle.YEARLY:
+        }
+        case BillingCycle.YEARLY: {
+            // Save original day & month to detect leap-year overflow (e.g. Feb 29 → Feb 28)
+            const originalDay = fromDate.getDate();
+            const originalMonth = fromDate.getMonth();
             next.setFullYear(next.getFullYear() + 1);
+            // If day or month changed (e.g. Feb 29 → Mar 1 in non-leap year), clamp to last day of target month
+            if (next.getDate() !== originalDay || next.getMonth() !== originalMonth) {
+                next.setDate(0);
+            }
             break;
+        }
     }
     return next;
 }

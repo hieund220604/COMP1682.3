@@ -6,136 +6,63 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
-import 'core/di/injection_container.dart' as di;
-import 'core/network/socket_client.dart';
-import 'core/config/gemini_config.dart';
+import 'core/app_services.dart';
+import 'core/navigation/app_route_observer.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/notification_replay_service.dart';
-import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
-import 'core/utils/token_manager.dart';
-import 'features/auth/presentation/pages/auth_page.dart';
+
+// New Fat Providers
+import 'features/auth/auth_provider.dart';
+import 'features/groups/group_provider.dart';
+import 'features/invoices/invoice_provider.dart';
+import 'features/subscriptions/subscription_provider.dart';
+import 'features/notifications/notification_provider.dart';
+import 'features/exchange/exchange_provider.dart';
+import 'features/receipts/receipt_provider.dart';
+
+// AI Provider (server-backed AI features)
+import 'package:splitpal/features/ai/ai_provider.dart';
+
+// Pages
+import 'package:splitpal/features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
-import 'features/auth/presentation/providers/auth_provider.dart';
-import 'features/groups/presentation/providers/group_provider.dart';
 import 'features/home/presentation/pages/home_shell_page.dart';
 import 'features/invoices/presentation/pages/invoice_detail_page.dart';
 import 'features/invoices/presentation/pages/my_invoices_page.dart';
-import 'features/invoices/presentation/providers/invoice_provider.dart';
-import 'features/invoices/presentation/providers/ocr_provider.dart';
-import 'features/notifications/presentation/providers/notification_provider.dart';
 import 'features/onboarding/presentation/pages/onboarding_page.dart';
-import 'features/subscriptions/presentation/providers/subscription_provider.dart';
-import 'features/exchange/presentation/providers/exchange_provider.dart';
-import 'features/receipts/presentation/providers/receipt_provider.dart';
 import 'features/receipts/presentation/pages/receipt_calendar_page.dart';
+import 'features/groups/presentation/pages/join_group_page.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
-// Cache for onboarding preference to avoid repeated futures
-final Map<String, bool> _showOnboardingCache = {};
-
-/// Helper function to get home widget based on preference
-Widget _getHomeWidget(AuthProvider authProvider) {
-  final userId = authProvider.user?.id ?? '';
-  final cacheKey = 'user_$userId';
-
-  // Check cache first
-  if (_showOnboardingCache.containsKey(cacheKey)) {
-    return _showOnboardingCache[cacheKey]!
-        ? const OnboardingPage()
-        : const HomeShellPage();
-  }
-
-  // Load preference asynchronously
-  return FutureBuilder<bool>(
-    future: authProvider.getShowOnboardingOnLogin().then((value) {
-      _showOnboardingCache[cacheKey] = value;
-      return value;
-    }),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      }
-      return snapshot.data! ? const OnboardingPage() : const HomeShellPage();
-    },
-  );
-}
-
-/// StatefulWidget to handle onboarding toggle state caching
-class _AuthenticatedHome extends StatefulWidget {
-  const _AuthenticatedHome();
-
-  @override
-  State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
-}
-
-class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
-  late Future<bool> _showOnboardingFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    // Cache the future to avoid infinite rebuilds
-    _showOnboardingFuture = Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).getShowOnboardingOnLogin();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _showOnboardingFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.data == true) {
-          // Show onboarding if enabled
-          return const OnboardingPage();
-        } else {
-          // Skip onboarding, go directly to home
-          return const HomeShellPage();
-        }
-      },
-    );
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Load environment variables
   await dotenv.load(fileName: '.env');
 
-  await di.init();
+  // Initialize core singletons
+  await AppServices.init();
 
+  // Notification replay
   final notificationReplayService = NotificationReplayService();
   try {
     await notificationReplayService.initialize();
   } catch (e) {
-    print('Local notification initialization failed: $e');
+    debugPrint('Local notification initialization failed: $e');
   }
 
+  // Firebase / FCM (optional)
   FcmService? fcmService;
   try {
     await Firebase.initializeApp();
     fcmService = FcmService();
     await fcmService.initialize();
-    print('Firebase initialized successfully');
   } catch (e) {
-    print('Firebase not configured: $e');
-    print(
-      'Push notifications disabled. Real-time notifications via Socket.IO will still work.',
-    );
+    debugPrint('Firebase not configured: $e');
   }
 
-  final themeController = ThemeController(tokenManager: di.sl<TokenManager>());
+  final themeController = ThemeController(tokenManager: AppServices.tokenManager);
 
   runApp(
     MyApp(
@@ -169,17 +96,39 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider.value(value: widget.themeController),
         ChangeNotifierProvider(
-          create: (_) => di.sl<AuthProvider>()..checkAuthStatus(),
+          create: (_) => AuthProvider(
+            dio: AppServices.dio,
+            tokenManager: AppServices.tokenManager,
+            prefs: AppServices.prefs,
+          )..checkAuthStatus(),
         ),
-        ChangeNotifierProvider(create: (_) => di.sl<GroupProvider>()),
-        ChangeNotifierProvider(create: (_) => di.sl<SubscriptionProvider>()),
-        ChangeNotifierProvider(create: (_) => di.sl<InvoiceProvider>()),
-        ChangeNotifierProvider(create: (_) => di.sl<NotificationProvider>()),
-        ChangeNotifierProvider(create: (_) => di.sl<ExchangeProvider>()),
-        ChangeNotifierProvider(create: (_) => di.sl<ReceiptProvider>()),
-        // OCR Provider (only if Gemini API configured)
-        if (GeminiConfig.isConfigured)
-          ChangeNotifierProvider(create: (_) => di.sl<OcrProvider>()),
+        ChangeNotifierProvider(
+          create: (_) => GroupProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => InvoiceProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => SubscriptionProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => NotificationProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ExchangeProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ReceiptProvider(
+            dio: AppServices.dio,
+            uploadRepository: AppServices.upload,
+          ),
+        ),
+        // AI Provider (server-backed OCR + invoice extraction)
+        ChangeNotifierProvider(
+          create: (_) => AiProvider(
+            dio: AppServices.dio,
+          ),
+        ),
       ],
       child: _AppInitializer(
         fcmService: widget.fcmService,
@@ -205,6 +154,7 @@ class _AppInitializer extends StatefulWidget {
 class _AppInitializerState extends State<_AppInitializer> {
   static const String _walletDeepLinkScheme = 'splitpal';
   static const String _walletDeepLinkHost = 'wallet';
+  static const String _joinDeepLinkHost = 'join';
 
   final AppLinks _appLinks = AppLinks();
 
@@ -227,17 +177,15 @@ class _AppInitializerState extends State<_AppInitializer> {
   Future<void> _initializeDeepLinks() async {
     try {
       final initialUri = await _appLinks.getInitialLink();
-      if (initialUri != null) {
-        _tryHandleWalletDeepLink(initialUri);
-      }
+      if (initialUri != null) _tryHandleDeepLink(initialUri);
     } catch (e) {
-      print('Failed to read initial deep link: $e');
+      debugPrint('Failed to read initial deep link: $e');
     }
 
     _deepLinkSubscription = _appLinks.uriLinkStream.listen(
-      _tryHandleWalletDeepLink,
+      _tryHandleDeepLink,
       onError: (Object error) {
-        print('Failed to listen deep link stream: $error');
+        debugPrint('Failed to listen deep link stream: $error');
       },
     );
   }
@@ -254,10 +202,21 @@ class _AppInitializerState extends State<_AppInitializer> {
         isHomePath;
   }
 
-  void _tryHandleWalletDeepLink(Uri uri) {
-    if (!_isWalletHomeDeepLink(uri)) {
-      return;
+  void _tryHandleDeepLink(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != _walletDeepLinkScheme) return;
+
+    final host = uri.host.toLowerCase();
+    
+    if (host == _walletDeepLinkHost) {
+      _tryHandleWalletDeepLink(uri);
+    } else if (host == _joinDeepLinkHost) {
+      _tryHandleJoinDeepLink(uri);
     }
+  }
+
+  void _tryHandleWalletDeepLink(Uri uri) {
+    if (!_isWalletHomeDeepLink(uri)) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (!authProvider.isAuthenticated) {
@@ -278,13 +237,34 @@ class _AppInitializerState extends State<_AppInitializer> {
     );
   }
 
-  void _consumePendingDeepLinkIfAny() {
-    final pendingDeepLinkUri = _pendingDeepLinkUri;
-    if (pendingDeepLinkUri == null) {
+  void _tryHandleJoinDeepLink(Uri uri) {
+    final code = uri.queryParameters['code'];
+    if (code == null) return;
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!authProvider.isAuthenticated) {
+      _pendingDeepLinkUri = uri;
       return;
     }
 
-    _tryHandleWalletDeepLink(pendingDeepLinkUri);
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) {
+      _pendingDeepLinkUri = uri;
+      return;
+    }
+
+    _pendingDeepLinkUri = null;
+    navigator.push(
+      MaterialPageRoute(
+        builder: (context) => JoinGroupPage(initialCode: code.toUpperCase()),
+      ),
+    );
+  }
+
+  void _consumePendingDeepLinkIfAny() {
+    final pendingDeepLinkUri = _pendingDeepLinkUri;
+    if (pendingDeepLinkUri == null) return;
+    _tryHandleDeepLink(pendingDeepLinkUri);
   }
 
   void _setupAuthListener() {
@@ -292,16 +272,14 @@ class _AppInitializerState extends State<_AppInitializer> {
 
     authProvider.addListener(() {
       if (authProvider.isAuthenticated) {
-        di.sl<SocketClient>().connect();
+        AppServices.socket.connect();
         _updateFcmToken();
         _consumePendingDeepLinkIfAny();
 
         final userId = authProvider.user?.id;
-        if (userId != null) {
-          _replayUnreadNotifications(userId);
-        }
+        if (userId != null) _replayUnreadNotifications(userId);
       } else {
-        di.sl<SocketClient>().disconnect();
+        AppServices.socket.disconnect();
         _fcmInitialized = false;
         _isUpdatingFcmToken = false;
         _isReplayingUnread = false;
@@ -310,14 +288,12 @@ class _AppInitializerState extends State<_AppInitializer> {
     });
 
     if (authProvider.isAuthenticated) {
-      di.sl<SocketClient>().connect();
+      AppServices.socket.connect();
       _updateFcmToken();
       _consumePendingDeepLinkIfAny();
 
       final userId = authProvider.user?.id;
-      if (userId != null) {
-        _replayUnreadNotifications(userId);
-      }
+      if (userId != null) _replayUnreadNotifications(userId);
     }
   }
 
@@ -340,7 +316,7 @@ class _AppInitializerState extends State<_AppInitializer> {
         _fcmInitialized = false;
       }
     } catch (e) {
-      print('Failed to update FCM token: $e');
+      debugPrint('Failed to update FCM token: $e');
       _fcmInitialized = false;
     } finally {
       _isUpdatingFcmToken = false;
@@ -348,9 +324,7 @@ class _AppInitializerState extends State<_AppInitializer> {
   }
 
   Future<void> _replayUnreadNotifications(String userId) async {
-    if (_isReplayingUnread || _replayedUnreadUserId == userId) {
-      return;
-    }
+    if (_isReplayingUnread || _replayedUnreadUserId == userId) return;
 
     _isReplayingUnread = true;
     try {
@@ -368,7 +342,7 @@ class _AppInitializerState extends State<_AppInitializer> {
 
       _replayedUnreadUserId = userId;
     } catch (e) {
-      print('Failed to replay unread notifications: $e');
+      debugPrint('Failed to replay unread notifications: $e');
     } finally {
       _isReplayingUnread = false;
     }
@@ -402,8 +376,9 @@ class _AppInitializerState extends State<_AppInitializer> {
           }
 
           if (authProvider.isAuthenticated) {
-            // Always go to HomeShellPage when authenticated
-            // Onboarding preference only applies on fresh app startup (different user)
+            if (authProvider.shouldShowOnboarding()) {
+              return const OnboardingPage();
+            }
             return const HomeShellPage();
           }
 

@@ -2,12 +2,14 @@ import { Types } from 'mongoose';
 
 export interface ReceiptInput {
     imageUrl: string;
+    totalAmount?: number;
     note?: string;
     tagIds: string[];
     receiptDate?: string; // ISO date string YYYY-MM-DD
 }
 
 export interface ReceiptUpdateInput {
+    totalAmount?: number;
     note?: string;
     tagIds?: string[];
 }
@@ -15,6 +17,7 @@ export interface ReceiptUpdateInput {
 export interface ReceiptDto {
     id: string;
     imageUrl: string;
+    totalAmount: number;
     note?: string | null;
     tags: TagDto[];
     receiptDate: string; // ISO date (UTC)
@@ -31,6 +34,7 @@ export interface TagDto {
 export interface MonthSummaryItem {
     date: string; // YYYY-MM-DD
     count: number;
+    totalAmount: number;
     thumbUrls: string[];
 }
 

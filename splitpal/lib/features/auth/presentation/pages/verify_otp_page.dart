@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/features/onboarding/presentation/pages/onboarding_page.dart';
 
-import '../providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 
 class VerifyOTPPage extends StatefulWidget {
   final String email;

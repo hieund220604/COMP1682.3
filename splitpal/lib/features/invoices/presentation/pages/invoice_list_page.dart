@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../providers/invoice_provider.dart';
-import '../../../groups/presentation/providers/group_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 import 'create_invoice_page.dart';
 import 'invoice_capture_mode_page.dart';
 import 'invoice_detail_page.dart';

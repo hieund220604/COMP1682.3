@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../domain/entities/subscription.dart';
+import 'package:splitpal/models/subscription.dart';
 
 class SubscriptionCard extends StatelessWidget {
   final Subscription subscription;

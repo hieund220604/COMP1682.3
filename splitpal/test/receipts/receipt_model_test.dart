@@ -1,9 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:splitpal/features/receipts/data/models/receipt_model.dart';
-import 'package:splitpal/features/receipts/domain/entities/receipt.dart';
+import 'package:splitpal/models/receipt.dart';
 
 void main() {
-  test('ReceiptModel fromJson/to fields', () {
+  test('Receipt fromJson/to fields', () {
     final json = {
       '_id': 'r1',
       'imageUrl': 'http://example.com/img.jpg',
@@ -15,7 +14,7 @@ void main() {
       'createdAt': '2026-03-29T01:00:00.000Z',
     };
 
-    final model = ReceiptModel.fromJson(json);
+    final model = Receipt.fromJson(json);
     expect(model.id, 'r1');
     expect(model.imageUrl, contains('img.jpg'));
     expect(model.note, 'Lunch');
@@ -23,7 +22,7 @@ void main() {
     expect(model.tags.first.name, 'Food');
   });
 
-  test('ReceiptModel parses tagIds fallback', () {
+  test('Receipt parses tagIds fallback', () {
     final json = {
       '_id': 'r2',
       'imageUrl': 'http://example.com/img2.jpg',
@@ -32,7 +31,7 @@ void main() {
       'createdAt': '2026-03-29T01:00:00.000Z',
     };
 
-    final model = ReceiptModel.fromJson(json);
+    final model = Receipt.fromJson(json);
     expect(model.tags.length, 2);
     expect(model.tags.first.id, 't1');
     expect(model.tags.first.name, 't1');

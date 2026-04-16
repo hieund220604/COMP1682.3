@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../domain/entities/receipt.dart';
-import '../providers/receipt_provider.dart';
+import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'tag_manager_page.dart';
 
 class ReceiptDetailPage extends StatefulWidget {
@@ -23,6 +23,7 @@ class ReceiptDetailPage extends StatefulWidget {
 
 class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
   Receipt? _receipt;
+  final TextEditingController _amountCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
   final Set<String> _selectedTagIds = {};
 
@@ -49,6 +50,7 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
       }
       if (found != null) {
         _receipt = found;
+        _amountCtrl.text = found.totalAmount.toStringAsFixed(0);
         _noteCtrl.text = found.note ?? '';
         _selectedTagIds.addAll(found.tags.map((t) => t.id));
         setState(() {});
@@ -61,6 +63,7 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
     final provider = context.read<ReceiptProvider>();
     await provider.updateReceipt(
       id: _receipt!.id,
+      totalAmount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       tagIds: _selectedTagIds.toList(),
     );
@@ -111,6 +114,17 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
                 _fixUrl(receipt.imageUrl),
                 fit: BoxFit.cover,
                 width: double.infinity,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
+              decoration: const InputDecoration(
+                labelText: 'Total Amount (VND)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.attach_money),
               ),
             ),
             const SizedBox(height: 12),

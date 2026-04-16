@@ -20,6 +20,7 @@ export interface GroupResponse {
     id: string;
     name: string;
     description: string;
+    joinCode?: string;
     baseCurrency: string;
     createdAt: Date;
     createdBy: string;

@@ -1,9 +1,6 @@
 import { Request, Response } from 'express';
 import { ResponseUtil } from '../util/responseUtil';
-
-const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/;
-const currencyRegex = /(vnd|vnđ|đ|usd|\$)/i;
-const dateRegex = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/;
+import { AIService } from '../service/aiService';
 
 export const aiController = {
     async extractInvoice(req: Request, res: Response): Promise<void> {
@@ -14,30 +11,49 @@ export const aiController = {
             return ResponseUtil.validationError(res, 'text is required');
         }
 
-        const amountMatch = text.match(amountRegex);
-        const currencyMatch = text.match(currencyRegex);
-        const dateMatch = text.match(dateRegex);
+        try {
+            const data = await AIService.extractInvoiceData(text, groupId);
+            ResponseUtil.success(res, data, 'Invoice draft extracted successfully');
+        } catch (error: any) {
+            console.error('[AI Controller] Error extracting invoice:', error);
+            ResponseUtil.serverError(res, 'Failed to extract invoice data');
+        }
+    },
+    async extractInvoiceFromImage(req: Request, res: Response): Promise<void> {
+        if (!req.file || !req.file.buffer) {
+            return ResponseUtil.validationError(res, 'file is required');
+        }
 
-        const amountRaw = amountMatch ? amountMatch[1].replace(/,/g, '').replace(/\./g, '.') : undefined;
-        const amount = amountRaw ? Number(amountRaw) : undefined;
-        const currency = currencyMatch
-            ? currencyMatch[1].toUpperCase().replace('VNĐ', 'VND').replace('Đ', 'VND')
-            : 'VND';
+        try {
+            const data = await AIService.extractInvoiceFromImage(
+                req.file.buffer,
+                req.file.mimetype
+            );
+            ResponseUtil.success(res, data, 'Invoice OCR extracted successfully');
+        } catch (error: any) {
+            console.error('[AI Controller] Error extracting OCR invoice:', error);
+            ResponseUtil.serverError(res, 'Failed to extract invoice OCR data');
+        }
+    },
+    async generateDebtReminder(req: Request, res: Response): Promise<void> {
+        const debtorName = typeof req.body?.debtorName === 'string' ? req.body.debtorName.trim() : '';
+        const debts = Array.isArray(req.body?.debts) ? req.body.debts : [];
+        const style = typeof req.body?.style === 'string' ? req.body.style.trim() : 'funny';
 
-        const title = text.length > 60 ? text.slice(0, 60) : text;
-        const note = text;
+        if (!debtorName) {
+            return ResponseUtil.validationError(res, 'debtorName is required');
+        }
 
-        const data = {
-            groupId,
-            title,
-            amount: Number.isFinite(amount) ? amount : undefined,
-            currency,
-            date: dateMatch ? dateMatch[1] : undefined,
-            note
-        };
-
-        // TODO: hook real LLM extraction here when available
-
-        ResponseUtil.success(res, { invoice: data }, 'Invoice draft extracted');
+        try {
+            const message = await AIService.generateDebtReminder({
+                debtorName,
+                debts,
+                style
+            });
+            ResponseUtil.success(res, { message }, 'Debt reminder generated successfully');
+        } catch (error: any) {
+            console.error('[AI Controller] Error generating debt reminder:', error);
+            ResponseUtil.serverError(res, 'Failed to generate debt reminder');
+        }
     }
 };

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:splitpal/features/auth/presentation/providers/auth_provider.dart';
-import 'package:splitpal/features/subscriptions/domain/entities/subscription.dart';
-import 'package:splitpal/features/subscriptions/presentation/providers/subscription_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/models/subscription.dart';
+import 'package:splitpal/features/subscriptions/subscription_provider.dart';
 
 class SubscriptionDetailPage extends StatefulWidget {
   final String subscriptionId;

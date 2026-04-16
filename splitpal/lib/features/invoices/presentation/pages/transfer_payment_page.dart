@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../domain/entities/invoice.dart';
-import '../providers/invoice_provider.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/models/invoice.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
 
 class TransferPaymentPage extends StatefulWidget {

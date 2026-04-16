@@ -1,6 +1,7 @@
 // Subscription Types
 
 export enum BillingCycle {
+    DAILY = 'DAILY',
     WEEKLY = 'WEEKLY',
     MONTHLY = 'MONTHLY',
     YEARLY = 'YEARLY'

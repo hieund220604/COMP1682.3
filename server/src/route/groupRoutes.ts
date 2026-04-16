@@ -19,6 +19,7 @@ router.delete('/:groupId', groupController.deleteGroup);
 router.get('/invites/pending', groupController.getPendingInvites); // Must be before :groupId routes
 router.post('/:groupId/invites', groupController.createInvite);
 router.post('/invites/accept', groupController.acceptInvite);
+router.post('/join-by-code', groupController.joinByCode);
 
 // Members
 router.get('/:groupId/members', groupController.getGroupMembers);

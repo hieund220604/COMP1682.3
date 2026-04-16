@@ -10,7 +10,7 @@ import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/widgets/app_empty_state.dart';
 import 'package:splitpal/features/invoices/presentation/pages/invoice_detail_page.dart';
-import 'package:splitpal/features/invoices/presentation/providers/invoice_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
 
 import 'invoice_status_filter.dart';
 

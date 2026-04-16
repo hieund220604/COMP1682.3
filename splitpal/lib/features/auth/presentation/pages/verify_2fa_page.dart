@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 
 class Verify2FAPage extends StatefulWidget {
   const Verify2FAPage({super.key});

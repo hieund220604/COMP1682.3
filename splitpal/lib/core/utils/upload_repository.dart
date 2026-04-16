@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/error/exceptions.dart';
 
@@ -9,13 +11,18 @@ class UploadRepository {
   UploadRepository({required DioClient dioClient}) : _dioClient = dioClient;
 
   Future<String> uploadImage(File file) async {
+    final bytes = await file.readAsBytes();
+    final fileName = file.path.split('/').last;
+    return uploadImageBytes(bytes, fileName);
+  }
+
+  Future<String> uploadImageBytes(Uint8List bytes, String fileName) async {
     try {
-      final String fileName = file.path.split('/').last;
-      
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(
-          file.path,
+        'file': MultipartFile.fromBytes(
+          bytes,
           filename: fileName,
+          contentType: MediaType('image', fileName.toLowerCase().endsWith('png') ? 'png' : 'jpeg'),
         ),
       });
 

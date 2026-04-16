@@ -41,6 +41,7 @@ function toReceiptDto(receipt: IReceipt, tags: IReceiptTag[]): ReceiptDto {
     return {
         id: receipt._id.toString(),
         imageUrl: receipt.imageUrl,
+        totalAmount: receipt.totalAmount || 0,
         note: receipt.note ?? null,
         receiptDate: receipt.receiptDate.toISOString().substring(0, 10),
         createdAt: receipt.createdAt.toISOString(),
@@ -160,6 +161,7 @@ export const receiptService = {
         const receipt = await Receipt.create({
             userId,
             imageUrl: payload.imageUrl.trim(),
+            totalAmount: payload.totalAmount || 0,
             note: payload.note?.trim() || undefined,
             tags: tags.map(t => t._id),
             receiptDate,
@@ -184,10 +186,11 @@ export const receiptService = {
                 $group: {
                     _id: '$receiptDate',
                     count: { $sum: 1 },
+                    totalAmount: { $sum: { $ifNull: ['$totalAmount', 0] } },
                     thumbUrls: { $push: '$imageUrl' },
                 }
             },
-            { $project: { _id: 0, date: { $dateToString: { format: '%Y-%m-%d', date: '$_id' } }, count: 1, thumbUrls: { $slice: ['$thumbUrls', 3] } } },
+            { $project: { _id: 0, date: { $dateToString: { format: '%Y-%m-%d', date: '$_id' } }, count: 1, totalAmount: 1, thumbUrls: { $slice: ['$thumbUrls', 3] } } },
             { $sort: { date: 1 } }
         ]);
 
@@ -217,6 +220,10 @@ export const receiptService = {
         if (payload.note !== undefined) {
             if (payload.note.length > 500) throw new AppError('Note too long (max 500)', 'VALIDATION_ERROR');
             receipt.note = payload.note.trim();
+        }
+
+        if (payload.totalAmount !== undefined) {
+            receipt.totalAmount = payload.totalAmount;
         }
 
         let tags: IReceiptTag[] | null = null;

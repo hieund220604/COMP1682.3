@@ -122,6 +122,23 @@ export const groupController = {
         }
     },
 
+    // Join group by code
+    async joinByCode(req: Request<{}, {}, { code: string }>, res: Response<ApiResponse<GroupMemberResponse>>): Promise<void> {
+        try {
+            if (!req.user) {
+                return ResponseUtil.unauthorized(res);
+            }
+            const { code } = req.body;
+            if (!code || typeof code !== 'string') {
+                return ResponseUtil.validationError(res, 'Code is required');
+            }
+            const member = await groupService.joinByCode(req.user.userId, code.toUpperCase());
+            ResponseUtil.success(res, member, 'Joined group successfully');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to join group by code');
+        }
+    },
+
     // Get group members
     async getGroupMembers(req: Request<{ groupId: string }>, res: Response<ApiResponse<GroupMemberResponse[]>>): Promise<void> {
         try {

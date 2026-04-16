@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/navigation/app_route_observer.dart';
-import 'package:splitpal/features/groups/presentation/providers/group_provider.dart';
-import 'package:splitpal/features/subscriptions/domain/entities/subscription.dart';
-import 'package:splitpal/features/subscriptions/presentation/providers/subscription_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
+import 'package:splitpal/models/subscription.dart';
+import 'package:splitpal/features/subscriptions/subscription_provider.dart';
 import 'package:splitpal/features/subscriptions/presentation/pages/subscription_detail_page.dart';
 
 class SubscriptionsPage extends StatefulWidget {
@@ -520,6 +520,7 @@ class _CreateSubscriptionSheetState extends State<_CreateSubscriptionSheet> {
             value: _billingCycle,
             decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
             items: const [
+              DropdownMenuItem(value: 'DAILY', child: Text('Daily')),
               DropdownMenuItem(value: 'WEEKLY', child: Text('Weekly')),
               DropdownMenuItem(value: 'MONTHLY', child: Text('Monthly')),
               DropdownMenuItem(value: 'YEARLY', child: Text('Yearly')),

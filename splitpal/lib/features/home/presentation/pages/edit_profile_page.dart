@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'package:splitpal/core/di/injection_container.dart';
+import 'package:splitpal/core/app_services.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/utils/upload_repository.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
-import 'package:splitpal/features/auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -46,8 +46,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       setState(() => _isUploading = true);
 
-      final uploadRepo = UploadRepository(dioClient: sl());
-      final url = await uploadRepo.uploadImage(File(image.path));
+      final url = await AppServices.upload.uploadImage(File(image.path));
 
       if (!mounted) return;
       setState(() {

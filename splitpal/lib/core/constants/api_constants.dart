@@ -116,6 +116,8 @@ class ApiConstants {
 
   // AI Endpoints
   static const String aiExtractInvoice = '/ai/extract-invoice';
+    static const String aiOcrInvoice = '/ai/ocr';
+    static const String aiDebtReminder = '/ai/debt-reminder';
 
   // Transaction Endpoints
   static const String transactions = '/transactions';

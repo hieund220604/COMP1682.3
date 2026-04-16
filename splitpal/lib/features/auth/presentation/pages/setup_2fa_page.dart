@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 
 class Setup2FAPage extends StatefulWidget {
   const Setup2FAPage({super.key});

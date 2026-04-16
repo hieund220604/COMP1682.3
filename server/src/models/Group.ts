@@ -5,6 +5,8 @@ export interface IGroup extends Document {
     name: string;
     baseCurrency: string;
     timezone: string;
+    description: string;
+    joinCode?: string;
     createdBy: string;
     createdAt: Date;
     updatedAt: Date;
@@ -25,6 +27,17 @@ const GroupSchema = new Schema<IGroup>({
     timezone: {
         type: String,
         default: 'Asia/Ho_Chi_Minh'
+    },
+    description: {
+        type: String,
+        default: ''
+    },
+    joinCode: {
+        type: String,
+        unique: true,
+        sparse: true,
+        uppercase: true,
+        trim: true,
     },
     createdBy: {
         type: String,

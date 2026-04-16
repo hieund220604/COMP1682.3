@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/theme/theme_controller.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import '../../../auth/presentation/pages/setup_2fa_page.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
-import '../../../notifications/presentation/providers/notification_provider.dart';
+import 'package:splitpal/features/notifications/notification_provider.dart';
 import 'edit_profile_page.dart';
 import 'change_password_page.dart';
 

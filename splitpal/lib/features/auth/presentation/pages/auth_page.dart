@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
 import 'verify_otp_page.dart';
 import 'verify_2fa_page.dart';
 import 'package:splitpal/features/onboarding/presentation/pages/onboarding_page.dart';
+import 'package:splitpal/features/home/presentation/pages/home_shell_page.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -55,7 +56,11 @@ class _AuthPageState extends State<AuthPage> {
       }
 
       if (authProvider.isAuthenticated) {
-        Navigator.pushReplacementNamed(context, OnboardingPage.routeName);
+        if (authProvider.shouldShowOnboarding()) {
+          Navigator.pushReplacementNamed(context, OnboardingPage.routeName);
+        } else {
+          Navigator.pushReplacementNamed(context, HomeShellPage.routeName);
+        }
       } else if (error != null) {
         // Show error snackbar
         ScaffoldMessenger.of(context).showSnackBar(

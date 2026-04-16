@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'package:splitpal/core/constants/app_constants.dart';
-import 'package:splitpal/core/di/injection_container.dart';
+import 'package:splitpal/core/app_services.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/network/dio_client.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
@@ -11,10 +11,9 @@ import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/widgets/app_empty_state.dart';
 import 'package:splitpal/core/widgets/app_section_header.dart';
-import 'package:splitpal/features/invoices/domain/entities/invoice.dart';
-import 'package:splitpal/features/invoices/domain/repositories/invoice_repository.dart';
+import 'package:splitpal/models/invoice.dart';
 import 'package:splitpal/features/invoices/presentation/pages/invoice_detail_page.dart';
-import 'package:splitpal/features/invoices/presentation/providers/invoice_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
 
 class PaymentRequestDetailPage extends StatefulWidget {
   final String groupId;
@@ -45,8 +44,7 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
   }
 
   Future<_LoadedPaymentRequestDetail> _load() async {
-    final dio = sl<DioClient>();
-    final repo = sl<InvoiceRepository>();
+    final dio = AppServices.dio;
 
     final response =
         await dio.get('/payment-requests/${widget.groupId}/${widget.requestId}');
@@ -62,15 +60,15 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
 
     String? invoicesError;
     List<Invoice> sourceInvoices = const [];
-    final invoicesEither = await repo.getInvoices(widget.groupId, status: 'LOCKED');
-    invoicesEither.fold(
-      (failure) => invoicesError = failure.message,
-      (invoices) {
-        sourceInvoices = invoices
-            .where((i) => i.paymentRequestId == widget.requestId)
-            .toList(growable: false);
-      },
-    );
+    try {
+      final invoiceProvider = context.read<InvoiceProvider>();
+      await invoiceProvider.loadInvoices(widget.groupId, status: 'LOCKED');
+      sourceInvoices = invoiceProvider.invoices
+          .where((i) => i.paymentRequestId == widget.requestId)
+          .toList(growable: false);
+    } catch (e) {
+      invoicesError = e.toString();
+    }
 
     return _LoadedPaymentRequestDetail(
       detail: detail,

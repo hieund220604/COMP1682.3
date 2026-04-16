@@ -6,19 +6,19 @@ import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/navigation/app_route_observer.dart';
 import '../../../../core/utils/currency_formatter.dart';
-import '../../../../features/auth/presentation/providers/auth_provider.dart';
-import '../../../../features/groups/presentation/providers/group_provider.dart';
-import '../../../../features/subscriptions/presentation/providers/subscription_provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
+import 'package:splitpal/features/subscriptions/subscription_provider.dart';
 import '../../../../features/groups/presentation/pages/group_detail_page.dart';
 import '../../../../features/subscriptions/presentation/pages/subscription_detail_page.dart';
 import '../../../../features/home/presentation/pages/home_shell_page.dart';
 import '../../../../features/exchange/presentation/pages/currency_converter_page.dart';
 import '../../../../features/receipts/presentation/pages/receipt_calendar_page.dart';
 import '../../../../features/receipts/presentation/pages/day_receipts_page.dart';
-import '../../../../features/receipts/presentation/providers/receipt_provider.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'transaction_history_page.dart';
 import 'wallet_operations_page.dart';
-import '../../../../core/di/injection_container.dart' as di;
+import 'package:splitpal/core/app_services.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/constants/api_constants.dart';
 
@@ -34,7 +34,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
   Map<String, dynamic>? _summary;
   bool _loading = false;
   String? _error;
-  final DioClient _dio = di.sl<DioClient>();
+  final DioClient _dio = AppServices.dio;
 
   Future<void> _refreshData() async {
     setState(() {

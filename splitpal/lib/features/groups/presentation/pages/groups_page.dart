@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/group_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 import 'group_detail_page.dart';
 import 'create_group_page.dart';
 

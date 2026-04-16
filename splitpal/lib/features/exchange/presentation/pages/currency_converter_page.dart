@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../providers/exchange_provider.dart';
+import 'package:splitpal/features/exchange/exchange_provider.dart';
 
 class CurrencyConverterPage extends StatefulWidget {
   const CurrencyConverterPage({super.key});

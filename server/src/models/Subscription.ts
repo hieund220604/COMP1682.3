@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type BillingCycle = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type BillingCycle = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 export type SubscriptionStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'EXPIRED' | 'PAST_DUE';
 
 export interface ISubscription extends Document {
@@ -50,7 +50,7 @@ const SubscriptionSchema = new Schema<ISubscription>({
     },
     billingCycle: {
         type: String,
-        enum: ['WEEKLY', 'MONTHLY', 'YEARLY'],
+        enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
         required: true
     },
     status: {

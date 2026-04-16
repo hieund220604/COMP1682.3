@@ -1,7 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../features/notifications/domain/entities/notification_entity.dart';
+import '../../models/notification.dart';
 
 class NotificationReplayService {
   static const String _channelId = 'splitpal_replay_channel';
@@ -59,7 +59,7 @@ class NotificationReplayService {
 
   Future<void> replayUnreadNotifications({
     required String userId,
-    required List<NotificationEntity> notifications,
+    required List<AppNotification> notifications,
     int maxCount = 5,
   }) async {
     if (!_initialized) {

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:splitpal/core/icons/app_icons.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
-import '../providers/group_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 
 class AcceptInvitePage extends StatefulWidget {
   static const routeName = '/accept-invite';
