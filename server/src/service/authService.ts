@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 import { emailService } from './emailService';
 import { JWTPayLoad } from '../type/auth';
+import { admin } from '../config/firebase-config';
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 const toPushNotificationsEnabled = (value: boolean | undefined): boolean => value !== false;
@@ -156,6 +157,53 @@ export const authService = {
                 balance: user.balance,
                 currency: user.currency,
                 twoFactorEnabled: false,
+                pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
+            },
+            token
+        };
+    },
+
+    async loginWithGoogle(idToken: string): Promise<any> {
+        // Verify the Firebase ID token
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const email = decodedToken.email;
+        const displayName = decodedToken.name || email?.split('@')[0];
+
+        if (!email) {
+            throw new Error('Google sign-in failed: Null email');
+        }
+
+        const normalizedEmail = normalizeEmail(email);
+        let user = await User.findOne({ email: normalizedEmail });
+
+        if (!user) {
+            // Create a new user with a random strong password since it's a Google account
+            const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8) + 'A1!';
+            const hashedPassword = await this.hashPassword(randomPassword);
+            
+            user = await User.create({
+                email: normalizedEmail,
+                passwordHash: hashedPassword,
+                displayName: displayName,
+                status: 'active', // Google emails are already verified
+                avatarUrl: decodedToken.picture || null
+            });
+        } else if (user.status !== 'active') {
+             // If they signed up manually but didn't verify, then signed in with Google -> activate them
+            user.status = 'active';
+            await user.save();
+        }
+
+        const token = this.generateToken(user._id.toString(), user.email);
+        return {
+            user: {
+                userId: user._id.toString(),
+                email: user.email,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+                balance: user.balance,
+                currency: user.currency,
+                twoFactorEnabled: user.twoFactorEnabled || false,
                 pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
             },
             token

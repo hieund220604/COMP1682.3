@@ -19,6 +19,7 @@ export interface IBillingHistory extends Document {
         shareAmount: number;
         success: boolean;
         reason?: string;
+        categoryTagId?: string;
     }[];
     createdAt: Date;
 }
@@ -74,7 +75,8 @@ const BillingHistorySchema = new Schema<IBillingHistory>({
         userId: { type: String, required: true },
         shareAmount: { type: Number, required: true },
         success: { type: Boolean, required: true },
-        reason: { type: String, default: null }
+        reason: { type: String, default: null },
+        categoryTagId: { type: String, default: null }
     }]
 }, {
     timestamps: { createdAt: true, updatedAt: false },

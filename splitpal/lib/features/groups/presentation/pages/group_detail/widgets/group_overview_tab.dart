@@ -24,7 +24,6 @@ class GroupOverviewTab extends StatelessWidget {
   final VoidCallback? onInvite;
   final VoidCallback? onCreateInvoice;
   final Future<void> Function()? onCreatePaymentRequest;
-  final VoidCallback? onCreateSubscription;
   final Future<void> Function(String memberId)? onTransferOwnership;
   final Future<void> Function(String memberId, String role)? onUpdateMemberRole;
 
@@ -43,7 +42,6 @@ class GroupOverviewTab extends StatelessWidget {
     this.onInvite,
     this.onCreateInvoice,
     this.onCreatePaymentRequest,
-    this.onCreateSubscription,
     this.onTransferOwnership,
     this.onUpdateMemberRole,
   });
@@ -170,12 +168,6 @@ class GroupOverviewTab extends StatelessWidget {
                   icon: AppIcons.payments,
                   label: 'Payment request',
                   onPressed: () => onCreatePaymentRequest!(),
-                ),
-              if (onCreateSubscription != null)
-                _QuickActionButton(
-                  icon: AppIcons.subscriptions,
-                  label: 'New subscription',
-                  onPressed: onCreateSubscription!,
                 ),
             ],
           ),

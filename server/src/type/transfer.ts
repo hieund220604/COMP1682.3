@@ -8,6 +8,7 @@ export interface InitiatePaymentRequest {
 
 export interface VerifyOTPRequest {
     otp: string;
+    categoryTagId?: string;
 }
 
 // Response types
@@ -22,6 +23,7 @@ export interface TransferResponse {
     paidAt?: Date;
     otpExpiresAt?: Date;
     createdAt: Date;
+    categoryTagId?: string;
 
     // Debt allocation details
     debtAllocations?: DebtAllocationDetail[];

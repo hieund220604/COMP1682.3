@@ -23,6 +23,7 @@ class ReceiptProvider with ChangeNotifier {
   // ─── State ──────────────────────────────────────────────
   bool _loadingMonth = false;
   bool _loadingDay = false;
+  bool _loadingBudget = false;
   bool _saving = false;
   String? _error;
   List<ReceiptDaySummary> _monthSummary = [];
@@ -37,6 +38,11 @@ class ReceiptProvider with ChangeNotifier {
   List<Receipt> get dayReceipts => _dayReceipts;
   List<ReceiptTag> get tags => _tags;
   bool get hasTags => _tags.isNotEmpty;
+  bool get isLoadingBudget => _loadingBudget;
+
+  // New field for budget
+  List<dynamic> _budgetSummary = [];
+  List<dynamic> get budgetSummary => _budgetSummary;
 
   void _setError(String? m) { _error = m; notifyListeners(); }
 
@@ -52,9 +58,14 @@ class ReceiptProvider with ChangeNotifier {
     }
   }
 
-  Future<ReceiptTag?> createTag(String name, String color) async {
+  Future<ReceiptTag?> createTag(String name, String color, {double? monthlyBudget, String? icon}) async {
     try {
-      final resp = await _dio.post('/receipts/tags', data: {'name': name, 'color': color});
+      final resp = await _dio.post('/receipts/tags', data: {
+        'name': name, 
+        'color': color,
+        if (monthlyBudget != null) 'monthlyBudget': monthlyBudget,
+        if (icon != null) 'icon': icon,
+      });
       final tag = ReceiptTag.fromJson(resp.data['data']);
       _tags.add(tag);
       notifyListeners();
@@ -65,11 +76,14 @@ class ReceiptProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateTag(String id, {String? name, String? color}) async {
+  Future<bool> updateTag(String id, {String? name, String? color, double? monthlyBudget, String? icon, bool? isArchived}) async {
     try {
       final resp = await _dio.put('/receipts/tags/$id', data: {
         if (name != null) 'name': name,
         if (color != null) 'color': color,
+        if (monthlyBudget != null) 'monthlyBudget': monthlyBudget,
+        if (icon != null) 'icon': icon,
+        if (isArchived != null) 'isArchived': isArchived,
       });
       final tag = ReceiptTag.fromJson(resp.data['data']);
       final idx = _tags.indexWhere((t) => t.id == id);
@@ -108,6 +122,24 @@ class ReceiptProvider with ChangeNotifier {
       _setError(e.toString());
     }
     _loadingMonth = false;
+    notifyListeners();
+  }
+
+  // ─── Budget Summary ─────────────────────────────────────────
+  Future<void> loadBudgetSummary(String month) async {
+    _loadingBudget = true;
+    _setError(null);
+    notifyListeners();
+    try {
+      final resp = await _dio.get('/budget/summary', queryParameters: {'month': month});
+      final data = resp.data['data'] as List<dynamic>? ?? [];
+      // To avoid circular dependency with a new model file inside the provider, 
+      // we'll just store the raw JSON map or dynamically parse it in UI using the model.
+      _budgetSummary = data;
+    } catch (e) {
+      _setError(e.toString());
+    }
+    _loadingBudget = false;
     notifyListeners();
   }
 

@@ -19,8 +19,8 @@ export const receiptController = {
         try {
             const userId = req.user?.userId;
             if (!userId) return ResponseUtil.unauthorized(res);
-            const { name, color } = req.body;
-            const tag = await receiptService.createTag(userId, name, color);
+            const { name, color, monthlyBudget, icon } = req.body;
+            const tag = await receiptService.createTag(userId, name, color, monthlyBudget, icon);
             ResponseUtil.created(res, tag, 'Tag created');
         } catch (error) {
             handleControllerError(res, error, 'Failed to create tag');
@@ -32,8 +32,8 @@ export const receiptController = {
             const userId = req.user?.userId;
             if (!userId) return ResponseUtil.unauthorized(res);
             const { id } = req.params;
-            const { name, color } = req.body;
-            const tag = await receiptService.updateTag(userId, id, name, color);
+            const { name, color, monthlyBudget, icon, isArchived } = req.body;
+            const tag = await receiptService.updateTag(userId, id, name, color, monthlyBudget, icon, isArchived);
             ResponseUtil.success(res, tag, 'Tag updated');
         } catch (error) {
             handleControllerError(res, error, 'Failed to update tag');

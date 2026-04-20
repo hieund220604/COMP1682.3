@@ -232,5 +232,19 @@ export const notificationService = {
         });
 
         return result.deletedCount || 0;
+    },
+
+    /**
+     * Convenience shorthand with positional args.
+     * notify(userId, type, title, message, data?)
+     */
+    async notify(
+        userId: string,
+        type: NotificationType,
+        title: string,
+        message: string,
+        data?: any,
+    ): Promise<void> {
+        return this.createNotification({ userId, type, title, message, data });
     }
 };

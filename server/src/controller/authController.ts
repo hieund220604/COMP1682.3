@@ -89,6 +89,20 @@ export const authController = {
             ResponseUtil.handleError(res, error, 'Invalid email or password');
         }
     },
+    
+    async loginWithGoogle(req: Request<{}, {}, { idToken: string }>, res: Response<AuthResponse>): Promise<void> {
+        try {
+            const { idToken } = req.body;
+            if (!idToken) {
+                return ResponseUtil.validationError(res, 'Google ID token is required');
+            }
+            const result = await authService.loginWithGoogle(idToken);
+            ResponseUtil.success(res, { user: result }, 'Google login successful');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to authenticate with Google');
+        }
+    },
+
     async resetPassword(req: Request<{}, {}, ResetPasswordRequest>, res: Response<AuthResponse>): Promise<void> {
         try {
             const { email, newPassword } = req.body;

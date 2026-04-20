@@ -53,23 +53,35 @@ class ReceiptTag {
   final String id;
   final String name;
   final String color;
+  final double? monthlyBudget;
+  final String? icon;
+  final bool isArchived;
 
   const ReceiptTag({
     required this.id,
     required this.name,
     required this.color,
+    this.monthlyBudget,
+    this.icon,
+    this.isArchived = false,
   });
 
   factory ReceiptTag.fromJson(Map<String, dynamic> json) => ReceiptTag(
         id: (json['id'] ?? json['_id'] ?? '').toString(),
         name: json['name'] ?? json['label'] ?? json['id'] ?? '',
         color: json['color'] ?? 'blue',
+        monthlyBudget: json['monthlyBudget']?.toDouble(),
+        icon: json['icon'],
+        isArchived: json['isArchived'] ?? false,
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'color': color,
+        'monthlyBudget': monthlyBudget,
+        'icon': icon,
+        'isArchived': isArchived,
       };
 }
 

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
-import 'tag_manager_page.dart';
+import 'budget_page.dart';
 
 class ReceiptDetailPage extends StatefulWidget {
   final String receiptId;
@@ -72,7 +72,7 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
   }
 
   void _openTagManager() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TagManagerPage()));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BudgetPage()));
     await context.read<ReceiptProvider>().loadTags();
     setState(() {});
   }

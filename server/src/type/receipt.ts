@@ -29,6 +29,9 @@ export interface TagDto {
     id: string;
     name: string;
     color: string;
+    monthlyBudget?: number | null;
+    icon?: string | null;
+    isArchived: boolean;
 }
 
 export interface MonthSummaryItem {

@@ -5,6 +5,7 @@ import { PaymentRequest } from '../models/PaymentRequest';
 import { Transfer } from '../models/Transfer';
 import { GroupMember } from '../models/GroupMember';
 import { ResponseUtil } from '../util/responseUtil';
+import { forecastService } from '../service/forecastService';
 
 const inflowTypes = new Set([
     'TOP_UP',
@@ -80,6 +81,14 @@ export const dashboardController = {
             // Recent activity: latest 10 transactions
             const recentTx = await Transaction.find({ userId }).sort({ createdAt: -1 }).limit(10);
 
+            // Forecast summary (non-blocking — fail silently)
+            let forecastSummary = null;
+            try {
+                forecastSummary = await forecastService.getDashboardSummary(userId);
+            } catch {
+                // forecast failure should not break the dashboard
+            }
+
             ResponseUtil.success(res, {
                 user: {
                     id: user?._id,
@@ -109,7 +118,8 @@ export const dashboardController = {
                     currency: tx.currency,
                     createdAt: tx.createdAt,
                     description: tx.description
-                }))
+                })),
+                forecastSummary,
             });
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to load personal dashboard');

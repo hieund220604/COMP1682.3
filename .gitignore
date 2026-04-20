@@ -7,3 +7,7 @@ npm-debug.log
 .agent/
 *md/
 postman/
+
+# Firebase Credentials
+serviceAccountKey.json
+google-services.json

@@ -33,6 +33,9 @@ function toTagDto(tag: IReceiptTag): TagDto {
         id: tag._id.toString(),
         name: tag.name,
         color: tag.color,
+        monthlyBudget: tag.monthlyBudget ?? null,
+        icon: tag.icon ?? null,
+        isArchived: tag.isArchived ?? false,
     };
 }
 
@@ -87,7 +90,7 @@ export const receiptService = {
         return tags.map(toTagDto);
     },
 
-    async createTag(userId: string, name: string, color: string): Promise<TagDto> {
+    async createTag(userId: string, name: string, color: string, monthlyBudget?: number, icon?: string): Promise<TagDto> {
         if (!name || !name.trim()) {
             throw new AppError('Tag name is required', 'VALIDATION_ERROR');
         }
@@ -107,11 +110,13 @@ export const receiptService = {
             userId,
             name: name.trim().toLowerCase(),
             color,
+            monthlyBudget: monthlyBudget ?? undefined,
+            icon: icon?.trim() ?? undefined,
         });
         return toTagDto(tag);
     },
 
-    async updateTag(userId: string, tagId: string, name?: string, color?: string): Promise<TagDto> {
+    async updateTag(userId: string, tagId: string, name?: string, color?: string, monthlyBudget?: number | null, icon?: string | null, isArchived?: boolean): Promise<TagDto> {
         const update: Partial<IReceiptTag> = {} as any;
         if (name !== undefined) {
             if (!name.trim()) throw new AppError('Tag name is required', 'VALIDATION_ERROR');
@@ -121,6 +126,15 @@ export const receiptService = {
         if (color !== undefined) {
             if (!TAG_COLORS.includes(color)) throw new AppError('Invalid tag color', 'INVALID_COLOR');
             update.color = color;
+        }
+        if (monthlyBudget !== undefined) {
+            update.monthlyBudget = monthlyBudget === null ? undefined : monthlyBudget;
+        }
+        if (icon !== undefined) {
+            update.icon = icon === null ? undefined : icon.trim();
+        }
+        if (isArchived !== undefined) {
+            update.isArchived = isArchived;
         }
 
         const tag = await ReceiptTag.findOneAndUpdate(

@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
-import '../pages/tag_manager_page.dart';
+import '../pages/budget_page.dart';
 
 class AddReceiptBottomSheet extends StatefulWidget {
   final DateTime defaultDate;
@@ -94,7 +94,7 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
   }
 
   void _openTagManager() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TagManagerPage()));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BudgetPage()));
     await context.read<ReceiptProvider>().loadTags();
     setState(() {});
   }

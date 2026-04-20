@@ -13,8 +13,6 @@ import 'package:splitpal/features/groups/group_provider.dart';
 import 'package:splitpal/features/invoices/presentation/pages/create_invoice_page.dart';
 import 'package:splitpal/features/invoices/invoice_provider.dart';
 import 'package:splitpal/features/invoices/presentation/widgets/payment_request_section.dart';
-import 'package:splitpal/features/subscriptions/presentation/widgets/create_subscription_sheet.dart';
-import 'package:splitpal/features/subscriptions/presentation/widgets/subscription_list.dart';
 import 'package:splitpal/core/constants/api_constants.dart';
 
 import 'widgets/group_header.dart';
@@ -130,14 +128,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     }
   }
 
-  void _openCreateSubscription() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => CreateSubscriptionSheet(initialGroupId: widget.groupId),
-    );
-  }
-
   void _openGroupChat() {
     final groupName =
         context.read<GroupProvider>().currentGroup?['name'] ?? widget.groupName;
@@ -240,7 +230,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     }
 
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: Scaffold(
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -292,7 +282,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     Tab(text: 'Overview', icon: Icon(AppIcons.overview)),
                     Tab(text: 'Invoices', icon: Icon(AppIcons.invoices)),
                     Tab(text: 'Payments', icon: Icon(AppIcons.payments)),
-                    Tab(text: 'Subs', icon: Icon(AppIcons.subscriptions)),
                   ],
                 ),
               ),
@@ -315,8 +304,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 onCreateInvoice: isOwnerOrAdmin ? _openCreateInvoice : null,
                 onCreatePaymentRequest:
                     isOwnerOrAdmin ? _createPaymentRequest : null,
-                onCreateSubscription:
-                    isOwnerOrAdmin ? _openCreateSubscription : null,
                 onTransferOwnership: resolvedRole == 'OWNER' ? _transferOwnership : null,
                 onUpdateMemberRole: isOwnerOrAdmin ? _updateMemberRole : null,
               ),
@@ -335,10 +322,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                   onCreatePaymentRequest:
                       isOwnerOrAdmin ? _createPaymentRequest : null,
                 ),
-              ),
-              ColoredBox(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: SubscriptionList(groupId: widget.groupId),
               ),
             ],
           ),

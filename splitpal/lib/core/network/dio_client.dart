@@ -49,7 +49,7 @@ class DioClient {
   Interceptor _errorInterceptor() {
     return InterceptorsWrapper(
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
+        if (error.response?.statusCode == 401 && !(error.requestOptions.path.contains('/auth/login') || error.requestOptions.path.contains('/auth/signup'))) {
           // Token expired or invalid - logout user
           await _tokenManager.clearAll();
           // You might want to navigate to login page here
@@ -213,8 +213,9 @@ class DioClient {
 
       case DioExceptionType.connectionError:
       case DioExceptionType.unknown:
-        // Try to surface clearer cause instead of generic “Network error”
         final underlying = error.error;
+        if (underlying is UnauthorizedException) return underlying;
+        if (underlying is ValidationException) return underlying;
         if (underlying is SocketException) {
           return NetworkException(
             message: 'Không thể kết nối tới máy chủ. Kiểm tra API_BASE_URL hoặc mạng nội bộ.',

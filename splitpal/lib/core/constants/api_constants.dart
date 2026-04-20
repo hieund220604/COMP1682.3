@@ -128,6 +128,10 @@ class ApiConstants {
   static const String dashboardHome = '/dashboard/home';
   static String dashboardGroup(String groupId) => '/dashboard/group/$groupId';
 
+  // Forecast
+  static const String forecastSummary = '/forecast/summary';
+  static const String forecast = '/forecast';
+
   // Chat Endpoints
   static String chatMessages(String groupId) =>
       '/chat/groups/$groupId/messages';

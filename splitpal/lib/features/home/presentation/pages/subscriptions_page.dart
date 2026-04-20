@@ -60,7 +60,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> with RouteAware {
     final result = await provider.processCharges();
     if (!mounted) return;
     final msg = provider.error ??
-        'Processed charges: ${result?['successfulCharges'] ?? 0}/${result?['totalSubscriptions'] ?? 0} succeeded';
+        'Processed: ${result?['charged'] ?? 0} charged, ${result?['kicked'] ?? 0} kicked';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -220,8 +220,6 @@ class _SubscriptionCard extends StatelessWidget {
     switch (subscription.status) {
       case 'ACTIVE':
         return Colors.green;
-      case 'PAUSED':
-        return Colors.orange;
       case 'CANCELLED':
         return Colors.red;
       default:
@@ -300,7 +298,9 @@ class _SubscriptionCard extends StatelessWidget {
                     const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                     const SizedBox(width: 6),
                     Text(
-                      'Next: ${_fmtDate(subscription.nextBillingDate)}',
+                      subscription.nextBillingDate != null
+                          ? 'Next: ${_fmtDate(subscription.nextBillingDate!)}'
+                          : '${subscription.memberCount} members',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -337,7 +337,6 @@ class _CreateSubscriptionSheetState extends State<_CreateSubscriptionSheet> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _startDateController = TextEditingController();
 
   List<dynamic> _groups = [];
   String? _selectedGroupId;
@@ -350,7 +349,6 @@ class _CreateSubscriptionSheetState extends State<_CreateSubscriptionSheet> {
     _nameController.dispose();
     _amountController.dispose();
     _descriptionController.dispose();
-    _startDateController.dispose();
     super.dispose();
   }
 
@@ -408,7 +406,6 @@ class _CreateSubscriptionSheetState extends State<_CreateSubscriptionSheet> {
       description: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),
-      startDate: _parseDate(_startDateController.text.trim()),
     );
 
     if (!mounted) return;
@@ -458,11 +455,9 @@ class _CreateSubscriptionSheetState extends State<_CreateSubscriptionSheet> {
             const SizedBox(height: 8),
             _buildField('Service name', _nameController, hint: 'Netflix, Spotify...'),
             _buildGroupDropdown(),
-            _buildField('Amount', _amountController, hint: 'e.g. 99000'),
+            _buildField('Amount (per member/cycle)', _amountController, hint: 'e.g. 99000'),
             _buildDropdown(),
             _buildField('Description (optional)', _descriptionController, hint: ''),
-            _buildField('Start date ISO (optional)', _startDateController,
-                hint: '2026-01-28T00:00:00Z'),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(_error!, style: const TextStyle(color: Colors.red)),

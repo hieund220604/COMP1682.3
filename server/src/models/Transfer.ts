@@ -28,6 +28,9 @@ export interface ITransfer extends Document {
     createdAt: Date;
     vnpayTxnRef?: string;
     vnpayTransDate?: Date;
+
+    // Budget tagging
+    categoryTagId?: string;
 }
 
 const TransferSchema = new Schema<ITransfer>({
@@ -103,6 +106,11 @@ const TransferSchema = new Schema<ITransfer>({
     },
     vnpayTransDate: {
         type: Date,
+        default: null
+    },
+    categoryTagId: {
+        type: String,
+        ref: 'ReceiptTag',
         default: null
     }
 }, {

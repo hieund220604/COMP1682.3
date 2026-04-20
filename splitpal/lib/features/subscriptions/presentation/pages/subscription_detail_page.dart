@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'package:splitpal/models/subscription.dart';
+import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'package:splitpal/features/subscriptions/subscription_provider.dart';
 
 class SubscriptionDetailPage extends StatefulWidget {
@@ -14,6 +15,8 @@ class SubscriptionDetailPage extends StatefulWidget {
 }
 
 class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
+  String? _selectedTagId;
+  bool _isResponding = false;
   @override
   void initState() {
     super.initState();
@@ -22,17 +25,40 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
       final provider = context.read<SubscriptionProvider>();
       provider.fetchSubscription(widget.subscriptionId);
       provider.fetchBillingHistory(widget.subscriptionId);
+      context.read<ReceiptProvider>().loadTags();
     });
   }
 
-  // ── Action helpers ────────────────────────────────────────────────────────
+  // ── Action helpers ─────────────────────────────────────────────────────────
+
+  Future<void> _respond(SubscriptionProvider provider, String invitationId, bool accept) async {
+    setState(() => _isResponding = true);
+    final ok = await provider.respondToInvitation(
+      subscriptionId: widget.subscriptionId,
+      invitationId: invitationId,
+      accept: accept,
+      categoryTagId: _selectedTagId,
+    );
+    if (!mounted) return;
+    setState(() => _isResponding = false);
+    
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok 
+        ? (accept ? 'You joined the subscription' : 'Invitation declined')
+        : (provider.actionError ?? 'Failed to respond')),
+      backgroundColor: ok ? Colors.green : Theme.of(context).colorScheme.error,
+    ));
+    if (!ok) provider.clearActionError();
+  }
 
   Future<void> _cancel(SubscriptionProvider provider, Subscription sub) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel subscription'),
-        content: const Text('This cannot be undone. Are you sure?'),
+        content: const Text(
+          'This will end the subscription for all members. No refunds. Are you sure?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -56,23 +82,13 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
     if (!ok) provider.clearActionError();
   }
 
-  Future<void> _resume(SubscriptionProvider provider, Subscription sub) async {
-    final ok = await provider.resume(sub.id);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'Subscription resumed' : (provider.actionError ?? 'Resume failed')),
-      backgroundColor: ok ? null : Theme.of(context).colorScheme.error,
-    ));
-    if (!ok) provider.clearActionError();
-  }
-
   Future<void> _leave(SubscriptionProvider provider) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Leave subscription'),
         content: const Text(
-          'You will no longer be charged for this subscription. Your share will be redistributed to remaining members.',
+          'If you have not paid for the current cycle, you will be charged before leaving.',
         ),
         actions: [
           TextButton(
@@ -94,7 +110,7 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You left the subscription')),
       );
-      Navigator.of(context).pop(); // Go back to list
+      Navigator.of(context).pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(provider.actionError ?? 'Failed to leave'),
@@ -108,7 +124,7 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Subscription details'),
+        title: const Text('Subscription Details'),
       ),
       body: Consumer<SubscriptionProvider>(
         builder: (context, provider, _) {
@@ -122,19 +138,33 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
             );
           }
 
-          // Determine current user's role in this subscription
           final authProvider = context.read<AuthProvider>();
           final currentUserId = authProvider.user?.id;
           final isCreator = sub.createdBy == currentUserId;
-          final isMember = sub.members.any((m) => m.userId == currentUserId && m.status == 'ACTIVE');
-          final canManage = isCreator; // Only creator (OWNER/ADMIN) can cancel/pause/resume
+          final isMember = sub.members
+              .any((m) => m.userId == currentUserId && m.isActive);
+
+          // Find current user's member record for per-member billing info
+          final myMember = sub.members
+              .cast<SubscriptionMember?>()
+              .firstWhere(
+                (m) => m?.userId == currentUserId,
+                orElse: () => null,
+              );
+              
+          final myInvitation = sub.pendingInvitations
+              .cast<SubInvitation?>()
+              .firstWhere(
+                (inv) => inv?.inviteeId == currentUserId && inv?.status == 'PENDING',
+                orElse: () => null,
+              );
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ──────────────────────────────────────────────────
+                // ── Header ────────────────────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -161,78 +191,163 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
                 Text(sub.description ?? 'No description'),
                 const SizedBox(height: 16),
 
-                // ── Info ────────────────────────────────────────────────────
-                _info('Amount', '${sub.amount.toStringAsFixed(0)} ${sub.currency}'),
+                // ── Subscription info ────────────────────────────────────────
+                _info('Fee per member',
+                    '${sub.amount.toStringAsFixed(0)} ${sub.currency} / ${sub.billingCycle.toLowerCase()}'),
                 _info('Billing cycle', sub.billingCycle),
-                _info('Next billing', _fmt(sub.nextBillingDate)),
-                if (sub.lastBilledAt != null) _info('Last billed', _fmt(sub.lastBilledAt!)),
                 _info('Group', sub.groupName ?? sub.groupId),
                 _info('Created by', sub.createdByName ?? sub.createdBy),
                 _info('Created at', _fmt(sub.createdAt)),
-                const SizedBox(height: 16),
-
-                // ── Members ─────────────────────────────────────────────────
-                const Text('Members', style: TextStyle(fontWeight: FontWeight.bold)),
+                if (sub.cancelledAt != null)
+                  _info('Cancelled at', _fmt(sub.cancelledAt!)),
                 const SizedBox(height: 8),
-                ...sub.members.map(
-                  (m) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      child: Text((m.displayName ?? m.email ?? '?').characters.first.toUpperCase()),
-                    ),
-                    title: Text(m.displayName ?? m.email ?? m.userId),
-                    subtitle: Text('Share: ${m.shareAmount} · ${m.status}'),
-                  ),
-                ),
 
-                // ── PAST_DUE warning ────────────────────────────────────────
-                if (sub.status == 'PAST_DUE') ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      border: Border.all(color: Colors.orange),
-                      borderRadius: BorderRadius.circular(8),
+                // ── My billing info ───────────────────────────────────────────
+                if (myMember != null && myMember.isActive) ...[
+                  const Divider(),
+                  const Text('My Billing',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  _info('My fee', '${myMember.amount.toStringAsFixed(0)} ${sub.currency}'),
+                  _info('Next charge', _fmt(myMember.nextBillingDate)),
+                  _info('Last charged', _fmt(myMember.lastChargedAt)),
+                  if (myMember.retryCount > 0)
+                    _infoWarning('Failed attempts', '${myMember.retryCount}/3'),
+                  const SizedBox(height: 8),
+                ],
+
+                // ── Members ───────────────────────────────────────────────────
+                const Divider(),
+                Text(
+                  'Members (${sub.memberCount} active)',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...sub.members.where((m) => m.isActive).map(
+                      (m) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          child: Text(
+                            (m.displayName ?? m.email ?? '?')
+                                .characters
+                                .first
+                                .toUpperCase(),
+                          ),
+                        ),
+                        title: Text(m.displayName ?? m.email ?? m.userId),
+                        subtitle: Text(
+                          '${m.amount.toStringAsFixed(0)} ${sub.currency} · Next: ${_fmt(m.nextBillingDate)}',
+                        ),
+                        trailing: m.retryCount > 0
+                            ? Tooltip(
+                                message: '${m.retryCount} failed attempt(s)',
+                                child: const Icon(Icons.warning_amber,
+                                    color: Colors.orange, size: 18),
+                              )
+                            : null,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                // ── Respond to Invitation ─────────────────────────────────────
+                if (myInvitation != null) ...[
+                  const Divider(),
+                  const Text('You have been invited to join this subscription.', 
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                  const SizedBox(height: 12),
+                  
+                  // Tag selector
+                  Consumer<ReceiptProvider>(
+                    builder: (context, receiptProvider, _) {
+                      final tags = receiptProvider.tags;
+                      if (tags.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: DropdownButton<String>(
+                          value: _selectedTagId,
+                          hint: const Text('Select Budget Envelope (Optional)', style: TextStyle(fontSize: 14)),
+                          isExpanded: true,
+                          underline: const SizedBox(),
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text('No Envelope'),
+                            ),
+                            ...tags.map((t) => DropdownMenuItem(
+                                  value: t.id,
+                                  child: Text('${t.icon} ${t.name}'),
+                                )),
+                          ],
+                          onChanged: (val) => setState(() => _selectedTagId = val),
+                        ),
+                      );
+                    },
+                  ),
+                  
+                  if (_isResponding)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    Row(
                       children: [
-                        const Text('Payment Overdue',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
-                        const SizedBox(height: 4),
-                        Text('Retry count: ${sub.retryCount}/3'),
-                        if (sub.failureReason != null)
-                          Text('Reason: ${sub.failureReason}'),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _respond(provider, myInvitation.id, false),
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Decline'),
+                          )
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => _respond(provider, myInvitation.id, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Accept'),
+                          )
+                        ),
                       ],
+                    ),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── Pending invitations ───────────────────────────────────────
+                if (isCreator && sub.pendingInvitations.isNotEmpty) ...[
+                  const Divider(),
+                  const Text('Pending Invitations',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  ...sub.pendingInvitations.map(
+                    (inv) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                          child: Icon(Icons.mail_outline, size: 18)),
+                      title: Text(
+                          inv.inviteeDisplayName ?? inv.inviteeEmail ?? inv.inviteeId),
+                      subtitle: const Text('Awaiting response'),
                     ),
                   ),
                 ],
 
                 const SizedBox(height: 24),
 
-                // ── Action buttons ──────────────────────────────────────────
+                // ── Action buttons ────────────────────────────────────────────
                 if (provider.isProcessing)
                   const Center(child: CircularProgressIndicator())
                 else ...[
-                  // Cancel (ACTIVE only + canManage)
-                  if (sub.status == 'ACTIVE' && canManage)
+                  if (sub.isActive && isCreator)
                     _actionButton(
                       label: 'Cancel Subscription',
                       color: Theme.of(context).colorScheme.error,
                       onPressed: () => _cancel(provider, sub),
                     ),
-
-                  // Resume (PAST_DUE only + canManage)
-                  if (sub.status == 'PAST_DUE' && canManage)
-                    _actionButton(
-                      label: 'Resume Subscription',
-                      color: Colors.green,
-                      onPressed: () => _resume(provider, sub),
-                    ),
-
-                  // Leave (member but not creator, ACTIVE only)
-                  if (!isCreator && isMember && sub.status == 'ACTIVE')
+                  if (!isCreator && isMember && sub.isActive)
                     _actionButton(
                       label: 'Leave Subscription',
                       color: Colors.blueGrey,
@@ -242,7 +357,7 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
 
                 const SizedBox(height: 32),
 
-                // ── Billing History ─────────────────────────────────────────
+                // ── Billing History ───────────────────────────────────────────
                 const Text(
                   'Billing History',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -288,10 +403,10 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
 
   Widget _billingHistoryTile(Map<String, dynamic> record) {
     final status = (record['status'] ?? '').toString();
-    final billedAt = record['billedAt'] != null
-        ? _fmt(DateTime.tryParse(record['billedAt'].toString()) ?? DateTime.now())
+    final billingDate = record['billingDate'] != null
+        ? _fmt(DateTime.tryParse(record['billingDate'].toString()) ?? DateTime.now())
         : '—';
-    final amount = record['amount']?.toString() ?? '—';
+    final amount = record['totalCollected']?.toString() ?? record['amount']?.toString() ?? '—';
     final isSuccess = status == 'SUCCESS';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -312,12 +427,12 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                billedAt,
+                billingDate,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(
-                'Amount: $amount',
+                'Collected: $amount VND',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
@@ -347,12 +462,30 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          SizedBox(width: 120, child: Text(label, style: const TextStyle(color: Colors.grey))),
+          SizedBox(
+              width: 120,
+              child: Text(label, style: const TextStyle(color: Colors.grey))),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            child: Text(value,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoWarning(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 120,
+              child: Text(label, style: const TextStyle(color: Colors.orange))),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, color: Colors.orange)),
           ),
         ],
       ),
@@ -366,10 +499,6 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
     switch (status) {
       case 'ACTIVE':
         return Colors.green;
-      case 'PAST_DUE':
-        return Colors.orange.shade800;
-      case 'PAUSED':
-        return Colors.orange;
       case 'CANCELLED':
         return Colors.red;
       default:

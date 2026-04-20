@@ -230,13 +230,16 @@ class InvoiceProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> verifyOTPAndPay(String transferId, String otp) async {
+  Future<bool> verifyOTPAndPay(String transferId, String otp, {String? categoryTagId}) async {
     _setLoading(true);
     _setError(null);
     try {
       final resp = await _dio.post(
         '/transfers/$transferId/verify-otp',
-        data: {'otp': otp},
+        data: {
+          'otp': otp,
+          if (categoryTagId != null) 'categoryTagId': categoryTagId,
+        },
       );
       final transfer = Transfer.fromJson(resp.data['data']);
       final idx = _transfers.indexWhere((t) => t.id == transferId);

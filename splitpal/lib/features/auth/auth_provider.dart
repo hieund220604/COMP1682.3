@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
@@ -90,6 +91,71 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       final msg = _extractError(e);
       _setError(msg);
+      return msg;
+    }
+  }
+
+  // ─── Login with Google ──────────────────────────────────
+  Future<String?> loginWithGoogle() async {
+    _setState(AuthState.loading);
+    try {
+      final googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      
+      if (googleUser == null) {
+        _setState(AuthState.unauthenticated);
+        return 'Đăng nhập Google bị hủy';
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        _setError('Lỗi: Không lấy được Google ID token');
+        return 'Lỗi ID Token';
+      }
+
+      final resp = await _dio.post(
+        '/auth/google-login',
+        data: {'idToken': idToken},
+      );
+      
+      final root = resp.data;
+      if (root == null) {
+         _setError('Lỗi server');
+         return 'Lỗi server';
+      }
+      
+      // Attempt to parse standard format
+      bool success = root['success'] == true;
+      if (!success) {
+         _setError(root['error']?['message'] ?? 'Đăng nhập Google thất bại');
+         return 'Thất bại';
+      }
+      
+      final authResp = AuthResponse.fromJson(resp.data);
+      if (authResp.data == null) {
+        _setError('Dữ liệu trả về bị lỗi');
+        return 'Lỗi dữ liệu';
+      }
+
+      // Check 2FA if they somehow enabled it on a google account
+      if (authResp.data!.requires2FA && authResp.data!.tempToken != null) {
+        _tempToken = authResp.data!.tempToken;
+        _setState(AuthState.requires2FA);
+        return '2FA_REQUIRED';
+      }
+
+      // Save token + user
+      await _saveAuthData(authResp.data!);
+      return null; // success
+    } catch (e) {
+      final msg = _extractError(e);
+      _setError(msg);
+      // Ensure we clear GoogleSignIn session so they can try again if it fails
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
       return msg;
     }
   }
@@ -281,6 +347,60 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       _setError(_extractError(e));
       _setState(AuthState.authenticated);
+      return false;
+    }
+  }
+
+  // ─── Forgot Password ────────────────────────────────────
+  Future<bool> forgotPassword({required String email}) async {
+    _setState(AuthState.loading);
+    try {
+      await _dio.post(ApiConstants.authForgotPassword, data: {'email': email});
+      _setState(AuthState.unauthenticated);
+      return true;
+    } catch (e) {
+      _setError(_extractError(e));
+      _setState(AuthState.unauthenticated);
+      return false;
+    }
+  }
+
+  Future<String?> verifyResetOTP({required String email, required String otp}) async {
+    _setState(AuthState.loading);
+    try {
+      final resp = await _dio.post(
+        ApiConstants.authVerifyResetOtp,
+        data: {'email': email, 'otp': otp},
+      );
+      _setState(AuthState.unauthenticated);
+      
+      final data = resp.data['data'];
+      if (data is Map<String, dynamic> && data['resetToken'] != null) {
+        return data['resetToken'] as String;
+      }
+      return null;
+    } catch (e) {
+      _setError(_extractError(e));
+      _setState(AuthState.unauthenticated);
+      return null;
+    }
+  }
+
+  Future<bool> resetPasswordWithToken({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    _setState(AuthState.loading);
+    try {
+      await _dio.post(
+        ApiConstants.authResetPasswordToken,
+        data: {'resetToken': resetToken, 'newPassword': newPassword},
+      );
+      _setState(AuthState.unauthenticated);
+      return true;
+    } catch (e) {
+      _setError(_extractError(e));
+      _setState(AuthState.unauthenticated);
       return false;
     }
   }

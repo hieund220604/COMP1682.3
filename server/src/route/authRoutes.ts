@@ -36,6 +36,9 @@ router.post('/resend-otp', resendOtpRateLimit, authController.resendOTP);
 // Login
 router.post('/login', loginGuard, authController.loginUser);
 
+// Google Login
+router.post('/google-login', authController.loginWithGoogle);
+
 // Forgot Password - Send OTP
 router.post('/forgot-password', authController.forgotPassword);
 

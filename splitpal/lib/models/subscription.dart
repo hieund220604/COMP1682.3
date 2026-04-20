@@ -1,4 +1,4 @@
-// Unified Subscription models — replaces entity + model pairs.
+// Unified Subscription models — v2
 
 class Subscription {
   final String id;
@@ -6,20 +6,18 @@ class Subscription {
   final String? groupName;
   final String name;
   final String? description;
+  /// Fixed fee per member per cycle (NOT a total to be split).
   final double amount;
   final String currency;
   final String billingCycle;
+  /// ACTIVE = owner hasn't cancelled. CANCELLED = owner closed.
   final String status;
-  final DateTime nextBillingDate;
-  final DateTime? lastBilledAt;
   final String createdBy;
   final String? createdByName;
   final DateTime createdAt;
   final DateTime? cancelledAt;
-  final int retryCount;
-  final String? failureReason;
-  final DateTime? lastAttemptAt;
   final List<SubscriptionMember> members;
+  final List<SubInvitation> pendingInvitations;
   final int memberCount;
 
   const Subscription({
@@ -32,33 +30,57 @@ class Subscription {
     required this.currency,
     required this.billingCycle,
     required this.status,
-    required this.nextBillingDate,
-    this.lastBilledAt,
     required this.createdBy,
     this.createdByName,
     required this.createdAt,
     this.cancelledAt,
-    this.retryCount = 0,
-    this.failureReason,
-    this.lastAttemptAt,
     this.members = const [],
+    this.pendingInvitations = const [],
     this.memberCount = 0,
   });
 
-  factory Subscription.fromJson(Map<String, dynamic> json) {
-    final membersRaw = json['members'];
-    List<SubscriptionMember> members = [];
-    if (membersRaw is List) {
-      members = membersRaw
-          .whereType<Map<String, dynamic>>()
-          .map(SubscriptionMember.fromJson)
-          .toList();
-    }
+  bool get isActive => status == 'ACTIVE';
+  bool get isCancelled => status == 'CANCELLED';
 
+  /// Earliest nextBillingDate among ACTIVE members.
+  DateTime? get nextBillingDate {
+    final active = members.where((m) => m.isActive).toList();
+    if (active.isEmpty) return null;
+    return active
+        .map((m) => m.nextBillingDate)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+  }
+
+  /// Most recent lastChargedAt among ACTIVE members.
+  DateTime? get lastBilledAt {
+    final active = members.where((m) => m.isActive).toList();
+    if (active.isEmpty) return null;
+    return active
+        .map((m) => m.lastChargedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  factory Subscription.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) {
       if (value == null) return null;
       return DateTime.tryParse(value.toString());
     }
+
+    final membersRaw = json['members'];
+    final List<SubscriptionMember> members = membersRaw is List
+        ? membersRaw
+            .whereType<Map<String, dynamic>>()
+            .map(SubscriptionMember.fromJson)
+            .toList()
+        : [];
+
+    final invitesRaw = json['pendingInvitations'];
+    final List<SubInvitation> invitations = invitesRaw is List
+        ? invitesRaw
+            .whereType<Map<String, dynamic>>()
+            .map(SubInvitation.fromJson)
+            .toList()
+        : [];
 
     return Subscription(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
@@ -72,19 +94,15 @@ class Subscription {
       currency: (json['currency'] ?? 'VND').toString(),
       billingCycle: (json['billingCycle'] ?? '').toString(),
       status: (json['status'] ?? '').toString(),
-      nextBillingDate: parseDate(json['nextBillingDate']) ?? DateTime.now(),
-      lastBilledAt: parseDate(json['lastBilledAt']),
       createdBy: (json['createdBy'] ?? '').toString(),
       createdByName: json['createdByName'] as String?,
       createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
       cancelledAt: parseDate(json['cancelledAt']),
-      retryCount: json['retryCount'] as int? ?? 0,
-      failureReason: json['failureReason'] as String?,
-      lastAttemptAt: parseDate(json['lastAttemptAt']),
       members: members,
+      pendingInvitations: invitations,
       memberCount: json['memberCount'] is int
           ? json['memberCount'] as int
-          : members.length,
+          : members.where((m) => m.isActive).length,
     );
   }
 }
@@ -92,9 +110,13 @@ class Subscription {
 class SubscriptionMember {
   final String id;
   final String userId;
-  final double shareAmount;
+  /// Amount this member pays per cycle (frozen at join time).
+  final double amount;
   final String status;
   final DateTime joinedAt;
+  final DateTime nextBillingDate;
+  final DateTime lastChargedAt;
+  final int retryCount;
   final DateTime? leftAt;
   final String? email;
   final String? displayName;
@@ -103,34 +125,95 @@ class SubscriptionMember {
   const SubscriptionMember({
     required this.id,
     required this.userId,
-    required this.shareAmount,
+    required this.amount,
     required this.status,
     required this.joinedAt,
+    required this.nextBillingDate,
+    required this.lastChargedAt,
+    this.retryCount = 0,
     this.leftAt,
     this.email,
     this.displayName,
     this.avatarUrl,
   });
 
+  bool get isActive => status == 'ACTIVE';
+  bool get hasLeft => status == 'LEFT';
+
   factory SubscriptionMember.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>?;
 
+    DateTime parseDate(dynamic value) {
+      if (value == null) return DateTime.now();
+      return DateTime.tryParse(value.toString()) ?? DateTime.now();
+    }
+
     return SubscriptionMember(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
-      userId:
-          (json['userId'] ?? user?['id'] ?? user?['_id'] ?? '').toString(),
-      shareAmount: (json['shareAmount'] is num)
-          ? (json['shareAmount'] as num).toDouble()
-          : double.tryParse(json['shareAmount']?.toString() ?? '') ?? 0,
+      userId: (json['userId'] ?? user?['id'] ?? user?['_id'] ?? '').toString(),
+      amount: (json['amount'] is num)
+          ? (json['amount'] as num).toDouble()
+          : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
       status: (json['status'] ?? '').toString(),
-      joinedAt: DateTime.tryParse(json['joinedAt']?.toString() ?? '') ??
-          DateTime.now(),
+      joinedAt: parseDate(json['joinedAt']),
+      nextBillingDate: parseDate(json['nextBillingDate']),
+      lastChargedAt: parseDate(json['lastChargedAt']),
+      retryCount: json['retryCount'] as int? ?? 0,
       leftAt: json['leftAt'] != null
           ? DateTime.tryParse(json['leftAt'].toString())
           : null,
       email: user?['email'] as String?,
       displayName: user?['displayName'] as String?,
       avatarUrl: user?['avatarUrl'] as String?,
+    );
+  }
+}
+
+class SubInvitation {
+  final String id;
+  final String subscriptionId;
+  final String inviteeId;
+  final String invitedBy;
+  final String status;
+  final DateTime expiresAt;
+  final DateTime createdAt;
+  final String? inviteeEmail;
+  final String? inviteeDisplayName;
+  final String? inviteeAvatarUrl;
+
+  const SubInvitation({
+    required this.id,
+    required this.subscriptionId,
+    required this.inviteeId,
+    required this.invitedBy,
+    required this.status,
+    required this.expiresAt,
+    required this.createdAt,
+    this.inviteeEmail,
+    this.inviteeDisplayName,
+    this.inviteeAvatarUrl,
+  });
+
+  bool get isPending => status == 'PENDING';
+
+  factory SubInvitation.fromJson(Map<String, dynamic> json) {
+    final invitee = json['invitee'] as Map<String, dynamic>?;
+    DateTime parseDate(dynamic value) {
+      if (value == null) return DateTime.now();
+      return DateTime.tryParse(value.toString()) ?? DateTime.now();
+    }
+
+    return SubInvitation(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      subscriptionId: (json['subscriptionId'] ?? '').toString(),
+      inviteeId: (json['inviteeId'] ?? '').toString(),
+      invitedBy: (json['invitedBy'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      expiresAt: parseDate(json['expiresAt']),
+      createdAt: parseDate(json['createdAt']),
+      inviteeEmail: invitee?['email'] as String?,
+      inviteeDisplayName: invitee?['displayName'] as String?,
+      inviteeAvatarUrl: invitee?['avatarUrl'] as String?,
     );
   }
 }

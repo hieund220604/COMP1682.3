@@ -154,13 +154,27 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   String? _findUserId(String nameText) {
-    if (nameText.toLowerCase() == 'người gửi' || nameText.toLowerCase() == 'tôi' || nameText.toLowerCase() == 'mình' || nameText.toLowerCase() == 'me') {
+    final lowerInput = nameText.toLowerCase().trim();
+    // First-person pronouns → current user
+    if (lowerInput == 'người gửi' || lowerInput == 'tôi' || lowerInput == 'mình' || lowerInput == 'me') {
       final currentUserId = context.read<AuthProvider>().user?.id ?? AppServices.tokenManager.getUserId();
       if (currentUserId != null) return currentUserId;
     }
+    // Strip Vietnamese title prefixes before matching
+    final stripped = lowerInput
+        .replaceAll(RegExp(r'\b(anh|chị|chi|em|bạn|ban|mr|ms|ông|ong|bà|ba)\b'), '')
+        .trim();
+    final toSearch = stripped.isNotEmpty ? stripped : lowerInput;
+
+    // 1. Exact match
     for (var member in _groupMembers) {
       final mName = (member['name'] as String).toLowerCase();
-      if (mName.contains(nameText.toLowerCase()) || nameText.toLowerCase().contains(mName)) {
+      if (mName == toSearch) return member['id'] as String;
+    }
+    // 2. Partial match (both directions)
+    for (var member in _groupMembers) {
+      final mName = (member['name'] as String).toLowerCase();
+      if (mName.contains(toSearch) || toSearch.contains(mName)) {
         return member['id'] as String;
       }
     }
@@ -168,33 +182,50 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   void _applyAiData(Map<String, dynamic> data) {
+    // Guard: if members not loaded yet, skip (will be called again after load)
+    if (_isLoadingMembers) return;
+
     final rawItems = data['items'] as List<dynamic>? ?? [];
-    final rootSplitMethod = (data['splitMethod'] as String?)?.toUpperCase() ?? 'EQUAL';
     final rootSplitDetails = data['splitDetails'] as Map<String, dynamic>? ?? {};
 
-    // Helper to map backend's text format to UI's splitType ENUM
-    String mapSplitType(String sm) {
-        if (sm == 'CUSTOM_AMOUNT') return 'CUSTOM';
-        if (sm == 'PERCENTAGE' || sm == 'SHARES') return 'PERCENTAGE';
-        return 'EQUAL'; // Currently UI supports EQUAL, PERCENTAGE, CUSTOM
+    // Normalize splitMethod to a canonical uppercase form
+    final rawMethod = (data['splitMethod'] as String? ?? 'unknown').toLowerCase().trim();
+    final rootSplitMethod = switch (rawMethod) {
+      'equal'         => 'EQUAL',
+      'percentage'    => 'PERCENTAGE',
+      'shares'        => 'SHARES',
+      'custom_amount' => 'CUSTOM_AMOUNT',
+      _               => 'EQUAL', // 'unknown' or anything else → equal
+    };
+
+    // Map AI canonical method → UI splitType enum (EQUAL | PERCENTAGE | CUSTOM)
+    String toUiSplitType(String sm) {
+      if (sm == 'CUSTOM_AMOUNT') return 'CUSTOM';
+      if (sm == 'PERCENTAGE' || sm == 'SHARES') return 'PERCENTAGE';
+      return 'EQUAL';
     }
 
     // Clear initial blank item created in initState
     if (_items.length == 1 && _items.first.nameController.text.isEmpty) {
-        _items.first.dispose();
+      _items.first.dispose();
       _items.clear();
     }
 
+    // Fallback: no items but has a total amount → create one generic item
     if (rawItems.isEmpty && data['amountTotal'] != null) {
       final amount = data['amountTotal'] is num ? (data['amountTotal'] as num).toDouble() : 0.0;
+      final senderUid = _findUserId('me');
       final newItem = InvoiceItemData(
         nameController: TextEditingController(
             text: _titleController.text.isNotEmpty ? _titleController.text : 'Ghi chú hóa đơn'),
         amountController: TextEditingController(text: amount.toStringAsFixed(2)),
         splitType: 'EQUAL',
-        assignedTo: _groupMembers.isNotEmpty ? [_groupMembers[0]['id']] : [],
+        assignedTo: senderUid != null
+            ? [senderUid]
+            : (_groupMembers.isNotEmpty ? [_groupMembers[0]['id'] as String] : []),
       );
       _items.add(newItem);
+      return;
     }
 
     for (var raw in rawItems) {
@@ -206,18 +237,18 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       final newItem = InvoiceItemData(
         nameController: TextEditingController(text: name),
         amountController: TextEditingController(text: itemAmount.toStringAsFixed(2)),
-        splitType: mapSplitType(rootSplitMethod),
+        splitType: toUiSplitType(rootSplitMethod),
         assignedTo: [],
       );
 
       bool hasAssignedSpecifics = false;
 
+      // --- Apply per-person split values based on canonical method ---
       if (rootSplitMethod == 'CUSTOM_AMOUNT') {
         final customList = rootSplitDetails['customAmounts'] as List<dynamic>? ?? [];
         for (var customObj in customList) {
           final amountVal = customObj['amount'] is num ? (customObj['amount'] as num).toDouble() : 0.0;
-          final personName = customObj['name'] as String? ?? '';
-          final uid = _findUserId(personName);
+          final uid = _findUserId((customObj['name'] as String? ?? ''));
           if (uid != null && !newItem.assignedTo.contains(uid)) {
             newItem.assignedTo.add(uid);
             newItem.splitControllers[uid] = TextEditingController(text: amountVal.toStringAsFixed(2));
@@ -228,8 +259,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
         final percentList = rootSplitDetails['percentages'] as List<dynamic>? ?? [];
         for (var pObj in percentList) {
           final percentVal = pObj['percentage'] is num ? (pObj['percentage'] as num).toDouble() : 0.0;
-          final personName = pObj['name'] as String? ?? '';
-          final uid = _findUserId(personName);
+          final uid = _findUserId((pObj['name'] as String? ?? ''));
           if (uid != null && !newItem.assignedTo.contains(uid)) {
             newItem.assignedTo.add(uid);
             newItem.splitControllers[uid] = TextEditingController(text: percentVal.toStringAsFixed(2));
@@ -237,26 +267,25 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           }
         }
       } else if (rootSplitMethod == 'SHARES') {
+        // Convert share ratios to percentages so the UI PERCENTAGE mode displays them correctly
         final shareList = rootSplitDetails['shares'] as List<dynamic>? ?? [];
-        double totalShares = 0.0;
-        for (var sObj in shareList) {
-            totalShares += sObj['share'] is num ? (sObj['share'] as num).toDouble() : 0.0;
-        }
+        final totalShares = shareList.fold<double>(
+          0.0, (sum, s) => sum + (s['share'] is num ? (s['share'] as num).toDouble() : 0.0));
         if (totalShares > 0) {
-            for (var sObj in shareList) {
-                final shareVal = sObj['share'] is num ? (sObj['share'] as num).toDouble() : 0.0;
-                final personName = sObj['name'] as String? ?? '';
-                final uid = _findUserId(personName);
-                if (uid != null && !newItem.assignedTo.contains(uid)) {
-                    final percentStr = ((shareVal / totalShares) * 100).toStringAsFixed(2);
-                    newItem.assignedTo.add(uid);
-                    newItem.splitControllers[uid] = TextEditingController(text: percentStr);
-                    hasAssignedSpecifics = true;
-                }
+          for (var sObj in shareList) {
+            final shareVal = sObj['share'] is num ? (sObj['share'] as num).toDouble() : 0.0;
+            final uid = _findUserId((sObj['name'] as String? ?? ''));
+            if (uid != null && !newItem.assignedTo.contains(uid)) {
+              final pct = ((shareVal / totalShares) * 100).toStringAsFixed(2);
+              newItem.assignedTo.add(uid);
+              newItem.splitControllers[uid] = TextEditingController(text: pct);
+              hasAssignedSpecifics = true;
             }
+          }
         }
       }
-      
+
+      // Fallback 1: use per-item assignee list from AI (names only, no amounts)
       if (!hasAssignedSpecifics && assigneesList.isNotEmpty) {
         for (var pName in assigneesList) {
           final uid = _findUserId(pName.toString());
@@ -265,18 +294,18 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             hasAssignedSpecifics = true;
           }
         }
-      } 
-      
-      if (!hasAssignedSpecifics && shared) {
-        // assign to all
-        newItem.assignedTo.clear();
-        newItem.assignedTo.addAll(_groupMembers.map((e) => e['id'] as String));
       }
 
+      // Fallback 2: shared item → assign to all group members
+      if (!hasAssignedSpecifics && shared) {
+        newItem.assignedTo.addAll(_groupMembers.map((e) => e['id'] as String));
+        hasAssignedSpecifics = true;
+      }
+
+      // Fallback 3: still nobody → assign to current user (or first member)
       if (newItem.assignedTo.isEmpty && _groupMembers.isNotEmpty) {
-        // Fallback default assigned to sender/first
         final senderUid = _findUserId('me');
-        newItem.assignedTo.add(senderUid ?? _groupMembers[0]['id']);
+        newItem.assignedTo.add(senderUid ?? _groupMembers[0]['id'] as String);
       }
 
       _items.add(newItem);

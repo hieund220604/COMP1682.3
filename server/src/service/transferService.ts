@@ -70,6 +70,7 @@ export const transferService = {
             paidAt: transfer.paidAt ?? undefined,
             otpExpiresAt: transfer.otpExpiresAt ?? undefined,
             createdAt: transfer.createdAt,
+            categoryTagId: transfer.categoryTagId ?? undefined,
             debtAllocations: allocationDetails
         };
     },
@@ -187,7 +188,7 @@ export const transferService = {
     /**
      * Verify OTP and complete payment
      */
-    async verifyOTPAndPay(userId: string, transferId: string, otp: string): Promise<PaymentCompleteResponse> {
+    async verifyOTPAndPay(userId: string, transferId: string, otp: string, categoryTagId?: string): Promise<PaymentCompleteResponse> {
         const transfer = await Transfer.findById(transferId);
         if (!transfer) {
             throw new Error('Transfer not found');
@@ -241,7 +242,8 @@ export const transferService = {
                         status: 'COMPLETED',
                         paidAt: new Date(),
                         otp: null,
-                        otpVerified: true
+                        otpVerified: true,
+                        categoryTagId: categoryTagId ?? null
                     },
                     { session, new: false }
                 );

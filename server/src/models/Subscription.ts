@@ -1,27 +1,22 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export type BillingCycle = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
-export type SubscriptionStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'EXPIRED' | 'PAST_DUE';
+export type SubscriptionStatus = 'ACTIVE' | 'CANCELLED';
 
 export interface ISubscription extends Document {
     _id: Types.ObjectId;
     groupId: string;
     name: string;
     description?: string;
+    /** Fixed fee per member per cycle (VND). NOT a total to be split. */
     amount: number;
     currency: string;
     billingCycle: BillingCycle;
+    /** ACTIVE = owner hasn't cancelled. CANCELLED = owner closed. No billing meaning. */
     status: SubscriptionStatus;
-    nextBillingDate: Date;
-    lastBilledAt?: Date;
     createdBy: string;
     createdAt: Date;
     cancelledAt?: Date;
-    // New fields for retry logic
-    retryCount: number;
-    failureReason?: string;
-    lastAttemptAt?: Date;
-    groupDeleted: boolean;  // True if group was deleted
 }
 
 const SubscriptionSchema = new Schema<ISubscription>({
@@ -55,28 +50,8 @@ const SubscriptionSchema = new Schema<ISubscription>({
     },
     status: {
         type: String,
-        enum: ['ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED', 'PAST_DUE'],
+        enum: ['ACTIVE', 'CANCELLED'],
         default: 'ACTIVE'
-    },
-    retryCount: {
-        type: Number,
-        default: 0
-    },
-    failureReason: {
-        type: String,
-        default: null
-    },
-    lastAttemptAt: {
-        type: Date,
-        default: null
-    },
-    nextBillingDate: {
-        type: Date,
-        required: true
-    },
-    lastBilledAt: {
-        type: Date,
-        default: null
     },
     createdBy: {
         type: String,
@@ -86,19 +61,14 @@ const SubscriptionSchema = new Schema<ISubscription>({
     cancelledAt: {
         type: Date,
         default: null
-    },
-    groupDeleted: {
-        type: Boolean,
-        default: false
     }
 }, {
     timestamps: { createdAt: true, updatedAt: false },
     collection: 'subscriptions'
 });
 
-// Indexes
 SubscriptionSchema.index({ groupId: 1 });
 SubscriptionSchema.index({ status: 1 });
-SubscriptionSchema.index({ nextBillingDate: 1 });
+SubscriptionSchema.index({ createdBy: 1 });
 
 export const Subscription = mongoose.model<ISubscription>('Subscription', SubscriptionSchema);

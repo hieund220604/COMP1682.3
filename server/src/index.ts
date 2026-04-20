@@ -28,7 +28,9 @@ import paymentRequestRoutes from './route/paymentRequestRoutes';
 import transferRoutes from './route/transferRoutes';
 import exchangeRateRoutes from './route/exchangeRateRoutes';
 import dashboardRoutes from './route/dashboardRoutes';
+import forecastRoutes from './route/forecastRoutes';
 import receiptRoutes from './route/receiptRoutes';
+import budgetRoutes from './route/budgetRoutes';
 import { connectRedis, disconnectRedis } from './redis';
 
 const app = express();
@@ -59,6 +61,7 @@ app.use('/api/upload', uploadRoutes); // New upload route
 app.use('/api/notifications', notificationRoutes); // Notification route
 app.use('/api/ai', aiRoutes);
 app.use('/api/receipts', receiptRoutes);
+app.use('/api/budget', budgetRoutes);
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Serve uploaded files
 
 // UpBill Routes - mounted separately due to groupId param
@@ -67,6 +70,7 @@ app.use('/api/payment-requests', paymentRequestRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/exchange', exchangeRateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/forecast', forecastRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

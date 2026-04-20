@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'verify_otp_page.dart';
 import 'verify_2fa_page.dart';
+import 'forgot_password_page.dart';
 import 'package:splitpal/features/onboarding/presentation/pages/onboarding_page.dart';
 import 'package:splitpal/features/home/presentation/pages/home_shell_page.dart';
 
@@ -546,7 +547,14 @@ class _AuthPageState extends State<AuthPage> {
         ),
         TextButton(
           onPressed: () {
-            // Navigate to forgot password
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ForgotPasswordPage(
+                  initialEmail: _emailController.text,
+                ),
+              ),
+            );
           },
           child: const Text(
             'Forgot password?',
@@ -600,17 +608,35 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Widget _buildGoogleButton() {
-    return OutlinedButton(
-      onPressed: () {
-        // TODO: Implement Google Sign In
-      },
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        side: const BorderSide(color: Color(0xFFBDC3C7)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return OutlinedButton(
+          onPressed: authProvider.isLoading ? null : () async {
+            final error = await authProvider.loginWithGoogle();
+            if (!mounted) return;
+            
+            if (error == null) {
+              if (authProvider.shouldShowOnboarding()) {
+                Navigator.pushReplacementNamed(context, OnboardingPage.routeName);
+              } else {
+                Navigator.pushReplacementNamed(context, HomeShellPage.routeName);
+              }
+            } else if (error != 'Đăng nhập Google bị hủy') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(error),
+                  backgroundColor: const Color(0xFFE74C3C),
+                ),
+              );
+            }
+          },
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            side: const BorderSide(color: Color(0xFFBDC3C7)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -629,6 +655,8 @@ class _AuthPageState extends State<AuthPage> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 

@@ -225,15 +225,28 @@ export class AIService {
             }
         }
 
-        // Try Gemini API first
-        if (genAI) {
-            try {
-                const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-                const prompt = buildExtractionPrompt(groupCurrency, todayDate) + text;
-                const result = await model.generateContent(prompt);
-                const responseText = result.response.text();
+        const MAX_RETRIES = 3;
+        const BASE_DELAY_MS = 1500;
 
-                if (responseText) {
+        // Try Gemini API with retry on transient errors (503/429)
+        if (genAI) {
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    console.log(`[AI] Text extraction attempt ${attempt}/${MAX_RETRIES}`);
+                    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+                    const prompt = buildExtractionPrompt(groupCurrency, todayDate) + text;
+                    const result = await model.generateContent(prompt);
+                    const responseText = result.response.text();
+
+                    if (!responseText) {
+                        console.warn(`[AI] Attempt ${attempt}: empty response from Gemini`);
+                        if (attempt < MAX_RETRIES) {
+                            await this.delay(BASE_DELAY_MS * attempt);
+                            continue;
+                        }
+                        break; // fall through to regex
+                    }
+
                     const cleaned = this.cleanJsonResponse(responseText);
                     const parsed = JSON.parse(cleaned.trim());
                     const amountTotal = typeof parsed.amountTotal === 'number' && Number.isFinite(parsed.amountTotal)
@@ -267,12 +280,29 @@ export class AIService {
                         extractedBy: 'gemini'
                     };
 
-                    console.log('[AI] Gemini extraction successful:', JSON.stringify(data));
+                    console.log(`[AI] Gemini text extraction succeeded on attempt ${attempt}:`, JSON.stringify(data));
                     return data;
+                } catch (error: any) {
+                    const isTransient = error?.status === 503 || error?.status === 429
+                        || error?.message?.includes('503')
+                        || error?.message?.includes('429')
+                        || error?.message?.includes('quota')
+                        || error?.message?.includes('rate')
+                        || error?.message?.includes('temporarily');
+
+                    console.error(`[AI] Gemini extraction attempt ${attempt} failed (transient=${isTransient}):`, error.message);
+
+                    if (attempt < MAX_RETRIES) {
+                        const delayMs = isTransient
+                            ? BASE_DELAY_MS * Math.pow(2, attempt)  // 3s, 6s for 503/429
+                            : BASE_DELAY_MS * attempt;               // 1.5s, 3s for other errors
+                        console.log(`[AI] Retrying text extraction in ${delayMs}ms...`);
+                        await this.delay(delayMs);
+                        continue;
+                    }
+
+                    console.error('[AI] All Gemini attempts failed, falling back to regex.');
                 }
-            } catch (error: any) {
-                console.error('[AI] Gemini extraction failed, falling back to regex:', error.message);
-                // Fall through to regex fallback
             }
         } else {
             console.warn('[AI] GEMINI_API_KEY not configured, using regex fallback');

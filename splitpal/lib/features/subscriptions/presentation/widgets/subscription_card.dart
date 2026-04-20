@@ -17,10 +17,6 @@ class SubscriptionCard extends StatelessWidget {
     switch (subscription.status) {
       case 'ACTIVE':
         return Colors.green;
-      case 'PAST_DUE':
-        return Colors.orange.shade800; // Updated to match recent changes
-      case 'PAUSED':
-        return Colors.orange;
       case 'CANCELLED':
         return Colors.red;
       default:
@@ -99,7 +95,9 @@ class SubscriptionCard extends StatelessWidget {
                     const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                     const SizedBox(width: 6),
                     Text(
-                      'Next: ${_fmtDate(subscription.nextBillingDate)}',
+                      subscription.nextBillingDate != null
+                          ? 'Next: ${_fmtDate(subscription.nextBillingDate!)}'
+                          : 'No active members',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall

@@ -75,7 +75,7 @@ export const transferController = {
     async verifyOTPAndPay(req: Request, res: Response): Promise<void> {
         try {
             const { transferId } = req.params;
-            const { otp } = req.body;
+            const { otp, categoryTagId } = req.body;
             const userId = req.user?.userId;
 
             if (!userId) {
@@ -86,7 +86,7 @@ export const transferController = {
                 return ResponseUtil.validationError(res, 'OTP is required');
             }
 
-            const result = await transferService.verifyOTPAndPay(userId, transferId, otp);
+            const result = await transferService.verifyOTPAndPay(userId, transferId, otp, categoryTagId);
             ResponseUtil.success(res, result, 'Payment completed successfully');
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to verify OTP');

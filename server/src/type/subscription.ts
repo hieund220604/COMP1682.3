@@ -1,4 +1,4 @@
-// Subscription Types
+// Subscription Types — v2
 
 export enum BillingCycle {
     DAILY = 'DAILY',
@@ -9,34 +9,58 @@ export enum BillingCycle {
 
 export enum SubscriptionStatus {
     ACTIVE = 'ACTIVE',
-    PAUSED = 'PAUSED',
-    CANCELLED = 'CANCELLED',
-    EXPIRED = 'EXPIRED',
-    PAST_DUE = 'PAST_DUE'
+    CANCELLED = 'CANCELLED'
 }
+
+// ── Request shapes ─────────────────────────────────────────────────────
 
 export interface CreateSubscriptionRequest {
     groupId: string;
     name: string;
     description?: string;
-    amount: number;          // Total amount to be split equally
+    /** Fixed fee per member per cycle (VND). Not a total to split. */
+    amount: number;
     billingCycle: BillingCycle;
-    startDate?: Date;        // Optional, defaults to now
 }
 
-export interface UpdateSubscriptionRequest {
-    name?: string;
-    description?: string;
-    amount?: number;
-    billingCycle?: BillingCycle;
+export interface InviteMemberRequest {
+    inviteeId: string;
+}
+
+export interface RespondInvitationRequest {
+    invitationId: string;
+    accept: boolean;
+    categoryTagId?: string;
+}
+
+// ── Response shapes ────────────────────────────────────────────────────
+
+export interface SubInvitationResponse {
+    id: string;
+    subscriptionId: string;
+    inviteeId: string;
+    invitedBy: string;
+    status: string;
+    expiresAt: Date;
+    createdAt: Date;
+    invitee?: {
+        id: string;
+        email: string;
+        displayName?: string;
+        avatarUrl?: string;
+    };
 }
 
 export interface SubscriptionMemberResponse {
     id: string;
     userId: string;
-    shareAmount: number;      // Amount this member pays per cycle
+    /** Amount this member pays per cycle (frozen at join time) */
+    amount: number;
     status: string;
     joinedAt: Date;
+    nextBillingDate: Date;
+    lastChargedAt: Date;
+    retryCount: number;
     leftAt?: Date;
     user?: {
         id: string;
@@ -49,41 +73,42 @@ export interface SubscriptionMemberResponse {
 export interface SubscriptionResponse {
     id: string;
     groupId: string;
-    groupName?: string;          // Group name instead of just ID
+    groupName?: string;
     name: string;
     description?: string;
-    amount: number;           // Total amount
+    /** Fixed fee per member per cycle */
+    amount: number;
     currency: string;
     billingCycle: BillingCycle;
+    /** ACTIVE = owner hasn't cancelled. CANCELLED = owner closed it. */
     status: SubscriptionStatus;
-    nextBillingDate: Date;
-    lastBilledAt?: Date;
     createdBy: string;
-    createdByName?: string;      // Creator name instead of just ID
+    createdByName?: string;
     createdAt: Date;
     cancelledAt?: Date;
     members: SubscriptionMemberResponse[];
     memberCount: number;
+    pendingInvitations?: SubInvitationResponse[];
 }
 
-export interface ChargeResult {
+// ── Scheduler result shapes ────────────────────────────────────────────
+
+export interface MemberChargeResult {
+    memberId: string;
+    userId: string;
     subscriptionId: string;
     subscriptionName: string;
+    amount: number;
     success: boolean;
-    totalCharged: number;
-    membersCharged: number;
-    membersFailed: number;
-    failedMembers: {
-        userId: string;
-        reason: string;
-    }[];
-    autoCancelled: boolean;
+    kicked: boolean;
+    reason?: string;
 }
 
 export interface ProcessChargesResponse {
     processedAt: Date;
-    totalSubscriptions: number;
-    successfulCharges: number;
-    failedCharges: number;
-    results: ChargeResult[];
+    totalMembersChecked: number;
+    charged: number;
+    failed: number;
+    kicked: number;
+    results: MemberChargeResult[];
 }

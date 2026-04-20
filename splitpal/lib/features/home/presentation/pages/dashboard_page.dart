@@ -21,6 +21,8 @@ import 'wallet_operations_page.dart';
 import 'package:splitpal/core/app_services.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/constants/api_constants.dart';
+import 'package:splitpal/features/forecast/forecast_provider.dart';
+import 'package:splitpal/features/forecast/presentation/widgets/forecast_risk_card.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -57,6 +59,12 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
     try {
       final response = await _dio.get(ApiConstants.dashboardHome);
       _summary = response.data['data'] as Map<String, dynamic>?;
+      if (!mounted) return;
+      // Inject forecast summary from dashboard response (avoids extra HTTP call)
+      final forecastJson = _summary?['forecastSummary'] as Map<String, dynamic>?;
+      if (forecastJson != null && mounted) {
+        context.read<ForecastProvider>().injectFromDashboard(forecastJson);
+      }
     } catch (e) {
       _error = 'Không tải được dashboard';
     }
@@ -118,17 +126,13 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                   children: [
                     _WalletBalanceCard(summary: _summary),
                     const SizedBox(height: 20),
-                    _CashflowDashboard(summary: _summary),
-                    const SizedBox(height: 20),
-                    _DebtDashboard(summary: _summary),
+                    const ForecastRiskCard(),
                     const SizedBox(height: 20),
                     const _CurrencyConverterCard(),
                     const SizedBox(height: 20),
                     const _ReceiptDiarySection(),
                     const SizedBox(height: 20),
                     _SharedGroups(),
-                    const SizedBox(height: 20),
-                    const _SubscriptionForecastCard(),
                     const SizedBox(height: 20),
                     _UpcomingList(summary: _summary),
                     const SizedBox(height: 16),
@@ -446,193 +450,6 @@ class _SharedGroups extends StatelessWidget {
   }
 }
 
-class _SubscriptionForecastCard extends StatelessWidget {
-  const _SubscriptionForecastCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final subscriptions = context.select(
-      (SubscriptionProvider p) => p.subscriptions,
-    );
-    final isLoading = context.select((SubscriptionProvider p) => p.isLoading);
-
-    final activeSubs = subscriptions
-        .where((s) => s.status == 'ACTIVE' || s.status == 'PAST_DUE')
-        .toList(growable: false);
-
-    final currencies = activeSubs.map((s) => s.currency.toUpperCase()).toSet();
-    final hasSingleCurrency = currencies.length == 1;
-    final displayCurrency = hasSingleCurrency
-        ? currencies.first
-        : (context.select((AuthProvider p) => p.user?.currency) ??
-              AppConstants.defaultCurrency);
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    double overdueAmount = 0;
-    final weekAmounts = List<double>.filled(4, 0);
-    int overdueCount = 0;
-    final weekCounts = List<int>.filled(4, 0);
-
-    for (final sub in activeSubs) {
-      final due = DateTime(
-        sub.nextBillingDate.year,
-        sub.nextBillingDate.month,
-        sub.nextBillingDate.day,
-      );
-
-      final isOverdue = sub.status == 'PAST_DUE' || due.isBefore(today);
-      if (isOverdue) {
-        overdueAmount += sub.amount;
-        overdueCount += 1;
-        continue;
-      }
-
-      final days = due.difference(today).inDays;
-      final weekIndex = days ~/ 7;
-      if (weekIndex >= 0 && weekIndex < 4) {
-        weekAmounts[weekIndex] += sub.amount;
-        weekCounts[weekIndex] += 1;
-      }
-    }
-
-    final amountValues = <double>[overdueAmount, ...weekAmounts];
-    final countValues = <double>[
-      overdueCount.toDouble(),
-      ...weekCounts.map((c) => c.toDouble()),
-    ];
-
-    final values = hasSingleCurrency ? amountValues : countValues;
-    final maxValue = values.fold<double>(0, (m, v) => math.max(m, v));
-    final totalValue = values.fold<double>(0, (s, v) => s + v);
-
-    String formatValue(double v) {
-      if (!hasSingleCurrency) return v.toInt().toString();
-      if (displayCurrency.toUpperCase() == 'VND') {
-        return CurrencyFormatter.formatVNDCompact(v);
-      }
-      return CurrencyFormatter.formatCurrency(v, displayCurrency);
-    }
-
-    const labels = ['Overdue', 'W1', 'W2', 'W3', 'W4'];
-    const opacities = [1.0, 0.85, 0.65, 0.50, 0.35];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outline.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            title: 'Forecast (4 weeks)',
-            actionLabel: 'Subscriptions',
-            onAction: () {
-              SwitchTabNotification(1).dispatch(context);
-            },
-          ),
-          const SizedBox(height: 12),
-          if (isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (activeSubs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'No active subscriptions',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            )
-          else ...[
-            SizedBox(
-              height: 140,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(labels.length, (index) {
-                  final v = values[index];
-                  final double ratio = maxValue <= 0 ? 0.0 : (v / maxValue);
-                  final double barHeight = v == 0 ? 6.0 : (18.0 + ratio * 70.0);
-                  final color = scheme.primary.withOpacity(opacities[index]);
-
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            formatValue(v),
-                            style: textTheme.labelSmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            height: barHeight,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            labels[index],
-                            style: textTheme.labelSmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              hasSingleCurrency
-                  ? 'Total due within 28 days: ${formatValue(totalValue)}'
-                  : 'Multiple currencies detected, showing counts. Total due items within 28 days: ${totalValue.toInt()}',
-              style: textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 class _UpcomingList extends StatelessWidget {
   final Map<String, dynamic>? summary;
@@ -645,12 +462,11 @@ class _UpcomingList extends StatelessWidget {
     );
     final isLoading = context.select((SubscriptionProvider p) => p.isLoading);
 
-    // Filter active subscriptions and sort by next billing date
-    final upcomingSubs =
-        subscriptions
-            .where((sub) => sub.status == 'ACTIVE' || sub.status == 'PAST_DUE')
-            .toList()
-          ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    // Filter active subscriptions with at least one active member, sort by next billing date
+    final upcomingSubs = subscriptions
+        .where((sub) => sub.status == 'ACTIVE' && sub.nextBillingDate != null)
+        .toList()
+      ..sort((a, b) => a.nextBillingDate!.compareTo(b.nextBillingDate!));
 
     final openPRs = (summary?['openPaymentRequests'] as List?) ?? [];
 
@@ -750,11 +566,10 @@ class _UpcomingList extends StatelessWidget {
           Column(
             children: upcomingSubs.take(3).map((sub) {
               final now = DateTime.now();
-              final daysUntil = sub.nextBillingDate.difference(now).inDays;
+              final nbd = sub.nextBillingDate!;
+              final daysUntil = nbd.difference(now).inDays;
               final isDueSoon = daysUntil <= 3;
-              final statusText = sub.status == 'PAST_DUE'
-                  ? 'Overdue'
-                  : (isDueSoon ? 'Due soon' : 'Auto-pay');
+              final statusText = isDueSoon ? 'Due soon' : 'Auto-pay';
 
               return GestureDetector(
                 onTap: () {
@@ -796,7 +611,7 @@ class _UpcomingList extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              DateFormat('MMM').format(sub.nextBillingDate),
+                              DateFormat('MMM').format(nbd),
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -804,7 +619,7 @@ class _UpcomingList extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              DateFormat('dd').format(sub.nextBillingDate),
+                              DateFormat('dd').format(nbd),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
@@ -1018,135 +833,7 @@ class _CurrencyConverterCard extends StatelessWidget {
   }
 }
 
-class _CashflowDashboard extends StatelessWidget {
-  final Map<String, dynamic>? summary;
-  const _CashflowDashboard({this.summary});
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final cashflow = summary?['cashflow7d'] as Map<String, dynamic>? ?? {};
-    final inflow = (cashflow['inflow'] ?? 0).toDouble();
-    final outflow = (cashflow['outflow'] ?? 0).toDouble();
-    final total = inflow + outflow;
-    final inflowPct = total == 0 ? 0.0 : (inflow / total).clamp(0.0, 1.0);
-
-    final numFormat = NumberFormat.compactCurrency(symbol: '', decimalDigits: 1);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Cashflow (7d)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text('Inflow', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                   Text(numFormat.format(inflow), style: TextStyle(color: scheme.tertiary, fontWeight: FontWeight.bold, fontSize: 16)),
-                ]
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                   Text('Outflow', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                   Text(numFormat.format(outflow), style: TextStyle(color: scheme.error, fontWeight: FontWeight.bold, fontSize: 16)),
-                ]
-              ),
-            ]
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-               height: 8,
-               child: total == 0 ? Container(color: scheme.surfaceVariant) : Row(
-                 children: [
-                   if (inflowPct > 0) Expanded(flex: (inflowPct * 1000).toInt(), child: Container(color: scheme.tertiary)),
-                   if (inflowPct < 1) Expanded(flex: ((1 - inflowPct) * 1000).toInt(), child: Container(color: scheme.error)),
-                 ]
-               )
-            )
-          )
-        ]
-      )
-    );
-  }
-}
-
-class _DebtDashboard extends StatelessWidget {
-  final Map<String, dynamic>? summary;
-  const _DebtDashboard({this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final debts = summary?['debts'] as Map<String, dynamic>? ?? {};
-    final youOwe = (debts['youOwe'] ?? 0).toDouble();
-    final theyOwe = (debts['theyOwe'] ?? 0).toDouble();
-    final total = youOwe + theyOwe;
-    final youOwePct = total == 0 ? 0.0 : (youOwe / total).clamp(0.0, 1.0);
-
-    final numFormat = NumberFormat.compactCurrency(symbol: '', decimalDigits: 1);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Debt Summary', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text('You Owe', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                   Text(numFormat.format(youOwe), style: TextStyle(color: scheme.error, fontWeight: FontWeight.bold, fontSize: 16)),
-                ]
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                   Text('They Owe You', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
-                   Text(numFormat.format(theyOwe), style: TextStyle(color: scheme.primary, fontWeight: FontWeight.bold, fontSize: 16)),
-                ]
-              ),
-            ]
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-               height: 8,
-               child: total == 0 ? Container(color: scheme.surfaceVariant) : Row(
-                 children: [
-                   if (youOwePct > 0) Expanded(flex: (youOwePct * 1000).toInt(), child: Container(color: scheme.error)),
-                   if (youOwePct < 1) Expanded(flex: ((1 - youOwePct) * 1000).toInt(), child: Container(color: scheme.primary)),
-                 ]
-               )
-            )
-          )
-        ]
-      )
-    );
-  }
-}
 
 class _ReceiptDiarySection extends StatefulWidget {
   const _ReceiptDiarySection();

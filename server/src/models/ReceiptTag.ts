@@ -5,6 +5,9 @@ export interface IReceiptTag extends Document {
     userId: string;
     name: string;
     color: string;
+    monthlyBudget?: number;
+    icon?: string;
+    isArchived: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -26,6 +29,19 @@ const ReceiptTagSchema = new Schema<IReceiptTag>({
         type: String,
         required: true,
         trim: true,
+    },
+    monthlyBudget: {
+        type: Number,
+        default: null,
+    },
+    icon: {
+        type: String,
+        default: null,
+        trim: true,
+    },
+    isArchived: {
+        type: Boolean,
+        default: false,
     }
 }, {
     timestamps: true,
@@ -34,5 +50,6 @@ const ReceiptTagSchema = new Schema<IReceiptTag>({
 
 // Unique tag name per user
 ReceiptTagSchema.index({ userId: 1, name: 1 }, { unique: true });
+ReceiptTagSchema.index({ userId: 1, isArchived: 1 });
 
 export const ReceiptTag = mongoose.model<IReceiptTag>('ReceiptTag', ReceiptTagSchema);

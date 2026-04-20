@@ -25,6 +25,9 @@ import 'features/receipts/receipt_provider.dart';
 // AI Provider (server-backed AI features)
 import 'package:splitpal/features/ai/ai_provider.dart';
 
+// Forecast Provider
+import 'features/forecast/forecast_provider.dart';
+
 // Pages
 import 'package:splitpal/features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
@@ -128,6 +131,10 @@ class _MyAppState extends State<MyApp> {
           create: (_) => AiProvider(
             dio: AppServices.dio,
           ),
+        ),
+        // Forecast Provider
+        ChangeNotifierProvider(
+          create: (_) => ForecastProvider(dio: AppServices.dio),
         ),
       ],
       child: _AppInitializer(
@@ -368,8 +375,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       navigatorObservers: [appRouteObserver],
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
-          if (authProvider.state == AuthState.initial ||
-              authProvider.state == AuthState.loading) {
+          if (authProvider.state == AuthState.initial) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );

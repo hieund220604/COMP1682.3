@@ -7,7 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'day_receipts_page.dart';
-import 'tag_manager_page.dart';
+import 'budget_page.dart';
+import 'budget_page.dart';
 import '../widgets/add_receipt_bottom_sheet.dart';
 
 class ReceiptCalendarPage extends StatefulWidget {
@@ -78,7 +79,7 @@ class _ReceiptCalendarPageState extends State<ReceiptCalendarPage> {
   void _openTagManager() async {
     final provider = context.read<ReceiptProvider>();
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const TagManagerPage()),
+      MaterialPageRoute(builder: (_) => const BudgetPage()),
     );
     if (changed == true) {
       provider.loadTags();
@@ -126,6 +127,18 @@ class _ReceiptCalendarPageState extends State<ReceiptCalendarPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Receipt diary'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.pie_chart_outline),
+            tooltip: 'Budget Envelopes',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BudgetPage()),
+              ).then((_) => _loadMonth(provider));
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

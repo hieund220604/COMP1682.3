@@ -3,14 +3,12 @@ import { subscriptionService } from '../service/subscriptionService';
 import { ResponseUtil } from '../util/responseUtil';
 
 export const subscriptionController = {
-    /**
-     * Create a new subscription
-     * POST /api/subscriptions
-     */
+
+    /** POST /api/subscriptions */
     async createSubscription(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
-            const { groupId, name, description, amount, billingCycle, startDate } = req.body;
+            const { groupId, name, description, amount, billingCycle } = req.body;
 
             if (!groupId || !name || !amount || !billingCycle) {
                 return ResponseUtil.validationError(res, 'groupId, name, amount, and billingCycle are required');
@@ -22,19 +20,14 @@ export const subscriptionController = {
                 description,
                 amount: Number(amount),
                 billingCycle,
-                startDate: startDate ? new Date(startDate) : undefined
             });
-
             ResponseUtil.success(res, subscription, 'Subscription created successfully', 201);
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to create subscription');
         }
     },
 
-    /**
-     * Get all subscriptions for the current user
-     * GET /api/subscriptions
-     */
+    /** GET /api/subscriptions */
     async getSubscriptions(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
@@ -45,15 +38,11 @@ export const subscriptionController = {
         }
     },
 
-    /**
-     * Get subscription by ID
-     * GET /api/subscriptions/:id
-     */
+    /** GET /api/subscriptions/:id */
     async getSubscriptionById(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
             const { id } = req.params;
-
             const subscription = await subscriptionService.getSubscriptionById(userId, id);
             ResponseUtil.success(res, subscription, 'Subscription retrieved successfully');
         } catch (error) {
@@ -61,15 +50,23 @@ export const subscriptionController = {
         }
     },
 
-    /**
-     * Get billing history for a subscription
-     * GET /api/subscriptions/:id/billing-history
-     */
+    /** GET /api/subscriptions/:id/members */
+    async getMembers(req: Request, res: Response) {
+        try {
+            const userId = (req as any).user.userId;
+            const { id } = req.params;
+            const result = await subscriptionService.getMembers(userId, id);
+            ResponseUtil.success(res, result, 'Members retrieved successfully');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to fetch members');
+        }
+    },
+
+    /** GET /api/subscriptions/:id/billing-history */
     async getBillingHistory(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
             const { id } = req.params;
-
             const history = await subscriptionService.getBillingHistory(userId, id);
             ResponseUtil.success(res, history, 'Billing history retrieved successfully');
         } catch (error) {
@@ -77,15 +74,46 @@ export const subscriptionController = {
         }
     },
 
-    /**
-     * Cancel a subscription (OWNER/ADMIN only)
-     * POST /api/subscriptions/:id/cancel
-     */
+    /** POST /api/subscriptions/:id/invite */
+    async inviteMember(req: Request, res: Response) {
+        try {
+            const ownerId = (req as any).user.userId;
+            const { id } = req.params;
+            const { inviteeId } = req.body;
+
+            if (!inviteeId) {
+                return ResponseUtil.validationError(res, 'inviteeId is required');
+            }
+
+            const invitation = await subscriptionService.inviteMember(ownerId, id, inviteeId);
+            ResponseUtil.success(res, invitation, 'Invitation sent successfully', 201);
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to send invitation');
+        }
+    },
+
+    /** POST /api/subscriptions/:id/invite/respond */
+    async respondToInvitation(req: Request, res: Response) {
+        try {
+            const userId = (req as any).user.userId;
+            const { invitationId, accept, categoryTagId } = req.body;
+
+            if (!invitationId || accept === undefined) {
+                return ResponseUtil.validationError(res, 'invitationId and accept (boolean) are required');
+            }
+
+            await subscriptionService.respondToInvitation(userId, invitationId, Boolean(accept), categoryTagId);
+            ResponseUtil.success(res, null, accept ? 'Joined subscription successfully' : 'Invitation declined');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to respond to invitation');
+        }
+    },
+
+    /** POST /api/subscriptions/:id/cancel */
     async cancelSubscription(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
             const { id } = req.params;
-
             const subscription = await subscriptionService.cancelSubscription(userId, id);
             ResponseUtil.success(res, subscription, 'Subscription cancelled successfully');
         } catch (error) {
@@ -93,15 +121,11 @@ export const subscriptionController = {
         }
     },
 
-    /**
-     * Member leaves a subscription without leaving the group
-     * POST /api/subscriptions/:id/leave
-     */
+    /** POST /api/subscriptions/:id/leave */
     async leaveSubscription(req: Request, res: Response) {
         try {
             const userId = (req as any).user.userId;
             const { id } = req.params;
-
             await subscriptionService.leaveSubscription(userId, id);
             ResponseUtil.success(res, null, 'Successfully left the subscription');
         } catch (error) {
@@ -109,64 +133,13 @@ export const subscriptionController = {
         }
     },
 
-    /**
-     * Pause an active subscription (OWNER/ADMIN only)
-     * POST /api/subscriptions/:id/pause
-     */
-    async pauseSubscription(req: Request, res: Response) {
-        try {
-            const userId = (req as any).user.userId;
-            const { id } = req.params;
-
-            const subscription = await subscriptionService.pauseSubscription(userId, id);
-            ResponseUtil.success(res, subscription, 'Subscription paused successfully');
-        } catch (error) {
-            ResponseUtil.handleError(res, error, 'Failed to pause subscription');
-        }
-    },
-
-    /**
-     * Update a subscription (OWNER/ADMIN only)
-     * PATCH /api/subscriptions/:id
-     */
-    async updateSubscription(req: Request, res: Response) {
-        try {
-            const userId = (req as any).user.userId;
-            const { id } = req.params;
-
-            const subscription = await subscriptionService.updateSubscription(userId, id, req.body);
-            ResponseUtil.success(res, subscription, 'Subscription updated successfully');
-        } catch (error) {
-            ResponseUtil.handleError(res, error, 'Failed to update subscription');
-        }
-    },
-
-    /**
-     * Resume a cancelled/past_due/paused subscription (OWNER/ADMIN only)
-     * POST /api/subscriptions/:id/resume
-     */
-    async resumeSubscription(req: Request, res: Response) {
-        try {
-            const userId = (req as any).user.userId;
-            const { id } = req.params;
-
-            const subscription = await subscriptionService.resumeSubscription(userId, id);
-            ResponseUtil.success(res, subscription, 'Subscription resumed successfully');
-        } catch (error) {
-            ResponseUtil.handleError(res, error, 'Failed to resume subscription');
-        }
-    },
-
-    /**
-     * Process recurring charges (called by cron job or admin)
-     * POST /api/subscriptions/process-charges
-     */
+    /** POST /api/subscriptions/process-charges (cron) */
     async processCharges(req: Request, res: Response) {
         try {
             const result = await subscriptionService.processRenewals();
-            ResponseUtil.success(res, result, 'Recurring charges processed successfully');
+            ResponseUtil.success(res, result, 'Renewals processed successfully');
         } catch (error) {
-            ResponseUtil.handleError(res, error, 'Failed to process recurring charges');
+            ResponseUtil.handleError(res, error, 'Failed to process renewals');
         }
-    }
+    },
 };

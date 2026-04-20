@@ -3,13 +3,14 @@ import 'package:flutter/foundation.dart';
 import '../../core/network/dio_client.dart';
 import '../../models/subscription.dart';
 
-/// Fat Provider — calls DioClient directly for all subscription operations.
+/// SubscriptionProvider — v2
+/// Handles all subscription operations: create, invite, respond, leave, cancel.
 class SubscriptionProvider extends ChangeNotifier {
   final DioClient _dio;
 
   SubscriptionProvider({required DioClient dio}) : _dio = dio;
 
-  // ─── State ──────────────────────────────────────────────
+  // ─── State ──────────────────────────────────────────────────────────────────
   List<Subscription> _subscriptions = [];
   Subscription? _selected;
   List<Map<String, dynamic>> _billingHistory = [];
@@ -29,9 +30,11 @@ class SubscriptionProvider extends ChangeNotifier {
   bool get isBillingHistoryLoading => _isBillingHistoryLoading;
   String? get error => _error;
   String? get actionError => _actionError;
-  void clearActionError() { _actionError = null; }
+  void clearActionError() {
+    _actionError = null;
+  }
 
-  // ─── Fetch All ──────────────────────────────────────────
+  // ─── Fetch All ──────────────────────────────────────────────────────────────
   Future<void> fetchSubscriptions() async {
     _isLoading = true;
     _error = null;
@@ -52,7 +55,7 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Fetch Detail ───────────────────────────────────────
+  // ─── Fetch Detail ────────────────────────────────────────────────────────────
   Future<void> fetchSubscription(String id) async {
     _isDetailLoading = true;
     _error = null;
@@ -70,7 +73,7 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Billing History ────────────────────────────────────
+  // ─── Billing History ─────────────────────────────────────────────────────────
   Future<void> fetchBillingHistory(String id) async {
     _isBillingHistoryLoading = true;
     notifyListeners();
@@ -89,17 +92,17 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Create ─────────────────────────────────────────────
+  // ─── Create ──────────────────────────────────────────────────────────────────
+  /// Create a subscription. [amount] = fixed fee per member per cycle.
   Future<bool> create({
     required String groupId,
     required String name,
     required double amount,
     required String billingCycle,
     String? description,
-    DateTime? startDate,
   }) async {
     _isProcessing = true;
-    _error = null;
+    _actionError = null;
     notifyListeners();
 
     try {
@@ -109,7 +112,6 @@ class SubscriptionProvider extends ChangeNotifier {
         'amount': amount,
         'billingCycle': billingCycle,
         if (description != null) 'description': description,
-        if (startDate != null) 'startDate': startDate.toIso8601String(),
       });
       final sub = Subscription.fromJson(resp.data['data']);
       _subscriptions = [sub, ..._subscriptions];
@@ -117,14 +119,77 @@ class SubscriptionProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString();
+      _actionError = e.toString();
       _isProcessing = false;
       notifyListeners();
       return false;
     }
   }
 
-  // ─── Cancel ─────────────────────────────────────────────
+  // ─── Invite Member ───────────────────────────────────────────────────────────
+  Future<bool> invite({
+    required String subscriptionId,
+    required String inviteeId,
+  }) async {
+    _isProcessing = true;
+    _actionError = null;
+    notifyListeners();
+
+    try {
+      await _dio.post('/subscriptions/$subscriptionId/invite', data: {
+        'inviteeId': inviteeId,
+      });
+      // Refresh detail to show new pending invitation
+      await fetchSubscription(subscriptionId);
+      _isProcessing = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _actionError = e.toString();
+      _isProcessing = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─── Respond to Invitation ───────────────────────────────────────────────────
+  /// [accept] = true to join (charges immediately), false to decline.
+  Future<bool> respondToInvitation({
+    required String subscriptionId,
+    required String invitationId,
+    required bool accept,
+    String? categoryTagId,
+  }) async {
+    _isProcessing = true;
+    _actionError = null;
+    notifyListeners();
+
+    try {
+      await _dio.post(
+        '/subscriptions/$subscriptionId/invite/respond',
+        data: {
+          'invitationId': invitationId,
+          'accept': accept,
+          if (categoryTagId != null) 'categoryTagId': categoryTagId,
+        },
+      );
+      // Refresh both list and detail
+      await Future.wait([
+        fetchSubscriptions(),
+        fetchSubscription(subscriptionId),
+      ]);
+      _isProcessing = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _actionError = e.toString();
+      _isProcessing = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ─── Cancel (owner) ──────────────────────────────────────────────────────────
   Future<bool> cancel(String id) async {
     _isProcessing = true;
     _actionError = null;
@@ -148,31 +213,7 @@ class SubscriptionProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Resume ─────────────────────────────────────────────
-  Future<bool> resume(String id) async {
-    _isProcessing = true;
-    _actionError = null;
-    notifyListeners();
-
-    try {
-      final resp = await _dio.post('/subscriptions/$id/resume');
-      final updated = Subscription.fromJson(resp.data['data']);
-      _selected = updated;
-      _subscriptions = _subscriptions
-          .map((s) => s.id == updated.id ? updated : s)
-          .toList(growable: false);
-      _isProcessing = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _actionError = e.toString();
-      _isProcessing = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // ─── Leave ──────────────────────────────────────────────
+  // ─── Leave (member) ──────────────────────────────────────────────────────────
   Future<bool> leave(String id) async {
     _isProcessing = true;
     _actionError = null;
@@ -180,6 +221,7 @@ class SubscriptionProvider extends ChangeNotifier {
 
     try {
       await _dio.post('/subscriptions/$id/leave');
+      await fetchSubscriptions();
       _isProcessing = false;
       notifyListeners();
       return true;
@@ -191,7 +233,7 @@ class SubscriptionProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Process Charges (admin) ────────────────────────────
+  // ─── Process Charges (admin/cron trigger) ────────────────────────────────────
   Future<Map<String, dynamic>?> processCharges() async {
     _isProcessing = true;
     _error = null;
@@ -201,7 +243,7 @@ class SubscriptionProvider extends ChangeNotifier {
       final resp = await _dio.post('/subscriptions/process-charges');
       _isProcessing = false;
       notifyListeners();
-      return resp.data['data'];
+      return resp.data['data'] as Map<String, dynamic>?;
     } catch (e) {
       _error = e.toString();
       _isProcessing = false;
