@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/features/invoices/invoice_provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/core/widgets/app_card.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
 
 class PaymentPage extends StatefulWidget {
@@ -186,95 +188,92 @@ class _PaymentPageState extends State<PaymentPage> {
           return RefreshIndicator(
             onRefresh: _loadTransfers,
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               itemCount: provider.transfers.length,
               itemBuilder: (context, index) {
+                final scheme = Theme.of(context).colorScheme;
+                final textTheme = Theme.of(context).textTheme;
                 final transfer = provider.transfers[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                
+                return AppCard(
+                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: _getStatusColor(transfer.status, scheme),
+                            child: Icon(
+                              _getStatusIcon(transfer.status),
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pay to ${transfer.toName}',
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  transfer.status,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '\$${transfer.amount.toStringAsFixed(2)}',
+                            style: textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (transfer.status == 'PENDING') ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: FilledButton.icon(
+                            onPressed: () => _initiatePayment(transfer.id),
+                            icon: const Icon(Icons.payment),
+                            label: const Text('Pay Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ),
+                        ),
+                      ],
+                      if (transfer.status == 'COMPLETED') ...[
+                        const SizedBox(height: AppSpacing.md),
                         Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: _getStatusColor(transfer.status),
-                              child: Icon(
-                                _getStatusIcon(transfer.status),
-                                color: Colors.white,
-                              ),
+                            Icon(
+                              Icons.check_circle,
+                              color: Colors.green.shade600,
+                              size: 16,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Pay to ${transfer.toName}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    transfer.status,
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            const SizedBox(width: AppSpacing.sm),
                             Text(
-                              '\$${transfer.amount.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                              'Completed on ${_formatDate(transfer.paidAt!)}',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
-                        if (transfer.status == 'PENDING') ...[
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _initiatePayment(transfer.id),
-                              icon: const Icon(Icons.payment),
-                              label: const Text('Pay Now'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                        if (transfer.status == 'COMPLETED') ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Completed on ${_formatDate(transfer.paidAt!)}',
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
                 );
               },
@@ -285,16 +284,16 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String status, ColorScheme scheme) {
     switch (status) {
       case 'PENDING':
-        return Colors.orange;
+        return scheme.primary;
       case 'COMPLETED':
-        return Colors.green;
+        return Colors.green.shade600;
       case 'CANCELLED':
-        return Colors.red;
+        return scheme.error;
       default:
-        return Colors.grey;
+        return scheme.outlineVariant;
     }
   }
 

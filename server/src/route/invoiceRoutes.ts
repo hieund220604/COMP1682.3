@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { invoiceController } from '../controller/invoiceController';
+import { billTemplateController } from '../controller/billTemplateController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router({ mergeParams: true }); // mergeParams to access :groupId from parent
@@ -20,5 +21,6 @@ router.delete('/:groupId/:invoiceId', invoiceController.deleteInvoice);
 // Invoice actions
 router.post('/:groupId/:invoiceId/submit', invoiceController.submitInvoice);
 router.post('/:groupId/:invoiceId/adjust', invoiceController.createAdjustmentInvoice);
+router.post('/:groupId/:invoiceId/confirm', billTemplateController.confirmDraft);
 
 export default router;

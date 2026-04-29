@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide User;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
@@ -95,29 +97,46 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  bool _isGoogleInitialized = false;
+
   // ─── Login with Google ──────────────────────────────────
   Future<String?> loginWithGoogle() async {
     _setState(AuthState.loading);
     try {
-      final googleSignIn = GoogleSignIn();
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      
-      if (googleUser == null) {
-        _setState(AuthState.unauthenticated);
-        return 'Đăng nhập Google bị hủy';
+      if (!_isGoogleInitialized) {
+        await GoogleSignIn.instance.initialize(
+          serverClientId: dotenv.env['GOOGLE_WEB_CLIENT_ID'],
+        );
+        _isGoogleInitialized = true;
       }
+      
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
+      if (googleAuth.idToken == null) {
+        _setError('Không lấy được token xác thực từ Google');
+        return 'Lỗi Token Google';
+      }
 
-      if (idToken == null) {
-        _setError('Lỗi: Không lấy được Google ID token');
+      // Convert Google Credential to Firebase Credential
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase Auth
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      
+      // Get the Firebase ID token
+      final firebaseIdToken = await userCredential.user?.getIdToken();
+
+      if (firebaseIdToken == null) {
+        _setError('Lỗi: Không lấy được Firebase ID token');
         return 'Lỗi ID Token';
       }
 
       final resp = await _dio.post(
         '/auth/google-login',
-        data: {'idToken': idToken},
+        data: {'idToken': firebaseIdToken},
       );
       
       final root = resp.data;
@@ -149,12 +168,24 @@ class AuthProvider extends ChangeNotifier {
       // Save token + user
       await _saveAuthData(authResp.data!);
       return null; // success
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled || 
+          e.code == GoogleSignInExceptionCode.interrupted) {
+        _setState(AuthState.unauthenticated);
+        return 'Đăng nhập Google bị hủy';
+      }
+      final msg = 'Lỗi Google Sign In: ${e.toString()}';
+      _setError(msg);
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {}
+      return msg;
     } catch (e) {
       final msg = _extractError(e);
       _setError(msg);
       // Ensure we clear GoogleSignIn session so they can try again if it fails
       try {
-        await GoogleSignIn().signOut();
+        await GoogleSignIn.instance.signOut();
       } catch (_) {}
       return msg;
     }

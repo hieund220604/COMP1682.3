@@ -31,6 +31,7 @@ import dashboardRoutes from './route/dashboardRoutes';
 import forecastRoutes from './route/forecastRoutes';
 import receiptRoutes from './route/receiptRoutes';
 import budgetRoutes from './route/budgetRoutes';
+import billTemplateRoutes from './route/billTemplateRoutes';
 import { connectRedis, disconnectRedis } from './redis';
 
 const app = express();
@@ -71,6 +72,7 @@ app.use('/api/transfers', transferRoutes);
 app.use('/api/exchange', exchangeRateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/forecast', forecastRoutes);
+app.use('/api/groups/:groupId/bill-templates', billTemplateRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type InvoiceStatus = 'SUBMITTED' | 'LOCKED';
+export type InvoiceStatus = 'DRAFT' | 'SUBMITTED' | 'LOCKED';
 
 export interface IInvoice extends Document {
     _id: Types.ObjectId;
@@ -28,6 +28,11 @@ export interface IInvoice extends Document {
 
     groupDeleted: boolean;    // True if group was deleted
     status: InvoiceStatus;
+
+    // Recurring bill linking
+    templateId?: string;      // ref: BillTemplate — null if created manually
+    billingPeriod?: string;   // e.g. "2026-05" (MONTHLY), "2026-W20" (WEEKLY), "2026-04-21" (DAILY)
+
     createdAt: Date;
     updatedAt: Date;
 }
@@ -108,8 +113,17 @@ const InvoiceSchema = new Schema<IInvoice>({
     },
     status: {
         type: String,
-        enum: ['SUBMITTED', 'LOCKED'],
+        enum: ['DRAFT', 'SUBMITTED', 'LOCKED'],
         default: 'SUBMITTED'
+    },
+    templateId: {
+        type: String,
+        ref: 'BillTemplate',
+        default: null
+    },
+    billingPeriod: {
+        type: String,
+        default: null
     }
 }, {
     timestamps: true,
@@ -120,5 +134,11 @@ const InvoiceSchema = new Schema<IInvoice>({
 InvoiceSchema.index({ groupId: 1, status: 1 });
 InvoiceSchema.index({ uploadedBy: 1 });
 InvoiceSchema.index({ paymentRequestId: 1 });
+InvoiceSchema.index({ templateId: 1 });
+// Idempotency: prevent duplicate auto-generation for same template+period
+InvoiceSchema.index(
+    { templateId: 1, billingPeriod: 1 },
+    { unique: true, sparse: true }
+);
 
 export const Invoice = mongoose.model<IInvoice>('Invoice', InvoiceSchema);

@@ -441,9 +441,12 @@ export const invoiceService = {
             throw new Error('Invoice not found');
         }
 
-        // Only uploader can update
-        if (invoice.uploadedBy !== userId) {
-            throw new Error('Only the uploader can update this invoice');
+        // DRAFT invoices (from recurring templates) can be updated by any owner/admin of the group
+        // SUBMITTED/LOCKED invoices can only be updated by the uploader
+        if (invoice.status !== 'DRAFT') {
+            if (invoice.uploadedBy !== userId) {
+                throw new Error('Only the uploader can update this invoice');
+            }
         }
 
         // Cannot update locked invoice
@@ -494,50 +497,55 @@ export const invoiceService = {
                         { session, ordered: true }
                     );
 
-                    // Recreate debts using the appropriate split method
-                    const isForeignCurrency = invoice.exchangeRate != null && invoice.baseCurrency != null;
-                    const debtMap = new Map<string, number>();
+                    // Recreate debts only for SUBMITTED invoices.
+                    // DRAFT invoices (recurring templates) skip debt creation —
+                    // debts are created later in confirmDraft() when the owner confirms.
+                    if (invoice.status !== 'DRAFT') {
+                        const isForeignCurrency = invoice.exchangeRate != null && invoice.baseCurrency != null;
+                        const debtMap = new Map<string, number>();
 
-                    for (let i = 0; i < newItems.length; i++) {
-                        const dbItem = newItems[i];
-                        const inputItem = data.items[i];
-                        if (dbItem.assignedTo.length === 0) continue;
-                        for (const debtorId of dbItem.assignedTo) {
-                            if (debtorId === userId) continue;
-                            const share = calculateShareForUser(
-                                { amount: dbItem.amount, assignedTo: dbItem.assignedTo, splitType: dbItem.splitType, splits: inputItem.splits },
-                                debtorId
-                            );
-                            debtMap.set(debtorId, (debtMap.get(debtorId) || 0) + share);
+                        for (let i = 0; i < newItems.length; i++) {
+                            const dbItem = newItems[i];
+                            const inputItem = data.items[i];
+                            if (dbItem.assignedTo.length === 0) continue;
+                            for (const debtorId of dbItem.assignedTo) {
+                                if (debtorId === userId) continue;
+                                const share = calculateShareForUser(
+                                    { amount: dbItem.amount, assignedTo: dbItem.assignedTo, splitType: dbItem.splitType, splits: inputItem.splits },
+                                    debtorId
+                                );
+                                debtMap.set(debtorId, (debtMap.get(debtorId) || 0) + share);
+                            }
+                        }
+
+                        const now = new Date();
+                        const debts = Array.from(debtMap.entries()).map(([debtorId, amountInCurrency]) => {
+                            const amountInBase = isForeignCurrency
+                                ? Math.round(amountInCurrency * invoice.exchangeRate! * 100) / 100
+                                : Math.round(amountInCurrency * 100) / 100;
+                            const amountInCurrencyRounded = Math.round(amountInCurrency * 100) / 100;
+
+                            return {
+                                groupId,
+                                invoiceId,
+                                debtorId,
+                                creditorId: userId,
+                                originalAmount: amountInBase,
+                                remainingAmount: amountInBase,
+                                ...(isForeignCurrency ? {
+                                    originalCurrency: invoice.currency,
+                                    originalAmountInCurrency: amountInCurrencyRounded,
+                                    exchangeRateUsed: invoice.exchangeRate,
+                                    rateLockedAt: now
+                                } : {})
+                            };
+                        });
+
+                        if (debts.length > 0) {
+                            await OriginalDebt.create(debts, { session, ordered: true });
                         }
                     }
 
-                    const now = new Date();
-                    const debts = Array.from(debtMap.entries()).map(([debtorId, amountInCurrency]) => {
-                        const amountInBase = isForeignCurrency
-                            ? Math.round(amountInCurrency * invoice.exchangeRate! * 100) / 100
-                            : Math.round(amountInCurrency * 100) / 100;
-                        const amountInCurrencyRounded = Math.round(amountInCurrency * 100) / 100;
-
-                        return {
-                            groupId,
-                            invoiceId,
-                            debtorId,
-                            creditorId: userId,
-                            originalAmount: amountInBase,
-                            remainingAmount: amountInBase,
-                            ...(isForeignCurrency ? {
-                                originalCurrency: invoice.currency,
-                                originalAmountInCurrency: amountInCurrencyRounded,
-                                exchangeRateUsed: invoice.exchangeRate,
-                                rateLockedAt: now
-                            } : {})
-                        };
-                    });
-
-                    if (debts.length > 0) {
-                        await OriginalDebt.create(debts, { session, ordered: true });
-                    }
                 }
 
                 await invoice.save({ session });

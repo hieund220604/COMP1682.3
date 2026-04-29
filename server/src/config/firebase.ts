@@ -67,6 +67,17 @@ export function initializeFirebase(): admin.app.App | null {
             return firebaseApp;
         }
 
+        // Legacy: check serviceAccountKey.json in the config directory
+        const legacyPath = path.resolve(__dirname, './serviceAccountKey.json');
+        if (fs.existsSync(legacyPath)) {
+            const serviceAccount = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+            firebaseApp = admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+            console.log(`Firebase Admin SDK initialized with legacy service account: ${legacyPath}`);
+            return firebaseApp;
+        }
+
         firebaseApp = admin.initializeApp({
             credential: admin.credential.applicationDefault()
         });

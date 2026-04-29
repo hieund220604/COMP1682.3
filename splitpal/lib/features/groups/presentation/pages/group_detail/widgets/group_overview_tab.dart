@@ -55,10 +55,10 @@ class GroupOverviewTab extends StatelessWidget {
     final netBalance = (balance?['netBalance'] ?? 0).toDouble();
 
     final netLabel = netBalance == 0
-        ? 'SETTLED'
+        ? 'Settled'
         : netBalance < 0
-            ? 'YOU OWE'
-            : 'YOU GET BACK';
+            ? 'You owe'
+            : 'You get back';
     final netColor = netBalance == 0
         ? scheme.tertiary
         : netBalance < 0
@@ -98,7 +98,7 @@ class GroupOverviewTab extends StatelessWidget {
                   children: [
                     Expanded(
                       child: AppMetricTile(
-                        label: 'TOTAL SPENT',
+                        label: 'Total spent',
                         value: CurrencyFormatter.formatCurrency(
                           totalSpent,
                           currency,
@@ -118,57 +118,47 @@ class GroupOverviewTab extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (netBalance != 0) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  FilledButton.tonalIcon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Settle up is coming soon'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(AppIcons.payments),
-                    label: const Text('Settle up'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: scheme.primary.withAlpha(18),
-                      foregroundColor: scheme.primary,
-                    ),
-                  ),
-                ],
+
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text('Quick actions', style: textTheme.titleSmall),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
+          Row(
             children: [
-              _QuickActionButton(
-                icon: AppIcons.chat,
-                label: 'Chat',
-                onPressed: onOpenChat,
+              Expanded(
+                child: _QuickActionSquare(
+                  icon: AppIcons.add,
+                  label: 'Invoice',
+                  isPrimary: true,
+                  onPressed: onCreateInvoice,
+                ),
               ),
-              if (onInvite != null)
-                _QuickActionButton(
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickActionSquare(
+                  icon: AppIcons.payments,
+                  label: 'Request',
+                  onPressed: onCreatePaymentRequest != null ? () => onCreatePaymentRequest!() : null,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickActionSquare(
                   icon: AppIcons.memberAdd,
                   label: 'Invite',
-                  onPressed: onInvite!,
+                  onPressed: onInvite,
                 ),
-              if (onCreateInvoice != null)
-                _QuickActionButton(
-                  icon: AppIcons.add,
-                  label: 'New invoice',
-                  onPressed: onCreateInvoice!,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickActionSquare(
+                  icon: AppIcons.chat,
+                  label: 'Chat',
+                  onPressed: onOpenChat,
                 ),
-              if (onCreatePaymentRequest != null)
-                _QuickActionButton(
-                  icon: AppIcons.payments,
-                  label: 'Payment request',
-                  onPressed: () => onCreatePaymentRequest!(),
-                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -426,32 +416,60 @@ String _roleLabel(String raw) {
   }
 }
 
-class _QuickActionButton extends StatelessWidget {
+class _QuickActionSquare extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
 
-  const _QuickActionButton({
+  const _QuickActionSquare({
     required this.icon,
     required this.label,
-    required this.onPressed,
+    this.onPressed,
+    this.isPrimary = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return FilledButton.tonalIcon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: AppColors.pomegranate.withOpacity(0.12),
-        foregroundColor: AppColors.pomegranate,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
+    final textTheme = Theme.of(context).textTheme;
+    final enabled = onPressed != null;
+
+    final bgColor = isPrimary 
+        ? scheme.primary 
+        : scheme.surfaceContainerHighest.withOpacity(0.5);
+    final fgColor = isPrimary 
+        ? scheme.onPrimary 
+        : scheme.onSurface;
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: Material(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: fgColor, size: 24),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  label,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: fgColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ),
-        visualDensity: VisualDensity.compact,
       ),
     );
   }

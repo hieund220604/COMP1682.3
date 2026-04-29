@@ -9,8 +9,12 @@ import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/widgets/app_empty_state.dart';
+import 'package:splitpal/features/invoices/bill_template_provider.dart';
+import 'package:splitpal/features/invoices/presentation/pages/bill_template_list_page.dart';
+import 'package:splitpal/features/invoices/presentation/pages/create_bill_template_page.dart';
 import 'package:splitpal/features/invoices/presentation/pages/invoice_detail_page.dart';
 import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/models/bill_template.dart';
 
 import 'invoice_status_filter.dart';
 
@@ -40,11 +44,15 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() {
-    return context.read<InvoiceProvider>().loadInvoices(
+  Future<void> _load() async {
+    await context.read<InvoiceProvider>().loadInvoices(
           widget.groupId,
           status: invoiceStatusToParam(_filter),
         );
+    // Load templates for Owner/Admin view
+    if (widget.isOwnerOrAdmin) {
+      await context.read<BillTemplateProvider>().loadTemplates(widget.groupId);
+    }
   }
 
   void _setFilter(InvoiceStatusFilterValue next) {
@@ -211,6 +219,86 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
 
         return Column(
           children: [
+            // ── Recurring Bills Section (Owner/Admin only) ──────────────────
+            if (widget.isOwnerOrAdmin)
+              Consumer<BillTemplateProvider>(
+                builder: (context, templateProvider, _) {
+                  final templates = templateProvider.activeTemplates;
+                  if (templates.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.autorenew, size: 15, color: scheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Recurring Bills',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: scheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${templates.length}',
+                                style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 11, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const Spacer(),
+                            // Manage templates button
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BillTemplateListPage(groupId: widget.groupId),
+                                  ),
+                                ).then((_) => _load());
+                              },
+                              child: Text(
+                                'Manage',
+                                style: TextStyle(
+                                  color: scheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 80,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 2, AppSpacing.lg, AppSpacing.sm),
+                          itemCount: templates.length,
+                          itemBuilder: (context, i) {
+                            final t = templates[i];
+                            return _TemplateChipCard(
+                              template: t,
+                              groupId: widget.groupId,
+                              onRefresh: _load,
+                            );
+                          },
+                        ),
+                      ),
+                      Divider(height: 1, color: scheme.outlineVariant.withOpacity(0.5)),
+                    ],
+                  );
+                },
+              ),
+            // ── Filter Row + New Invoice Button ────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
@@ -226,14 +314,37 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
                       onChanged: _setFilter,
                     ),
                   ),
-                if (widget.onCreateInvoice != null) ...[
-                  const SizedBox(width: AppSpacing.sm),
+                if (widget.isOwnerOrAdmin) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  // Open recurring template management page
                   IconButton(
-                    tooltip: 'New invoice',
-                    onPressed: widget.onCreateInvoice,
-                    color: scheme.primary,
-                    icon: const Icon(AppIcons.add),
+                    tooltip: 'Manage recurring bills',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BillTemplateListPage(groupId: widget.groupId),
+                        ),
+                      ).then((_) => _load());
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: scheme.primary,
+                      foregroundColor: scheme.onPrimary,
+                    ),
+                    icon: const Icon(Icons.autorenew, size: 20),
                   ),
+                  const SizedBox(width: AppSpacing.xs),
+                  // Create manual invoice
+                  if (widget.onCreateInvoice != null)
+                    IconButton(
+                      tooltip: 'New invoice',
+                      onPressed: widget.onCreateInvoice,
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
+                      ),
+                      icon: const Icon(AppIcons.add, size: 20),
+                    ),
                 ],
               ],
             ),
@@ -249,12 +360,12 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
 Color _statusColor(String status, ColorScheme scheme) {
   switch (status) {
     case 'SUBMITTED':
-      return AppColors.pomegranate;
+      return scheme.primary;
     case 'LOCKED':
-      return scheme.tertiary;
+      return Colors.green.shade600;
     case 'DRAFT':
     default:
-      return scheme.onSurfaceVariant;
+      return scheme.outline;
   }
 }
 
@@ -296,22 +407,245 @@ class _StatusPill extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
+        horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color,
         borderRadius: BorderRadius.circular(AppRadii.pill),
-        border: Border.all(color: color),
       ),
       child: Text(
         label,
         style: textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w800,
-          color: color,
+          color: Colors.white,
           fontSize: 11,
         ),
       ),
+    );
+  }
+}
+
+// ── Template Chip Card ────────────────────────────────────────────────────────
+/// Chip displayed in the horizontal scroll list.
+/// Tap → opens a bottom sheet menu with actions.
+class _TemplateChipCard extends StatelessWidget {
+  final BillTemplate template;
+  final String groupId;
+  final VoidCallback onRefresh;
+
+  const _TemplateChipCard({
+    required this.template,
+    required this.groupId,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isPaused = template.isPaused;
+
+    return GestureDetector(
+      onTap: () => _showMenu(context),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isPaused
+              ? scheme.surfaceContainerLowest
+              : scheme.primaryContainer.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          border: Border.all(
+            color: isPaused ? scheme.outlineVariant : scheme.primary.withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPaused ? Icons.pause_circle_outline : Icons.autorenew,
+                  size: 13,
+                  color: isPaused ? scheme.onSurfaceVariant : scheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  template.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: isPaused ? scheme.onSurfaceVariant : scheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.more_horiz, size: 12, color: scheme.onSurfaceVariant),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              template.cycleLabel,
+              style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+            ),
+            Text(
+              isPaused ? 'Paused' : '${template.daysUntilNext} days left',
+              style: TextStyle(
+                fontSize: 10,
+                color: isPaused ? scheme.error : Colors.orange.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMenu(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final provider = context.read<BillTemplateProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.autorenew, color: scheme.onPrimaryContainer, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            template.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          Text(
+                            template.cycleLabel,
+                            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+
+                // Generate now
+                if (template.isActive)
+                  _menuItem(
+                    context: ctx,
+                    icon: Icons.flash_on,
+                    label: 'Generate Invoice Now',
+                    subtitle: 'Create a DRAFT without waiting for the scheduler',
+                    color: Colors.blue,
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final inv = await provider.generateNow(groupId, template.id);
+                      if (!context.mounted) return;
+                      if (inv != null) {
+                        onRefresh();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✅ Created: ${inv.title}'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(provider.errorMessage ?? 'Generation failed'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+
+                // Pause / Resume
+                if (template.isActive)
+                  _menuItem(
+                    context: ctx,
+                    icon: Icons.pause,
+                    label: 'Pause',
+                    subtitle: 'Stop auto-generating invoices',
+                    color: Colors.orange,
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await provider.pauseTemplate(groupId, template.id);
+                      onRefresh();
+                    },
+                  )
+                else if (template.isPaused)
+                  _menuItem(
+                    context: ctx,
+                    icon: Icons.play_arrow,
+                    label: 'Resume',
+                    subtitle: 'Re-enable auto-generation',
+                    color: Colors.green,
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await provider.resumeTemplate(groupId, template.id);
+                      onRefresh();
+                    },
+                  ),
+
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _menuItem({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+      onTap: onTap,
     );
   }
 }

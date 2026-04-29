@@ -1,0 +1,40 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Chỉ clone Flutter nếu chưa có trong cache
+        - |
+          if [ ! -f "/root/flutter/bin/flutter" ]; then
+            echo ">>> Flutter not cached, cloning..."
+            git clone https://github.com/flutter/flutter.git -b stable --depth 1 /root/flutter
+          else
+            echo ">>> Flutter found in cache, skipping clone."
+          fi
+        - export PATH="$PATH:/root/flutter/bin"
+        - flutter --version
+        - flutter config --enable-web
+        # Install dependencies
+        - cd splitpal && flutter pub get
+    build:
+      commands:
+        - export PATH="$PATH:/root/flutter/bin"
+        - cd splitpal
+        # Inject .env từ Amplify Environment Variables
+        - |
+          cat > .env << 'EOF'
+          BASE_URL=${BASE_URL}
+          SOCKET_URL=${SOCKET_URL}
+          FIREBASE_WEB_API_KEY=${FIREBASE_WEB_API_KEY}
+          EOF
+        - flutter build web --release --web-renderer canvaskit
+  artifacts:
+    # Flutter web output directory
+    baseDirectory: splitpal/build/web
+    files:
+      - '**/*'
+  cache:
+    paths:
+      # Cache Flutter SDK bằng absolute path (Amplify chạy với user root)
+      - /root/flutter/**/*
+      - splitpal/.dart_tool/**/*

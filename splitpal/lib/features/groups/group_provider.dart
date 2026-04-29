@@ -233,4 +233,28 @@ class GroupProvider extends ChangeNotifier {
       throw Exception(e.toString());
     }
   }
+
+  // ─── Leave Group ────────────────────────────────────────
+  Future<bool> leaveGroup(String groupId) async {
+    isLoading = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      await _dio.post('/groups/$groupId/leave');
+      // Remove from local list immediately
+      groups = groups.where((g) {
+        final id = (g['_id'] ?? g['id'])?.toString();
+        return id != groupId;
+      }).toList();
+      isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      error = e.toString();
+      isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

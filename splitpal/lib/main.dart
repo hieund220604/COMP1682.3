@@ -17,6 +17,7 @@ import 'core/theme/theme_controller.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/groups/group_provider.dart';
 import 'features/invoices/invoice_provider.dart';
+import 'features/invoices/bill_template_provider.dart';
 import 'features/subscriptions/subscription_provider.dart';
 import 'features/notifications/notification_provider.dart';
 import 'features/exchange/exchange_provider.dart';
@@ -110,6 +111,9 @@ class _MyAppState extends State<MyApp> {
         ),
         ChangeNotifierProvider(
           create: (_) => InvoiceProvider(dio: AppServices.dio),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => BillTemplateProvider(dio: AppServices.dio),
         ),
         ChangeNotifierProvider(
           create: (_) => SubscriptionProvider(dio: AppServices.dio),

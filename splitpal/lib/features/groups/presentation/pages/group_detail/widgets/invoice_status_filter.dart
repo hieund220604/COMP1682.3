@@ -30,56 +30,55 @@ class InvoiceStatusFilter extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return SegmentedButton<InvoiceStatusFilterValue>(
-      showSelectedIcon: false,
-      style: ButtonStyle(
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return scheme.primary.withAlpha(18);
-          }
-          return scheme.surface;
-        }),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return scheme.primary;
-          }
-          return scheme.onSurfaceVariant;
-        }),
-        side: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return BorderSide(
-            color: selected
-                ? scheme.primary.withAlpha(90)
-                : scheme.outlineVariant.withAlpha(160),
+    final filters = [
+      (InvoiceStatusFilterValue.all, 'All', AppIcons.invoices),
+      (InvoiceStatusFilterValue.submitted, 'Submitted', AppIcons.submitted),
+      (InvoiceStatusFilterValue.locked, 'Locked', AppIcons.locked),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.map((f) {
+          final isSelected = value == f.$1;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    f.$3,
+                    size: 16,
+                    color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    f.$2,
+                    style: textTheme.labelMedium?.copyWith(
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              selected: isSelected,
+              showCheckmark: false,
+              backgroundColor: scheme.surface,
+              selectedColor: scheme.primary,
+              side: BorderSide(
+                color: isSelected ? scheme.primary : scheme.outlineVariant.withOpacity(0.5),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+              onSelected: (selected) {
+                if (selected) onChanged(f.$1);
+              },
+            ),
           );
-        }),
-        textStyle: WidgetStateProperty.all(textTheme.labelMedium),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        ),
+        }).toList(),
       ),
-      segments: const [
-        ButtonSegment(
-          value: InvoiceStatusFilterValue.all,
-          label: Text('All'),
-          icon: Icon(AppIcons.invoices),
-        ),
-        ButtonSegment(
-          value: InvoiceStatusFilterValue.submitted,
-          label: Text('Submitted'),
-          icon: Icon(AppIcons.submitted),
-        ),
-        ButtonSegment(
-          value: InvoiceStatusFilterValue.locked,
-          label: Text('Locked'),
-          icon: Icon(AppIcons.locked),
-        ),
-      ],
-      selected: {value},
-      onSelectionChanged: (next) {
-        if (next.isEmpty) return;
-        onChanged(next.first);
-      },
     );
   }
 }

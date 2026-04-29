@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Subscription Service â€” v2
  *
  * Core model:
@@ -631,18 +631,9 @@ export const subscriptionService = {
         // cycleStart = nextBillingDate - 1 billingCycle
         // If lastChargedAt >= cycleStart â†’ already paid this cycle â†’ obligation = 0
         // Otherwise â†’ obligation = amount (settle current cycle)
-        const cycleStart = calculateNextBillingDate(
-            subMember.nextBillingDate,
-            // We need to go BACK one cycle from nextBillingDate
-            // Pass the negative... actually recalculate: cycleStart = nextBillingDate - 1 cycle
-            // Trick: calculate by computing what "now - 1 cycle" would be using the reverse
-            subscription.billingCycle as BillingCycle,
-        );
-        // Actually compute cycleStart properly:
-        // cycleStart is the point in time when the current cycle BEGAN
-        // nextBillingDate is when the current cycle ENDS
-        // So cycleStart = nextBillingDate - 1 cycleDuration
-        // We'll compute it by subtracting the cycle duration from nextBillingDate
+        // cycleStart = nextBillingDate - 1 billingCycle (the point in time the current cycle BEGAN)
+        // Use strict > so that when lastChargedAt === cycleStart (member just joined at cycle boundary)
+        // we correctly treat it as NOT yet charged for the new cycle.
         const nbd = new Date(subMember.nextBillingDate);
         let cycleStartDate: Date;
         switch (subscription.billingCycle as BillingCycle) {
@@ -666,7 +657,7 @@ export const subscriptionService = {
             }
         }
 
-        const alreadyPaidThisCycle = subMember.lastChargedAt >= cycleStartDate;
+        const alreadyPaidThisCycle = subMember.lastChargedAt > cycleStartDate;
         const obligation = alreadyPaidThisCycle ? 0 : Number(subMember.amount);
 
         if (obligation > 0) {
@@ -790,7 +781,8 @@ export const subscriptionService = {
                     from: 'subscriptions',
                     let: { subId: '$subscriptionId' },
                     pipeline: [
-                        { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$subId'] } } },
+                        // Use $toObjectId so MongoDB can use the _id index (instead of $toString full scan)
+                        { $match: { $expr: { $eq: ['$_id', { $toObjectId: '$$subId' }] } } },
                         { $match: { status: 'ACTIVE' } },
                     ],
                     as: 'subscription',
@@ -850,7 +842,7 @@ export const subscriptionService = {
             case BillingCycle.MONTHLY: cycleStart.setMonth(cycleStart.getMonth() - 1); break;
             case BillingCycle.YEARLY: cycleStart.setFullYear(cycleStart.getFullYear() - 1); break;
         }
-        if (memberDoc.lastChargedAt >= cycleStart) {
+        if (memberDoc.lastChargedAt > cycleStart) {
             // Already charged this cycle â€” just advance nextBillingDate
             const newNextDate = calculateNextBillingDate(
                 new Date(memberDoc.nextBillingDate),
@@ -1047,7 +1039,8 @@ export const subscriptionService = {
                         from: 'subscriptions',
                         let: { subId: '$subscriptionId' },
                         pipeline: [
-                            { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$subId'] } } },
+                            // Use $toObjectId so MongoDB can use the _id index
+                            { $match: { $expr: { $eq: ['$_id', { $toObjectId: '$$subId' }] } } },
                             { $match: { status: 'ACTIVE', billingCycle: cycle } },
                         ],
                         as: 'subscription',

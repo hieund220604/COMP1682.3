@@ -44,12 +44,43 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
 
   Future<void> _submitCode(String code) async {
     if (code.length != 6) return;
+    if (_isLoading) return; // Prevent double submission when both Pinput and manual trigger fire
 
     setState(() => _isLoading = true);
+
+    // Show loading dialog with barrier
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 24),
+                Text(
+                  'Joining group...',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
     try {
       final provider = context.read<GroupProvider>();
       await provider.joinGroupByCode(code);
       if (mounted) {
+        Navigator.pop(context); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Successfully joined group')),
         );
@@ -57,6 +88,7 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
       }
     } catch (e) {
       if (mounted) {
+        Navigator.pop(context); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
         );
@@ -180,24 +212,20 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator())
-              else ...[
-                OutlinedButton.icon(
-                  onPressed: _openScanner,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan QR Code'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _openScanner,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scan QR Code'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                TextButton.icon(
-                  onPressed: _pasteFromClipboard,
-                  icon: const Icon(Icons.content_paste),
-                  label: const Text('Paste Invitation Link'),
-                ),
-              ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextButton.icon(
+                onPressed: _isLoading ? null : _pasteFromClipboard,
+                icon: const Icon(Icons.content_paste),
+                label: const Text('Paste Invitation Link'),
+              ),
             ],
           ),
         ),

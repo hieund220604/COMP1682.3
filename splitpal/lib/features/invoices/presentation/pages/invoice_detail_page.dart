@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/currency_formatter.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
+import 'package:splitpal/core/widgets/app_card.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/models/invoice.dart';
 import 'package:splitpal/features/invoices/invoice_provider.dart';
+import 'package:splitpal/features/invoices/bill_template_provider.dart';
 import 'package:splitpal/features/groups/group_provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'payment_page.dart';
+import 'edit_draft_invoice_page.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   static const routeName = '/invoice-detail';
@@ -52,49 +56,109 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
-  Future<void> _submitInvoice() async {
+  /// Confirm a DRAFT recurring invoice → SUBMITTED.
+  Future<void> _confirmDraftInvoice() async {
     if (_currentInvoice == null) return;
-    
+
+    // Validate: check if any items have amount=0
+    final zeroItems = _currentInvoice!.items.where((i) => i.amount <= 0).toList();
+    if (zeroItems.isNotEmpty) {
+      final names = zeroItems.map((i) => '"${i.name}"').join(', ');
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+              const SizedBox(width: 8),
+              const Text('Items missing amounts'),
+            ],
+          ),
+          content: Text(
+            'The following items have no amount: $names.\n\nPlease tap "Edit" to enter amounts before confirming.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8472A), foregroundColor: Colors.white),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _navigateToEditDraft();
+              },
+              icon: const Icon(Icons.edit, size: 16),
+              label: const Text('Edit Now'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Submit Invoice'),
-        content: const Text('Are you sure you want to submit this invoice? This action cannot be undone.'),
+        title: const Text('Confirm Recurring Invoice'),
+        content: const Text(
+          'Once confirmed, the invoice will be sent to all members and cannot be reversed.\n\nAre you sure you want to confirm?',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.silver)),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold)),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8472A), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     setState(() => _isSubmitting = true);
-
-    final provider = context.read<InvoiceProvider>();
-    final success = await provider.submitInvoice(widget.groupId, _currentInvoice!.id);
-
+    final provider = context.read<BillTemplateProvider>();
+    final invoice = await provider.confirmDraft(widget.groupId, _currentInvoice!.id);
     setState(() => _isSubmitting = false);
 
-    if (success && mounted) {
+    if (!mounted) return;
+    if (invoice != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invoice submitted successfully')),
+        const SnackBar(
+          content: Text('Invoice confirmed and sent to members!'),
+          backgroundColor: const Color(0xFFE8472A),
+        ),
       );
       await _loadInvoiceDetail();
-    } else if (mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.errorMessage ?? 'Failed to submit invoice'),
+          content: Text(provider.errorMessage ?? 'Confirmation failed'),
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  /// Navigate to edit DRAFT invoice page.
+  Future<void> _navigateToEditDraft() async {
+    if (_currentInvoice == null) return;
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditDraftInvoicePage(
+          groupId: widget.groupId,
+          invoice: _currentInvoice!,
+        ),
+      ),
+    );
+    // Reload if changes were made
+    if (result == true && mounted) {
+      await _loadInvoiceDetail();
     }
   }
 
@@ -175,24 +239,14 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: AppColors.background,
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.midnightBlue),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Invoice Details',
-            style: TextStyle(
-              color: AppColors.midnightBlue,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          title: const Text('Invoice Details'),
           centerTitle: true,
-          backgroundColor: AppColors.background.withOpacity(0.9),
-          elevation: 0,
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -200,22 +254,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
     if (_currentInvoice == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.midnightBlue),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Invoice Details',
-            style: TextStyle(
-              color: AppColors.midnightBlue,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          title: const Text('Invoice Details'),
           centerTitle: true,
-          backgroundColor: AppColors.background.withOpacity(0.9),
-          elevation: 0,
         ),
         body: const Center(child: Text('Invoice not found')),
       );
@@ -224,29 +265,15 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     final invoice = _currentInvoice!;
     
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.midnightBlue),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Invoice Details',
-          style: TextStyle(
-            color: AppColors.midnightBlue,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Invoice Details'),
         centerTitle: true,
-        backgroundColor: AppColors.background.withOpacity(0.9),
-        elevation: 0,
         actions: [
           if (invoice.status == 'DRAFT' && context.read<GroupProvider>().isOwnerOrAdmin)
             IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.midnightBlue),
-              onPressed: () {
-                // TODO: Navigate to edit page
-              },
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit amounts',
+              onPressed: _navigateToEditDraft,
             ),
         ],
       ),
@@ -254,88 +281,97 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         onRefresh: _loadInvoiceDetail,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // DRAFT Recurring Banner
+              if (invoice.status == 'DRAFT')
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: scheme.onSurfaceVariant, size: 20),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'This recurring invoice is pending confirmation. You can edit amounts before submitting.',
+                          style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Status Badge
-              _buildStatusBadge(),
-              const SizedBox(height: 20),
+              _buildStatusBadge(context),
+              const SizedBox(height: AppSpacing.lg),
 
               // Title Card
               _buildInfoCard(
+                context,
                 icon: Icons.receipt_long,
                 title: 'Invoice Title',
                 content: invoice.title,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               // Note Card
               if (invoice.note?.isNotEmpty ?? false) ...[
                 _buildInfoCard(
+                  context,
                   icon: Icons.note,
                   title: 'Note',
                   content: invoice.note!,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
               ],
 
               // Uploaded By Card
               _buildInfoCard(
+                context,
                 icon: Icons.person,
                 title: 'Uploaded By',
                 content: invoice.uploadedByName,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               // Date Card
               _buildInfoCard(
+                context,
                 icon: Icons.calendar_today,
                 title: 'Created Date',
                 content: _formatDate(invoice.createdAt),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
               // Items Section
-              Divider(color: AppColors.silver.withOpacity(0.3)),
-              const SizedBox(height: 24),
               Text(
                 'INVOICE ITEMS',
-                style: TextStyle(
-                  color: AppColors.silver,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                style: textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 1.0,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               ...invoice.items.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                return _buildItemCard(index + 1, item);
+                return _buildItemCard(context, entry.key + 1, entry.value);
               }).toList(),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
               // Total Card
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+              AppCard(
+                color: scheme.primaryContainer,
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
                   children: [
                     Row(
@@ -343,30 +379,28 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                       children: [
                         Text(
                           invoice.hasCurrencyConversion ? 'Original Total' : 'Total Amount',
-                          style: const TextStyle(
-                            fontSize: 16,
+                          style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: Colors.white70,
+                            color: scheme.onPrimaryContainer,
                           ),
                         ),
                         Text(
                           CurrencyFormatter.formatCurrency(invoice.amountTotal, invoice.currency),
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                          style: textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: scheme.onPrimaryContainer,
                           ),
                         ),
                       ],
                     ),
                     if (invoice.hasCurrencyConversion) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.md),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
+                          color: scheme.surface.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(AppRadii.md),
                         ),
                         child: Column(
                           children: [
@@ -375,25 +409,23 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                               children: [
                                 Text(
                                   'Converted (${invoice.baseCurrency ?? 'VND'})',
-                                  style: const TextStyle(fontSize: 13, color: Colors.white70),
+                                  style: textTheme.bodyMedium,
                                 ),
                                 Text(
                                   CurrencyFormatter.formatCurrency(
                                     invoice.convertedAmountTotal!, invoice.baseCurrency ?? 'VND'),
-                                  style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white,
-                                  ),
+                                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: AppSpacing.xs),
                             Row(
                               children: [
-                                const Icon(Icons.lock_outline, size: 12, color: Colors.white54),
+                                Icon(Icons.lock_outline, size: 12, color: scheme.onSurfaceVariant),
                                 const SizedBox(width: 4),
                                 Text(
                                   '1 ${invoice.currency} = ${invoice.exchangeRate!.toStringAsFixed(invoice.exchangeRate! < 1 ? 6 : 2)} ${invoice.baseCurrency ?? 'VND'}',
-                                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+                                  style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                                 ),
                               ],
                             ),
@@ -419,33 +451,22 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                       if (invoice.status == 'DRAFT') ...[
                         SizedBox(
                           width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: _isSubmitting ? null : _submitInvoice,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: _isSubmitting
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Submit Invoice',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                          child: FilledButton.tonalIcon(
+                            onPressed: _navigateToEditDraft,
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Edit Amounts'),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: FilledButton.icon(
+                            onPressed: _isSubmitting ? null : _confirmDraftInvoice,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: _isSubmitting
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Text('Confirm & Notify', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -455,34 +476,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                     if (!isOwnerOrAdmin && invoice.status == 'SUBMITTED' && userOwes) ...[
                       SizedBox(
                         width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton.icon(
+                        height: 48,
+                        child: FilledButton.icon(
                           onPressed: _isPayingNow ? null : _handlePayNow,
                           icon: const Icon(Icons.payment),
                           label: _isPayingNow
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                )
-                              : const Text(
-                                  'Pay Now',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 2,
-                          ),
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Text('Pay Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -497,106 +497,92 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     );
   }
 
-  Widget _buildStatusBadge() {
+  Widget _buildStatusBadge(BuildContext context) {
     if (_currentInvoice == null) return const SizedBox.shrink();
     
+    final scheme = Theme.of(context).colorScheme;
     Color badgeColor;
     String statusText;
 
     switch (_currentInvoice!.status) {
       case 'DRAFT':
-        badgeColor = Colors.orange;
+        badgeColor = scheme.outline;
         statusText = 'Draft';
         break;
       case 'SUBMITTED':
-        badgeColor = Colors.green;
+        badgeColor = scheme.primary;
         statusText = 'Submitted';
         break;
       case 'PAID':
-        badgeColor = Colors.blue;
+        badgeColor = Colors.blue.shade600;
         statusText = 'Paid';
         break;
+      case 'LOCKED':
+        badgeColor = Colors.green.shade600;
+        statusText = 'Locked';
+        break;
       default:
-        badgeColor = Colors.grey;
+        badgeColor = scheme.outlineVariant;
         statusText = _currentInvoice!.status;
     }
 
     return Center(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
         decoration: BoxDecoration(
           color: badgeColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: badgeColor.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(AppRadii.pill),
         ),
         child: Text(
           statusText.toUpperCase(),
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInfoCard({
+  Widget _buildInfoCard(BuildContext context, {
     required IconData icon,
     required String title,
     required String content,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 24),
+            child: Icon(icon, color: scheme.onSurfaceVariant, size: 24),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    color: AppColors.silver,
-                    fontSize: 12,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   content,
-                  style: const TextStyle(
-                    color: AppColors.midnightBlue,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -607,15 +593,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     );
   }
 
-  Widget _buildItemCard(int index, InvoiceItem item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.silver.withOpacity(0.3)),
-      ),
+  Widget _buildItemCard(BuildContext context, int index, InvoiceItem item) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -624,62 +608,56 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             children: [
               Text(
                 'ITEM $index',
-                style: TextStyle(
-                  color: AppColors.silver,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                style: textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 1.0,
                 ),
               ),
               Text(
                 CurrencyFormatter.formatCurrency(item.amount, _currentInvoice!.currency),
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                style: textTheme.titleMedium?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Text(
             item.name,
-            style: const TextStyle(
-              color: AppColors.midnightBlue,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (item.assignedToNames.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: item.assignedToNames.map<Widget>((name) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    border: Border.all(color: scheme.outlineVariant),
                   ),
                   child: Text(
                     name,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 );
               }).toList(),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Share per person: ${CurrencyFormatter.formatCurrency(item.sharePerPerson, _currentInvoice!.currency)}',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.silver,
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
               ),
             ),

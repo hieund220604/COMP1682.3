@@ -154,6 +154,85 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     );
   }
 
+  Future<void> _leaveGroup() async {
+    final resolvedRole = context.read<GroupProvider>().currentUserRole;
+
+    if (resolvedRole == 'OWNER') {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cannot Leave Group'),
+          content: const Text(
+            'You are the Owner. Please transfer ownership to another member before leaving.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave Group'),
+        content: Text(
+          'Are you sure you want to leave "${widget.groupName}"? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final groupProvider = context.read<GroupProvider>();
+    final ok = await groupProvider.leaveGroup(widget.groupId);
+
+    if (!mounted) return;
+
+    if (ok) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else {
+      // Show backend error (e.g. outstanding balance)
+      final rawError = groupProvider.error ?? 'Failed to leave group';
+      // Strip DioException wrapper text for cleaner display
+      final userMessage = rawError.contains('outstanding') || rawError.contains('balance')
+          ? 'You have an outstanding balance. Please settle your debts before leaving.'
+          : rawError.contains('Owner')
+              ? 'Owners cannot leave the group directly. Transfer ownership first.'
+              : rawError;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cannot Leave Group'),
+          content: Text(userMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _transferOwnership(String memberId) async {
     final groupProvider = context.read<GroupProvider>();
     try {
@@ -243,19 +322,33 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
               ),
               title: Text(name),
               actions: [
-                IconButton(
-                  tooltip: 'Chat',
-                  onPressed: _openGroupChat,
-                  color: Theme.of(context).colorScheme.primary,
-                  icon: const Icon(AppIcons.chat),
+                PopupMenuButton<String>(
+                  tooltip: 'More options',
+                  onSelected: (value) {
+                    if (value == 'leave') _leaveGroup();
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'leave',
+                      child: Row(
+                        children: [
+                          Icon(
+                            AppIcons.logout,
+                            color: Theme.of(context).colorScheme.error,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Leave Group',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                if (isOwnerOrAdmin)
-                  IconButton(
-                    tooltip: 'Invite',
-                    onPressed: _openInvite,
-                    color: Theme.of(context).colorScheme.primary,
-                    icon: const Icon(AppIcons.memberAdd),
-                  ),
                 const SizedBox(width: AppSpacing.xs),
               ],
             ),

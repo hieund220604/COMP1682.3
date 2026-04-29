@@ -24,8 +24,8 @@ class GroupHeader extends StatelessWidget {
     final roleText = _roleLabel(role);
 
     return AppCard(
-      // Slightly stronger brand tint so the header feels "red-forward".
-      color: scheme.primary.withAlpha(24),
+      color: scheme.surface,
+      elevation: 0,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
         children: [
@@ -100,18 +100,18 @@ class _RoleChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: scheme.primary.withAlpha(18),
+        color: scheme.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadii.pill),
-        border: Border.all(color: scheme.primary.withAlpha(44)),
+        border: Border.all(color: scheme.primary.withOpacity(0.3)),
       ),
       child: Text(
         label,
-        style: textTheme.labelMedium?.copyWith(
+        style: textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w800,
-          color: scheme.primary,
+          color: scheme.onPrimaryContainer,
         ),
       ),
     );

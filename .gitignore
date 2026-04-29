@@ -1,13 +1,47 @@
 node_modules/
 .env
+.env.*
 dist/
 build/
 npm-debug.log
 .DS_Store
 .agent/
+.agents/
 *md/
 postman/
 
-# Firebase Credentials
+# Firebase Credentials & Service Accounts
 serviceAccountKey.json
 google-services.json
+GoogleService-Info.plist
+firebase-service-account.json
+**/serviceAccountKey.json
+
+# Firebase cache
+.firebase/
+
+# Server uploads (user-generated content)
+server/uploads/
+
+# Server logs
+server/out.log
+*.log
+
+# Android local properties (contains local SDK paths)
+**/local.properties
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Package lock files (keep only root or per-project)
+# Uncomment below if you want to ignore lock files:
+# package-lock.json
+
+# Test results
+server/scripts/test_results.txt

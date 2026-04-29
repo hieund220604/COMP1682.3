@@ -1,5 +1,6 @@
 import { subscriptionService } from './service/subscriptionService';
 import { paymentRequestService } from './service/paymentRequestService';
+import { recurringBillService } from './service/recurringBillService';
 
 const INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -18,13 +19,19 @@ export const startScheduler = () => {
 
 async function runJob() {
     try {
-        console.log(`[Scheduler] Running subscription renewals check at ${new Date().toISOString()}`);
+        console.log(`[Scheduler] Running at ${new Date().toISOString()}`);
         const result = await subscriptionService.processRenewals();
         if (result.totalMembersChecked > 0) {
-            console.log(`[Scheduler] Renewals: ${result.charged} charged, ${result.failed} failed, ${result.kicked} kicked out of ${result.totalMembersChecked} members checked`);
+            console.log(`[Scheduler] Subscriptions: ${result.charged} charged, ${result.failed} failed, ${result.kicked} kicked`);
         }
         await paymentRequestService.processExpirationsAndReminders();
+
+        // Recurring bills: auto-generate DRAFT invoices from templates
+        const rbResult = await recurringBillService.processAutoGenerate();
+        if (rbResult.generated > 0 || rbResult.failed > 0) {
+            console.log(`[Scheduler] RecurringBills: +${rbResult.generated} generated, ${rbResult.skipped} skipped, ${rbResult.failed} failed`);
+        }
     } catch (error) {
-        console.error('[Scheduler] Error processing subscription renewals:', error);
+        console.error('[Scheduler] Error:', error);
     }
 }

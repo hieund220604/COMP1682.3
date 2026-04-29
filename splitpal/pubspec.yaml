@@ -90,6 +90,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
   
   # Code Generation
   build_runner: ^2.4.8
@@ -109,6 +110,7 @@ flutter:
   assets:
     - .env
     - assets/fonts/be_vietnam_pro/
+    - assets/image/
 
   fonts:
     - family: BeVietnamPro
@@ -152,3 +154,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/image/logo.png"
+  adaptive_icon_background: "#E8472A"
+  adaptive_icon_foreground: "assets/image/logo.png"
+  min_sdk_android: 21

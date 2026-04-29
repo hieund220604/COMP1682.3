@@ -22,6 +22,8 @@ export enum NotificationType {
     SUB_INVITE_DECLINED = 'SUB_INVITE_DECLINED',
     SUBSCRIPTION_MEMBER_KICKED = 'SUBSCRIPTION_MEMBER_KICKED',
     SUBSCRIPTION_MEMBER_LEFT = 'SUBSCRIPTION_MEMBER_LEFT',
+    // ── Recurring Bills ──────────────────────────────────────────
+    RECURRING_BILL_DRAFT = 'RECURRING_BILL_DRAFT',
     // ────────────────────────────────────────────────────────────
     ROLE_CHANGED = 'ROLE_CHANGED'
 }

@@ -198,33 +198,12 @@ class _AuthPageState extends State<AuthPage> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
                   ),
-                  child: Stack(
-                    children: [
-                      const Center(
-                        child: Icon(
-                          Icons.account_balance_wallet,
-                          size: 40,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Positioned(
-                        top: -4,
-                        right: -4,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFC0392B), width: 2),
-                          ),
-                        ),
-                      ),
-                    ],
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    'assets/image/logo.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
                 const SizedBox(height: 16),

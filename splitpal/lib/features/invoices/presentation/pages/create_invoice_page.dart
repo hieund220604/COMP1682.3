@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import 'package:splitpal/models/invoice.dart';
 import 'package:splitpal/features/ai/ai_provider.dart';
@@ -477,23 +479,26 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_isLoadingMembers) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: scheme.surface,
         appBar: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.close, color: AppColors.midnightBlue),
+            icon: Icon(Icons.close, color: scheme.onSurface),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text(
+          title: Text(
             'Create Invoice',
             style: TextStyle(
-              color: AppColors.midnightBlue,
+              color: scheme.onSurface,
               fontWeight: FontWeight.bold,
             ),
           ),
           centerTitle: true,
-          backgroundColor: AppColors.background.withOpacity(0.9),
+          backgroundColor: scheme.surface,
           elevation: 0,
         ),
         body: const Center(child: CircularProgressIndicator()),
@@ -501,21 +506,21 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: scheme.surface,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.midnightBlue),
+          icon: Icon(Icons.close, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Create Invoice',
           style: TextStyle(
-            color: AppColors.midnightBlue,
+            color: scheme.onSurface,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
-        backgroundColor: AppColors.background.withOpacity(0.9),
+        backgroundColor: scheme.surface,
         elevation: 0,
         actions: [
           // OCR Camera Button
@@ -538,10 +543,10 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                           valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                         ),
                       )
-                    : const Text(
+                    : Text(
                         'Save',
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: scheme.primary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
@@ -561,26 +566,26 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: scheme.surfaceContainerHighest,
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: scheme.primary.withOpacity(0.3),
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadii.md),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.lightbulb_outline,
-                      color: AppColors.primary,
+                      color: scheme.primary,
                       size: 20,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text(
                         'Tip: Use the camera button to capture & auto-fill invoice details',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.primary,
+                          color: scheme.primary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -594,15 +599,15 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Invoice Details',
                     style: TextStyle(
-                      color: AppColors.midnightBlue,
+                      color: scheme.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Icon(Icons.receipt_long, color: AppColors.silver),
+                  Icon(Icons.receipt_long, color: scheme.outline),
                 ],
               ),
               const SizedBox(height: 24),
@@ -613,26 +618,26 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               TextFormField(
                 controller: _titleController,
                 decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.title, color: AppColors.silver),
+                  prefixIcon: Icon(Icons.title, color: scheme.outline),
                   hintText: 'Enter invoice title',
-                  hintStyle: TextStyle(color: AppColors.silver),
+                  hintStyle: TextStyle(color: scheme.outline),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: scheme.surface,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.silver.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.silver.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.primary),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                style: const TextStyle(color: AppColors.midnightBlue),
+                style: TextStyle(color: scheme.onSurface),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter a title';
@@ -648,26 +653,26 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               TextFormField(
                 controller: _noteController,
                 decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.note, color: AppColors.silver),
+                  prefixIcon: Icon(Icons.note, color: scheme.outline),
                   hintText: 'Add optional note',
-                  hintStyle: TextStyle(color: AppColors.silver),
+                  hintStyle: TextStyle(color: scheme.outline),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: scheme.surface,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.silver.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.silver.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.primary),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                style: const TextStyle(color: AppColors.midnightBlue),
+                style: TextStyle(color: scheme.onSurface),
                 maxLines: 3,
               ),
               const SizedBox(height: 20),
@@ -677,9 +682,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.silver.withOpacity(0.3)),
+                  color: scheme.surface,
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: DropdownButtonFormField<String>(
                   value: _selectedCurrency,
@@ -699,14 +704,14 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     value: c,
                     child: Text(
                       '${_currencyFlags[c] ?? '💱'} $c',
-                      style: const TextStyle(color: AppColors.midnightBlue),
+                      style: TextStyle(color: scheme.onSurface),
                     ),
                   )).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedCurrency = val);
                   },
-                  dropdownColor: Colors.white,
-                  style: const TextStyle(color: AppColors.midnightBlue, fontSize: 16),
+                  dropdownColor: scheme.surface,
+                  style: TextStyle(color: scheme.onSurface, fontSize: 16),
                 ),
               ),
               if (_selectedCurrency != _groupBaseCurrency)
@@ -732,7 +737,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               const SizedBox(height: 32),
 
               // Items Section Header
-              Divider(color: AppColors.silver.withOpacity(0.3)),
+              Divider(color: scheme.outlineVariant),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -740,7 +745,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                   Text(
                     'INVOICE ITEMS',
                     style: TextStyle(
-                      color: AppColors.silver,
+                      color: scheme.outline,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.0,
@@ -751,7 +756,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     icon: const Icon(Icons.add_circle_outline, size: 20),
                     label: const Text('Add Item'),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
+                      foregroundColor: scheme.primary,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
@@ -772,11 +777,11 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     padding: const EdgeInsets.all(32),
                     child: Column(
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.silver),
+                        Icon(Icons.inventory_2_outlined, size: 48, color: scheme.outline),
                         const SizedBox(height: 12),
                         Text(
                           'No items yet',
-                          style: TextStyle(color: AppColors.silver, fontSize: 14),
+                          style: TextStyle(color: scheme.outline, fontSize: 14),
                         ),
                       ],
                     ),
@@ -790,14 +795,14 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+                    colors: [scheme.primary, scheme.primary.withOpacity(0.8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: scheme.primary.withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -832,12 +837,14 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     );
   }
 
-  Widget _buildLabel(String text, bool required) {    return Row(
+  Widget _buildLabel(String text, bool required) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
       children: [
         Text(
           text.toUpperCase(),
           style: TextStyle(
-            color: AppColors.silver,
+            color: scheme.outline,
             fontSize: 12,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
@@ -857,22 +864,12 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
   }
 
   Widget _buildItemCard(int index, InvoiceItemData item) {
+    final scheme = Theme.of(context).colorScheme;
     final activeSplitType = _normalizeSplitType(item.splitType);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -883,7 +880,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               Text(
                 'ITEM ${index + 1}',
                 style: TextStyle(
-                  color: AppColors.silver,
+                  color: scheme.outline,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.0,
@@ -906,18 +903,26 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           TextFormField(
             controller: item.nameController,
             decoration: InputDecoration(
-              prefixIcon: Icon(Icons.shopping_bag_outlined, color: AppColors.silver),
+              prefixIcon: Icon(Icons.shopping_bag_outlined, color: scheme.outline),
               hintText: 'Enter item name',
-              hintStyle: TextStyle(color: AppColors.silver),
+              hintStyle: TextStyle(color: scheme.outline),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: scheme.surface,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.outlineVariant),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.outlineVariant),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.primary),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            style: const TextStyle(color: AppColors.midnightBlue),
+            style: TextStyle(color: scheme.onSurface),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Please enter item name';
@@ -938,11 +943,11 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.attach_money, color: AppColors.silver, size: 20),
+                    Icon(Icons.attach_money, color: scheme.outline, size: 20),
                     Text(
                       _selectedCurrency,
                       style: TextStyle(
-                        color: AppColors.silver,
+                        color: scheme.outline,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -951,17 +956,25 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                 ),
               ),
               hintText: '0',
-              hintStyle: TextStyle(color: AppColors.silver),
+              hintStyle: TextStyle(color: scheme.outline),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: scheme.surface,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.outlineVariant),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.outlineVariant),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                borderSide: BorderSide(color: scheme.primary),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            style: const TextStyle(
-              color: AppColors.midnightBlue,
+            style: TextStyle(
+              color: scheme.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 16,
             ),
@@ -994,14 +1007,14 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: isSelected ? Colors.white : AppColors.midnightBlue,
+                    color: isSelected ? scheme.onPrimary : scheme.onSurface,
                   ),
                 ),
-                selectedColor: AppColors.primary,
-                checkmarkColor: Colors.white,
-                backgroundColor: Colors.white,
+                selectedColor: scheme.primary,
+                checkmarkColor: scheme.onPrimary,
+                backgroundColor: scheme.surface,
                 side: BorderSide(
-                  color: isSelected ? AppColors.primary : AppColors.silver.withOpacity(0.3),
+                  color: isSelected ? scheme.primary : scheme.outlineVariant,
                   width: 1.5,
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -1028,7 +1041,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               child: Text(
                 'Select at least one member',
                 style: TextStyle(
-                  color: AppColors.silver,
+                  color: scheme.outline,
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
                 ),
@@ -1050,14 +1063,14 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: selected ? Colors.white : AppColors.midnightBlue,
+                    color: selected ? scheme.onPrimary : scheme.onSurface,
                   ),
                 ),
                 selected: selected,
-                selectedColor: AppColors.primary,
-                backgroundColor: Colors.white,
+                selectedColor: scheme.primary,
+                backgroundColor: scheme.surface,
                 side: BorderSide(
-                  color: selected ? AppColors.primary : AppColors.silver.withOpacity(0.3),
+                  color: selected ? scheme.primary : scheme.outlineVariant,
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 onSelected: (_) => setState(() => item.splitType = type),
@@ -1086,8 +1099,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                       flex: 2,
                       child: Text(
                         memberName,
-                        style: const TextStyle(
-                          color: AppColors.midnightBlue,
+                        style: TextStyle(
+                          color: scheme.onSurface,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1100,19 +1113,27 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           hintText: '0',
-                          hintStyle: TextStyle(color: AppColors.silver),
+                          hintStyle: TextStyle(color: scheme.outline),
                           suffix: activeSplitType == 'PERCENTAGE'
-                              ? const Text('%', style: TextStyle(color: AppColors.midnightBlue))
+                              ? Text('%', style: TextStyle(color: scheme.onSurface))
                               : null,
                           filled: true,
-                          fillColor: AppColors.background,
+                          fillColor: scheme.surface,
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                            borderSide: BorderSide(color: scheme.outlineVariant),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                            borderSide: BorderSide(color: scheme.outlineVariant),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                            borderSide: BorderSide(color: scheme.primary),
                           ),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
-                        style: const TextStyle(color: AppColors.midnightBlue),
+                        style: TextStyle(color: scheme.onSurface),
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
