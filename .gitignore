@@ -9,7 +9,8 @@ npm-debug.log
 .agents/
 *md/
 postman/
-
+*.yml
+*.test
 # Firebase Credentials & Service Accounts
 serviceAccountKey.json
 google-services.json
@@ -45,3 +46,4 @@ Desktop.ini
 
 # Test results
 server/scripts/test_results.txt
+server/tests/

@@ -272,24 +272,34 @@ export const transferService = {
                     throw new Error('Recipient not found');
                 }
 
-                // CRITICAL: Validate allocations match transfer amount if allocations exist
+                // CRITICAL: Validate allocations and reduce debts
+                // For multi-hop (graph-based) allocations, the total sum may exceed
+                // the transfer amount because intermediate chain debts are also reduced.
+                // Validate by checking only the payer's outgoing debt allocations.
                 if (allocations.length > 0) {
-                    const totalAllocated = allocations.reduce((sum, a) => sum + a.allocatedAmount, 0);
-                    if (Math.abs(totalAllocated - amount) > 0.01) {
+                    const { OriginalDebt } = await import('../models/OriginalDebt');
+                    const allocDebtIds = [...new Set(allocations.map(a => a.originalDebtId))];
+                    const allocDebts = await OriginalDebt.find({ _id: { $in: allocDebtIds } }).session(session);
+                    const debtMap = new Map(allocDebts.map(d => [d._id.toString(), d]));
+
+                    const payerAllocated = allocations
+                        .filter(a => {
+                            const debt = debtMap.get(a.originalDebtId);
+                            return debt && debt.debtorId === transfer.fromUserId;
+                        })
+                        .reduce((sum, a) => sum + a.allocatedAmount, 0);
+
+                    if (Math.abs(payerAllocated - amount) > 0.01) {
                         console.error('[ERROR] Transfer allocation mismatch:', {
                             transferId,
                             transferAmount: amount,
-                            totalAllocated,
-                            difference: amount - totalAllocated,
-                            allocations: allocations.map(a => ({
-                                debtId: a.originalDebtId,
-                                amount: a.allocatedAmount
-                            }))
+                            payerAllocated,
+                            totalAllocations: allocations.length,
                         });
-                        throw new Error(`Allocation sum (${totalAllocated}) != transfer amount (${amount})`);
+                        throw new Error(`Payer allocation sum (${payerAllocated}) != transfer amount (${amount})`);
                     }
 
-                    // Reduce specific allocated debts
+                    // Reduce ALL allocated debts (direct + intermediate hops)
                     for (const alloc of allocations) {
                         await originalDebtService.reduceDebt(alloc.originalDebtId, alloc.allocatedAmount, session);
                     }

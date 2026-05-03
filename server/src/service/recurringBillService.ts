@@ -114,7 +114,7 @@ function calculateShareForUser(
     switch (item.splitType) {
         case 'PERCENTAGE': {
             const split = item.splits?.find(s => s.userId === debtorId);
-            return split ? item.amount * (split.value / 100) : 0;
+            return split ? Math.floor(item.amount * (split.value / 100)) : 0;
         }
         case 'CUSTOM': {
             const split = item.splits?.find(s => s.userId === debtorId);
@@ -123,11 +123,11 @@ function calculateShareForUser(
         case 'WEIGHT': {
             const totalWeight = item.splits?.reduce((s, x) => s + x.value, 0) || 1;
             const split = item.splits?.find(s => s.userId === debtorId);
-            return split ? item.amount * (split.value / totalWeight) : 0;
+            return split ? Math.floor(item.amount * (split.value / totalWeight)) : 0;
         }
         case 'EQUAL':
         default:
-            return item.assignedTo.length > 0 ? item.amount / item.assignedTo.length : 0;
+            return item.assignedTo.length > 0 ? Math.floor(item.amount / item.assignedTo.length) : 0;
     }
 }
 
@@ -336,14 +336,14 @@ export const recurringBillService = {
         try {
             session.startTransaction();
 
-            // Create OriginalDebts
+            // Create OriginalDebts (amounts already floored from calculateShareForUser)
             const debts = Array.from(debtMap.entries()).map(([debtorId, amount]) => ({
                 groupId,
                 invoiceId,
                 debtorId,
                 creditorId: invoice.uploadedBy,
-                originalAmount: Math.round(amount * 100) / 100,
-                remainingAmount: Math.round(amount * 100) / 100,
+                originalAmount: amount,
+                remainingAmount: amount,
             }));
             if (debts.length > 0) {
                 await OriginalDebt.create(debts, { session, ordered: true });

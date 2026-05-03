@@ -181,9 +181,47 @@ function hasMutualDebts(rawDebts: RawDebt[]): boolean {
 }
 
 // ─────────────────────────────────────────────
-// Debt Allocation (FIFO by creation date)
-// Allocate specific OriginalDebt to each transfer
+// Debt Allocation (FIFO + Graph-based BFS)
+// Direct debts first, then multi-hop via BFS
 // ─────────────────────────────────────────────
+
+/**
+ * BFS to find a path from source to target through the debt graph.
+ * Each edge represents an OriginalDebt with remaining capacity.
+ */
+function bfsFindPath(
+    adjacency: Map<string, Array<{ toUserId: string; debtId: string; capacity: number }>>,
+    source: string,
+    target: string
+): { path: Array<{ debtId: string }>; capacity: number } | null {
+    const visited = new Set<string>([source]);
+    const queue: Array<{
+        userId: string;
+        path: Array<{ debtId: string }>;
+        capacity: number;
+    }> = [{ userId: source, path: [], capacity: Infinity }];
+
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        const edges = adjacency.get(current.userId) || [];
+
+        for (const edge of edges) {
+            if (visited.has(edge.toUserId) || edge.capacity <= 0.01) continue;
+
+            const newPath = [...current.path, { debtId: edge.debtId }];
+            const newCapacity = Math.min(current.capacity, edge.capacity);
+
+            if (edge.toUserId === target) {
+                return { path: newPath, capacity: newCapacity };
+            }
+
+            visited.add(edge.toUserId);
+            queue.push({ userId: edge.toUserId, path: newPath, capacity: newCapacity });
+        }
+    }
+
+    return null;
+}
 
 async function allocateDebtsForTransfer(
     groupId: string,
@@ -191,19 +229,19 @@ async function allocateDebtsForTransfer(
     creditorId: string,
     amount: number
 ): Promise<DebtAllocation[]> {
-    const debts = await OriginalDebt.find({
+    // ── Step 1: Direct allocation (fast path, FIFO) ──
+    const directDebts = await OriginalDebt.find({
         groupId,
         debtorId,
         creditorId,
         remainingAmount: { $gt: 0.01 }
-    }).sort({ createdAt: 1 }); // FIFO: oldest debts paid first
+    }).sort({ createdAt: 1 });
 
     const allocations: DebtAllocation[] = [];
     let remaining = amount;
 
-    for (const debt of debts) {
+    for (const debt of directDebts) {
         if (remaining <= 0.01) break;
-
         const allocAmount = Math.min(remaining, debt.remainingAmount);
         allocations.push({
             originalDebtId: debt._id.toString(),
@@ -212,18 +250,69 @@ async function allocateDebtsForTransfer(
         remaining -= allocAmount;
     }
 
+    if (remaining <= 0.01) return allocations;
+
+    // ── Step 2: Graph-based allocation (BFS / Edmonds-Karp) ──
+    // When Greedy creates a "redirect" transfer (e.g. C→B) but only
+    // chain debts exist (C→A, A→B), BFS finds the path and allocates
+    // along every hop.
+    console.log(`[DebtSettlementEngine] Direct allocation insufficient for ${debtorId}→${creditorId} (${amount - remaining}/${amount}). Trying graph-based allocation...`);
+
+    const allDebts = await OriginalDebt.find({
+        groupId,
+        remainingAmount: { $gt: 0.01 }
+    });
+
+    // Track mutable remaining per debt (subtract already-allocated amounts)
+    const debtRemaining = new Map<string, number>();
+    for (const debt of allDebts) {
+        const id = debt._id.toString();
+        const alreadyAllocated = allocations
+            .filter(a => a.originalDebtId === id)
+            .reduce((sum, a) => sum + a.amount, 0);
+        debtRemaining.set(id, debt.remainingAmount - alreadyAllocated);
+    }
+
+    // Edmonds-Karp: repeated BFS until remaining is filled
+    while (remaining > 0.01) {
+        // Build adjacency from current state
+        const adjacency = new Map<string, Array<{ toUserId: string; debtId: string; capacity: number }>>();
+        for (const debt of allDebts) {
+            const id = debt._id.toString();
+            const cap = debtRemaining.get(id) || 0;
+            if (cap <= 0.01) continue;
+
+            const edges = adjacency.get(debt.debtorId) || [];
+            edges.push({ toUserId: debt.creditorId, debtId: id, capacity: cap });
+            adjacency.set(debt.debtorId, edges);
+        }
+
+        const result = bfsFindPath(adjacency, debtorId, creditorId);
+        if (!result) break; // No more augmenting paths
+
+        const flowAmount = Math.round(Math.min(remaining, result.capacity) * 100) / 100;
+
+        for (const edge of result.path) {
+            allocations.push({ originalDebtId: edge.debtId, amount: flowAmount });
+            debtRemaining.set(edge.debtId, (debtRemaining.get(edge.debtId) || 0) - flowAmount);
+        }
+
+        remaining -= flowAmount;
+    }
+
     if (remaining > 0.01) {
-        console.error('[DebtSettlementEngine] Insufficient debts to allocate:', {
+        console.error('[DebtSettlementEngine] Insufficient debts even with graph search:', {
             groupId, debtorId, creditorId,
             requestedAmount: amount,
             allocatedAmount: amount - remaining,
             shortfall: remaining,
         });
         throw new Error(
-            `Cannot allocate ${amount} VND. Only ${amount - remaining} VND available in debts from ${debtorId} to ${creditorId}`
+            `Cannot allocate ${amount} VND. Only ${(amount - remaining).toFixed(0)} VND available in debt paths from ${debtorId} to ${creditorId}`
         );
     }
 
+    console.log(`[DebtSettlementEngine] Graph-based allocation OK: ${allocations.length} allocations for ${amount} VND (${debtorId}→${creditorId})`);
     return allocations;
 }
 

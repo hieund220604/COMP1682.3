@@ -11,7 +11,15 @@
     "test:billing": "ts-node scripts/test-subscription-billing.ts",
     "test:concurrency": "ts-node scripts/concurrency-smoke.ts",
     "seed": "ts-node src/seed.ts",
-    "seed:test": "ts-node scripts/seed-test-data.ts"
+    "seed:test": "ts-node scripts/seed-test-data.ts",
+    "seed:perf": "ts-node tests/seed-perf-data.ts",
+    "test:load": "npx -y artillery@latest run tests/load-test.yml",
+    "test:stress": "npx -y artillery@latest run tests/stress-test.yml",
+    "test:spike": "npx -y artillery@latest run tests/spike-test.yml",
+    "test:benchmark": "ts-node tests/benchmark.ts",
+    "test:concurrency-v2": "ts-node tests/concurrency-test.ts",
+    "test:report": "ts-node tests/generate-report.ts",
+    "test:perf-all": "npm run test:benchmark && npm run test:concurrency-v2 && npm run test:report"
   },
   "keywords": [
     "express",

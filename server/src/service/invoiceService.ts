@@ -93,7 +93,7 @@ function calculateShareForUser(
         case 'PERCENTAGE': {
             const split = item.splits?.find(s => s.userId === debtorId);
             if (!split) return 0;
-            return item.amount * (split.value / 100);
+            return Math.floor(item.amount * (split.value / 100));
         }
         case 'CUSTOM': {
             const split = item.splits?.find(s => s.userId === debtorId);
@@ -104,11 +104,11 @@ function calculateShareForUser(
             const totalWeight = item.splits?.reduce((s, x) => s + x.value, 0) || 1;
             const split = item.splits?.find(s => s.userId === debtorId);
             if (!split) return 0;
-            return item.amount * (split.value / totalWeight);
+            return Math.floor(item.amount * (split.value / totalWeight));
         }
         case 'EQUAL':
         default:
-            return item.assignedTo.length > 0 ? item.amount / item.assignedTo.length : 0;
+            return item.assignedTo.length > 0 ? Math.floor(item.amount / item.assignedTo.length) : 0;
     }
 }
 
@@ -221,10 +221,11 @@ export const invoiceService = {
                 // Create original debts (amounts always in baseCurrency)
                 const now = new Date();
                 const debts = Array.from(debtMap.entries()).map(([debtorId, amountInCurrency]) => {
+                    // amountInCurrency is already floored from calculateShareForUser
                     const amountInBase = isForeignCurrency
-                        ? Math.round(amountInCurrency * exchangeRate! * 100) / 100
-                        : Math.round(amountInCurrency * 100) / 100;
-                    const amountInCurrencyRounded = Math.round(amountInCurrency * 100) / 100;
+                        ? Math.floor(amountInCurrency * exchangeRate!)
+                        : amountInCurrency;
+                    const amountInCurrencyRounded = amountInCurrency;
 
                     return {
                         groupId,
@@ -520,10 +521,11 @@ export const invoiceService = {
 
                         const now = new Date();
                         const debts = Array.from(debtMap.entries()).map(([debtorId, amountInCurrency]) => {
+                            // amountInCurrency is already floored from calculateShareForUser
                             const amountInBase = isForeignCurrency
-                                ? Math.round(amountInCurrency * invoice.exchangeRate! * 100) / 100
-                                : Math.round(amountInCurrency * 100) / 100;
-                            const amountInCurrencyRounded = Math.round(amountInCurrency * 100) / 100;
+                                ? Math.floor(amountInCurrency * invoice.exchangeRate!)
+                                : amountInCurrency;
+                            const amountInCurrencyRounded = amountInCurrency;
 
                             return {
                                 groupId,
