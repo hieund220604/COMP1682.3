@@ -407,9 +407,33 @@ class _AvatarBlock extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        Text(
-          displayName,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              displayName,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            if (user?.isPro == true) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade400,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'PRO',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black87,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 4),
         Text(

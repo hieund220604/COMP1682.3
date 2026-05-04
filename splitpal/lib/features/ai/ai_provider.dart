@@ -196,13 +196,11 @@ class AiProvider with ChangeNotifier {
   }) async {
     _isProcessing = true;
     _errorMessage = null;
-    _processingProgress = 0.2;
+    _processingProgress = 0.1;
     notifyListeners();
 
     try {
-      _processingProgress = 0.5;
-      notifyListeners();
-
+      // Step 1: Prepare upload
       final fileName = imageFile.path.split(Platform.pathSeparator).last;
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(
@@ -212,6 +210,10 @@ class AiProvider with ChangeNotifier {
         if (groupId != null) 'groupId': groupId,
       });
 
+      _processingProgress = 0.3;
+      notifyListeners();
+
+      // Step 2: Upload & wait for AI response
       final resp = await _dio.post(
         ApiConstants.aiOcrInvoice,
         data: formData,
@@ -220,8 +222,19 @@ class AiProvider with ChangeNotifier {
             'Content-Type': 'multipart/form-data',
           },
         ),
+        onSendProgress: (sent, total) {
+          if (total > 0) {
+            // Map upload progress to 0.3 → 0.6 range
+            _processingProgress = 0.3 + (sent / total) * 0.3;
+            notifyListeners();
+          }
+        },
       );
 
+      _processingProgress = 0.8;
+      notifyListeners();
+
+      // Step 3: Parse response
       final data = resp.data;
       final payload =
           (data is Map && data.containsKey('data')) ? data['data'] : data;
@@ -244,9 +257,20 @@ class AiProvider with ChangeNotifier {
       _isProcessing = false;
       notifyListeners();
       return result;
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['message'] != null) {
+        _errorMessage = e.response?.data['message'];
+      } else {
+        _errorMessage = 'Error processing image: ${e.message}';
+      }
+      _isProcessing = false;
+      _processingProgress = 0.0;
+      notifyListeners();
+      return null;
     } catch (e) {
       _errorMessage = 'Error processing image: ${e.toString()}';
       _isProcessing = false;
+      _processingProgress = 0.0;
       notifyListeners();
       return null;
     }
@@ -259,15 +283,22 @@ class AiProvider with ChangeNotifier {
   }) async {
     if (text.trim().isEmpty) throw Exception('Message is empty');
 
-    final resp = await _dio.post(ApiConstants.aiExtractInvoice, data: {
-      'text': text.trim(),
-      if (groupId != null) 'groupId': groupId,
-    });
+    try {
+      final resp = await _dio.post(ApiConstants.aiExtractInvoice, data: {
+        'text': text.trim(),
+        if (groupId != null) 'groupId': groupId,
+      });
 
-    final data = resp.data;
-    final payload =
-        (data is Map && data.containsKey('data')) ? data['data'] : data;
-    return Map<String, dynamic>.from(payload ?? {});
+      final data = resp.data;
+      final payload =
+          (data is Map && data.containsKey('data')) ? data['data'] : data;
+      return Map<String, dynamic>.from(payload ?? {});
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['message'] != null) {
+        throw Exception(e.response?.data['message']);
+      }
+      rethrow;
+    }
   }
 
   /// Generate a debt reminder via backend AI API.

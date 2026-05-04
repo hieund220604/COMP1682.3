@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import 'package:splitpal/models/invoice.dart';
-import 'package:splitpal/features/invoices/bill_template_provider.dart';
+import 'package:splitpal/features/invoices/invoice_provider.dart';
 
-/// Edit item amounts in a recurring DRAFT invoice.
-/// Owner enters actual amounts (e.g., this month's electricity bill) before confirming.
+/// Edit item amounts on a DRAFT invoice (both manual and recurring).
+/// Owner enters actual amounts before confirming.
 class EditDraftInvoicePage extends StatefulWidget {
   final String groupId;
   final Invoice invoice;
@@ -57,9 +58,9 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
     if (!_formKey.currentState!.validate()) return;
     if (_hasZeroItems) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter amounts for all items before saving.'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: const Text('Please enter amounts for all items before saving.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       return;
@@ -76,8 +77,8 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
         'splits': s.item.splits.map((sp) => {'userId': sp.userId, 'value': sp.value}).toList(),
     }).toList();
 
-    final provider = context.read<BillTemplateProvider>();
-    final ok = await provider.updateDraftItems(
+    final provider = context.read<InvoiceProvider>();
+    final ok = await provider.updateInvoice(
       widget.groupId,
       widget.invoice.id,
       title: widget.invoice.title,
@@ -93,7 +94,7 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Amounts updated successfully!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.brandDark,
         ),
       );
       Navigator.pop(context, true);
@@ -101,7 +102,7 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage ?? 'Update failed'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -110,42 +111,61 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F6FF),
+      backgroundColor: scheme.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE8472A),
-        foregroundColor: Colors.white,
+        backgroundColor: scheme.surface,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Edit Amounts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              'Edit Invoice',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: scheme.onSurface,
+              ),
+            ),
             Text(
               widget.invoice.title,
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
+        centerTitle: false,
         actions: [
           if (_isSaving)
             const Padding(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(AppSpacing.lg),
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
           else
-            TextButton.icon(
+            TextButton(
               onPressed: _save,
-              icon: const Icon(Icons.save_outlined, color: Colors.white),
-              label: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: Text(
+                'Save',
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ),
         ],
       ),
@@ -156,18 +176,28 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
             // Instruction banner
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              color: isDark
+                  ? AppColors.brand.withValues(alpha: 0.08)
+                  : AppColors.brandSurface,
               child: Row(
                 children: [
-                  Icon(Icons.edit_note, color: Colors.orange.shade700, size: 20),
-                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.lightbulb_outline,
+                    color: AppColors.brand,
+                    size: 18,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      'Enter the actual amount for each item. Items with amount = 0 must be filled in before confirming.',
-                      style: TextStyle(
-                        color: Colors.orange.shade800,
-                        fontSize: 12,
+                      'Enter the actual amount for each item before confirming.',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: isDark
+                            ? AppColors.brand.withValues(alpha: 0.85)
+                            : AppColors.brandDark,
                       ),
                     ),
                   ),
@@ -178,89 +208,110 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
             // Item list
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 itemCount: _itemStates.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
                 itemBuilder: (context, index) {
                   final state = _itemStates[index];
-                  return _buildItemCard(state, index, scheme);
+                  return _buildItemCard(state, index, scheme, textTheme, isDark);
                 },
               ),
             ),
 
             // Footer total + save button
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, -4),
+            _buildFooter(scheme, textTheme, isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooter(ColorScheme scheme, TextTheme textTheme, bool isDark) {
+    final zeroCount = _itemStates.where((s) => (s.currentAmount ?? 0) <= 0).length;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl,
+      ),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total',
+                  style: textTheme.titleSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
-                ],
+                ),
+                Text(
+                  CurrencyFormatter.formatVND(_totalAmount),
+                  style: textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.brand,
+                  ),
+                ),
+              ],
+            ),
+            if (_hasZeroItems)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: scheme.error,
+                      size: 15,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '$zeroCount item${zeroCount > 1 ? 's' : ''} still need amounts',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total',
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton(
+                onPressed: _isSaving ? null : _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                  ),
+                  disabledBackgroundColor: AppColors.brand.withValues(alpha: 0.5),
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Save Changes',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      Text(
-                        CurrencyFormatter.formatVND(_totalAmount),
-                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 22,
-                          color: const Color(0xFFE8472A),
                         ),
                       ),
-                    ],
-                  ),
-                  if (_hasZeroItems)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${_itemStates.where((s) => (s.currentAmount ?? 0) <= 0).length} items still need amounts',
-                            style: TextStyle(color: Colors.orange.shade700, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSaving ? null : _save,
-                      icon: _isSaving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.save_outlined),
-                      label: Text(
-                        _isSaving ? 'Saving...' : 'Save Changes',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE8472A),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -269,39 +320,46 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
     );
   }
 
-  Widget _buildItemCard(_ItemEditState state, int index, ColorScheme scheme) {
+  Widget _buildItemCard(
+    _ItemEditState state,
+    int index,
+    ColorScheme scheme,
+    TextTheme textTheme,
+    bool isDark,
+  ) {
     final amount = state.currentAmount ?? 0;
     final isZero = amount <= 0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        color: isDark ? scheme.surfaceContainerHigh : scheme.surface,
+        borderRadius: BorderRadius.circular(AppRadii.md),
         border: Border.all(
-          color: isZero ? Colors.orange.shade300 : Colors.grey.shade200,
+          color: isZero
+              ? scheme.error.withValues(alpha: 0.4)
+              : scheme.outlineVariant,
           width: isZero ? 1.5 : 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Item header
           Row(
             children: [
+              // Index badge
               Container(
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: isZero ? Colors.orange.shade100 : const Color(0xFFFFEDE9),
-                  borderRadius: BorderRadius.circular(8),
+                  color: isZero
+                      ? scheme.errorContainer
+                      : (isDark
+                          ? AppColors.brand.withValues(alpha: 0.15)
+                          : AppColors.brandSurface),
+                  borderRadius: BorderRadius.circular(AppSpacing.sm),
                 ),
                 child: Center(
                   child: Text(
@@ -309,29 +367,27 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: isZero ? Colors.orange.shade700 : const Color(0xFFE8472A),
+                      color: isZero ? scheme.error : AppColors.brand,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       state.item.name,
-                      style: const TextStyle(
+                      style: textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.midnightBlue,
+                        color: scheme.onSurface,
                       ),
                     ),
                     Text(
                       _splitTypeLabel(state.item.splitType),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -339,23 +395,27 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
               ),
               if (isZero)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(8),
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.sm),
                   ),
                   child: Text(
                     'Required',
-                    style: TextStyle(
-                      color: Colors.orange.shade700,
-                      fontSize: 11,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: scheme.onErrorContainer,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
+
+          // Amount field
           TextFormField(
             controller: state.amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: false),
@@ -372,50 +432,67 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
               return null;
             },
             decoration: InputDecoration(
-              labelText: 'Amount (VND)',
+              labelText: 'Amount',
               hintText: 'Enter actual amount',
-              prefixIcon: const Icon(Icons.attach_money, color: const Color(0xFFE8472A)),
+              prefixIcon: Icon(
+                Icons.payments_outlined,
+                color: isZero ? scheme.error : scheme.primary,
+                size: 20,
+              ),
               suffixText: '₫',
+              suffixStyle: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
               filled: true,
-              fillColor: isZero ? Colors.orange.shade50 : Colors.grey.shade50,
+              fillColor: isZero
+                  ? scheme.errorContainer.withValues(alpha: 0.3)
+                  : (isDark ? scheme.surfaceContainerHighest : scheme.surfaceContainerLowest),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: isZero ? Colors.orange.shade300 : Colors.grey.shade300,
-                ),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                borderSide: BorderSide(color: scheme.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
                 borderSide: BorderSide(
-                  color: isZero ? Colors.orange.shade300 : Colors.grey.shade300,
+                  color: isZero
+                      ? scheme.error.withValues(alpha: 0.4)
+                      : scheme.outlineVariant,
                 ),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: const Color(0xFFE8472A), width: 2),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                borderSide: BorderSide(color: scheme.primary, width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
             ),
           ),
 
-          // Display assigned members
+          // Assigned members
           if (state.item.assignedToNames.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.sm),
             Wrap(
-              spacing: 6,
-              runSpacing: 4,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               children: state.item.assignedToNames.map<Widget>((name) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFEDE9),
-                    borderRadius: BorderRadius.circular(8),
+                    color: isDark
+                        ? AppColors.brand.withValues(alpha: 0.1)
+                        : AppColors.brandSurface,
+                    borderRadius: BorderRadius.circular(AppSpacing.sm),
                   ),
                   child: Text(
                     name,
-                    style: TextStyle(
-                      color: const Color(0xFFC23A20),
-                      fontSize: 11,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: isDark ? AppColors.brandLight : AppColors.brandDark,
                     ),
                   ),
                 );
@@ -425,23 +502,31 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
 
           // Per-person share preview
           if (amount > 0 && state.item.assignedTo.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
+                color: isDark
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : Colors.green.shade50,
+                borderRadius: BorderRadius.circular(AppSpacing.sm),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.calculate_outlined, size: 14, color: Colors.green.shade700),
-                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.group_outlined,
+                    size: 14,
+                    color: isDark ? Colors.green.shade300 : Colors.green.shade700,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
                   Text(
                     'Per person: ${CurrencyFormatter.formatVND(amount / state.item.assignedTo.length)}',
-                    style: TextStyle(
-                      color: Colors.green.shade700,
-                      fontSize: 12,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: isDark ? Colors.green.shade300 : Colors.green.shade700,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

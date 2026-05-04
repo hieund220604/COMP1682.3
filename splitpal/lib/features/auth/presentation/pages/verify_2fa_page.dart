@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 
 class Verify2FAPage extends StatefulWidget {
@@ -14,6 +16,8 @@ class _Verify2FAPageState extends State<Verify2FAPage> {
   final _codeController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+
+  static const _brand = AppColors.brand;
 
   @override
   void dispose() {
@@ -39,8 +43,6 @@ class _Verify2FAPageState extends State<Verify2FAPage> {
     if (!mounted) return;
 
     if (error == null) {
-      // Success – Consumer in main.dart will rebuild to OnboardingPage
-      // when state changes to authenticated
       return;
     } else {
       setState(() {
@@ -52,152 +54,97 @@ class _Verify2FAPageState extends State<Verify2FAPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              // Icon
               Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C5CE7).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
+                  color: isDark
+                      ? _brand.withOpacity(0.15)
+                      : _brand.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
                 ),
-                child: const Icon(
-                  Icons.security,
-                  size: 40,
-                  color: Color(0xFF6C5CE7),
-                ),
+                child: Icon(Icons.security, size: 40, color: _brand),
               ),
-              const SizedBox(height: 24),
-              const Text(
+              const SizedBox(height: AppSpacing.xl),
+              Text(
                 'Two-Factor Authentication',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+                style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 'Enter the 6-digit code from your\nauthenticator app',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withOpacity(0.7),
-                ),
+                style: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 40),
-              // Code input
               TextField(
                 controller: _codeController,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
-                maxLength: 8, // Allow backup codes (hex)
+                maxLength: 8,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F]')),
                 ],
-                style: const TextStyle(
-                  fontSize: 28,
+                style: textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
                   letterSpacing: 8,
                 ),
                 decoration: InputDecoration(
                   counterText: '',
                   hintText: '000000',
-                  hintStyle: TextStyle(
-                    fontSize: 28,
+                  hintStyle: textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white.withOpacity(0.2),
+                    color: scheme.onSurfaceVariant.withOpacity(0.2),
                     letterSpacing: 8,
                   ),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.08),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF6C5CE7),
-                      width: 2,
-                    ),
-                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 20,
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.xl,
                   ),
                 ),
                 onSubmitted: (_) => _handleVerify(),
               ),
               if (_errorMessage != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(
-                    color: Color(0xFFE74C3C),
-                    fontSize: 13,
-                  ),
+                  style: textTheme.bodySmall?.copyWith(color: scheme.error),
                 ),
               ],
-              const SizedBox(height: 24),
-              // Verify button
+              const SizedBox(height: AppSpacing.xl),
               SizedBox(
                 width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
+                height: 52,
+                child: FilledButton(
                   onPressed: _isLoading ? null : _handleVerify,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C5CE7),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    disabledBackgroundColor:
-                        const Color(0xFF6C5CE7).withOpacity(0.5),
-                  ),
                   child: _isLoading
                       ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text(
-                          'Verify',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      : const Text('Verify', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 16),
-              // Backup code hint
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 'You can also use a backup code',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.5),
-                ),
+                style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),

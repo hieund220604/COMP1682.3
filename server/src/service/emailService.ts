@@ -165,7 +165,7 @@ export const emailService = {
                   <table role="presentation" cellspacing="0" cellpadding="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
                     <!-- Header -->
                     <tr>
-                      <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 40px; text-align: center;">
+                      <td style="background: linear-gradient(135deg, #E8472A 0%, #C23A20 100%); padding: 40px 40px; text-align: center;">
                         <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">SplitPal</h1>
                         <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Secure Account Verification</p>
                       </td>
@@ -178,13 +178,13 @@ export const emailService = {
                           Hello! We received a request to verify your email address. Please use the verification code below to complete your registration:
                         </p>
                         <!-- OTP Box -->
-                        <div style="background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); border: 2px dashed #667eea; border-radius: 12px; padding: 32px; text-align: center; margin: 0 0 32px;">
-                          <p style="margin: 0 0 8px; color: #667eea; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Your Verification Code</p>
-                          <h1 style="margin: 0; color: #1a1a2e; font-size: 42px; font-weight: 700; letter-spacing: 12px; font-family: 'Courier New', monospace;">${otp}</h1>
+                        <div style="background: linear-gradient(135deg, #FFF8F6 0%, #FFEEE9 100%); border: 2px dashed #E8472A; border-radius: 12px; padding: 32px; text-align: center; margin: 0 0 32px;">
+                          <p style="margin: 0 0 8px; color: #E8472A; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Your Verification Code</p>
+                          <h1 style="margin: 0; color: #2C3E50; font-size: 42px; font-weight: 700; letter-spacing: 12px; font-family: 'Courier New', monospace;">${otp}</h1>
                         </div>
                         <!-- Timer Notice -->
-                        <div style="background-color: #fff8e6; border-left: 4px solid #f6ad55; border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 0 0 32px;">
-                          <p style="margin: 0; color: #744210; font-size: 14px;">
+                        <div style="background-color: #FFEEE9; border-radius: 8px; padding: 16px 20px; margin: 0 0 32px;">
+                          <p style="margin: 0; color: #C23A20; font-size: 14px;">
                             <strong>⏱️ Time Sensitive:</strong> This code will expire in <strong>10 minutes</strong>. Please use it promptly.
                           </p>
                         </div>
@@ -248,7 +248,7 @@ export const emailService = {
                 <td style="padding: 40px 20px;">
                   <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);">
                     <tr>
-                      <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
+                      <td style="background: linear-gradient(135deg, #E8472A 0%, #C23A20 100%); padding: 40px; text-align: center;">
                         <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">SplitPal</h1>
                       </td>
                     </tr>
@@ -258,13 +258,13 @@ export const emailService = {
                           Hello! We received a request to verify your email address. Please use the verification code below to complete your request:
                         </p>
                         <!-- OTP Box -->
-                        <div style="background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%); border: 2px dashed #667eea; border-radius: 12px; padding: 32px; text-align: center; margin: 0 0 32px;">
-                          <p style="margin: 0 0 8px; color: #667eea; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Your Verification Code</p>
-                          <h1 style="margin: 0; color: #1a1a2e; font-size: 42px; font-weight: 700; letter-spacing: 12px; font-family: 'Courier New', monospace;">${otp}</h1>
+                        <div style="background: linear-gradient(135deg, #FFF8F6 0%, #FFEEE9 100%); border: 2px dashed #E8472A; border-radius: 12px; padding: 32px; text-align: center; margin: 0 0 32px;">
+                          <p style="margin: 0 0 8px; color: #E8472A; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Your Verification Code</p>
+                          <h1 style="margin: 0; color: #2C3E50; font-size: 42px; font-weight: 700; letter-spacing: 12px; font-family: 'Courier New', monospace;">${otp}</h1>
                         </div>
                         <!-- Timer Notice -->
-                        <div style="background-color: #fff8e6; border-left: 4px solid #f6ad55; border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 0 0 32px;">
-                          <p style="margin: 0; color: #744210; font-size: 14px;">
+                        <div style="background-color: #FFEEE9; border-radius: 8px; padding: 16px 20px; margin: 0 0 32px;">
+                          <p style="margin: 0; color: #C23A20; font-size: 14px;">
                             <strong>⏱️ Time Sensitive:</strong> This code will expire in <strong>10 minutes</strong>. Please use it promptly.
                           </p>
                         </div>
@@ -357,7 +357,7 @@ export const emailService = {
                   <table role="presentation" cellspacing="0" cellpadding="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
                     <!-- Header -->
                     <tr>
-                      <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 40px; text-align: center;">
+                      <td style="background: linear-gradient(135deg, #E8472A 0%, #C23A20 100%); padding: 40px 40px; text-align: center;">
                         <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">SplitPal</h1>
                         <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Password Recovery</p>
                       </td>
@@ -373,7 +373,7 @@ export const emailService = {
                         <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="margin: 0 0 32px;">
                           <tr>
                             <td style="text-align: center;">
-                              <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 50px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);">
+                              <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #E8472A 0%, #C23A20 100%); color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 50px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 16px rgba(232, 71, 42, 0.35);">
                                 🔐 Reset My Password
                               </a>
                             </td>
@@ -384,18 +384,18 @@ export const emailService = {
                           <p style="margin: 0 0 8px; color: #4a5568; font-size: 13px;">
                             If the button doesn't work, copy and paste this link into your browser:
                           </p>
-                          <p style="margin: 0; color: #667eea; font-size: 12px; word-break: break-all;">
+                          <p style="margin: 0; color: #E8472A; font-size: 12px; word-break: break-all;">
                             ${resetLink}
                           </p>
                         </div>
                         <!-- Timer Notice -->
-                        <div style="background-color: #fff8e6; border-left: 4px solid #f6ad55; border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 0 0 32px;">
-                          <p style="margin: 0; color: #744210; font-size: 14px;">
+                        <div style="background-color: #FFEEE9; border-radius: 8px; padding: 16px 20px; margin: 0 0 32px;">
+                          <p style="margin: 0; color: #C23A20; font-size: 14px;">
                             <strong>⏱️ Time Sensitive:</strong> This link will expire in <strong>1 hour</strong> for security reasons.
                           </p>
                         </div>
                         <!-- Security Notice -->
-                        <div style="background-color: #f0fff4; border-left: 4px solid #48bb78; border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 0 0 24px;">
+                        <div style="background-color: #f0fff4; border-radius: 8px; padding: 16px 20px; margin: 0 0 24px;">
                           <p style="margin: 0; color: #276749; font-size: 14px;">
                             <strong>🛡️ Security Tip:</strong> If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
                           </p>
@@ -466,7 +466,7 @@ export const emailService = {
         from: emailFrom,
         to: email,
         subject: `🔔 ${title} - SplitPal`,
-        html: `<html><body style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;"><h2>Hi ${displayName},</h2><h3 style="color: #667eea;">${title}</h3><p>${message}</p><p style="color: #666; font-size: 14px;">Log in to SplitPal to view more details.</p><hr><p style="color: #999; font-size: 12px;">SplitPal</p></body></html>`
+        html: `<html><body style="font-family: Arial; max-width: 600px; margin: 0 auto; padding: 20px;"><h2>Hi ${displayName},</h2><h3 style="color: #E8472A;">${title}</h3><p>${message}</p><p style="color: #666; font-size: 14px;">Log in to SplitPal to view more details.</p><hr><p style="color: #999; font-size: 12px;">SplitPal</p></body></html>`
       });
     } catch (error) {
       console.error('Failed to send notification email:', error);

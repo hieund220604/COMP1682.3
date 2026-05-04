@@ -92,6 +92,7 @@ class DioClient {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    ProgressCallback? onSendProgress,
   }) async {
     try {
       final response = await _dio.post(
@@ -99,6 +100,7 @@ class DioClient {
         data: data,
         queryParameters: queryParameters,
         options: options,
+        onSendProgress: onSendProgress,
       );
       return response;
     } on DioException catch (e) {
@@ -175,11 +177,11 @@ class DioClient {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return TimeoutException(message: 'Kết nối quá thời gian. Vui lòng thử lại.');
+        return TimeoutException(message: 'Káº¿t ná»‘i quÃ¡ thá»i gian. Vui lÃ²ng thá»­ láº¡i.');
 
       case DioExceptionType.badResponse:
         final statusCode = error.response?.statusCode;
-        String message = 'Lỗi máy chủ';
+        String message = 'Lá»—i mÃ¡y chá»§';
         final data = error.response?.data;
         
         if (data is Map<String, dynamic>) {
@@ -218,21 +220,21 @@ class DioClient {
         if (underlying is ValidationException) return underlying;
         if (underlying is SocketException) {
           return NetworkException(
-            message: 'Không thể kết nối tới máy chủ. Kiểm tra API_BASE_URL hoặc mạng nội bộ.',
+            message: 'KhÃ´ng thá»ƒ káº¿t ná»‘i tá»›i mÃ¡y chá»§. Kiá»ƒm tra API_BASE_URL hoáº·c máº¡ng ná»™i bá»™.',
           );
         }
         if (underlying is HandshakeException) {
           return NetworkException(
-            message: 'Kết nối bảo mật thất bại (SSL). Kiểm tra chứng chỉ máy chủ.',
+            message: 'Káº¿t ná»‘i báº£o máº­t tháº¥t báº¡i (SSL). Kiá»ƒm tra chá»©ng chá»‰ mÃ¡y chá»§.',
           );
         }
         return NetworkException(
-          message: 'Không thể kết nối. Vui lòng kiểm tra mạng hoặc địa chỉ máy chủ.',
+          message: 'KhÃ´ng thá»ƒ káº¿t ná»‘i. Vui lÃ²ng kiá»ƒm tra máº¡ng hoáº·c Ä‘á»‹a chá»‰ mÃ¡y chá»§.',
         );
 
       default:
         return ServerException(
-          message: 'Lỗi không xác định',
+          message: 'Lá»—i khÃ´ng xÃ¡c Ä‘á»‹nh',
         );
     }
   }

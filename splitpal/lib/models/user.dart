@@ -9,6 +9,7 @@ class User {
   final bool isActive;
   final bool twoFactorEnabled;
   final bool pushNotificationsEnabled;
+  final bool isPro;
   final DateTime createdAt;
 
   const User({
@@ -21,6 +22,7 @@ class User {
     required this.isActive,
     this.twoFactorEnabled = false,
     this.pushNotificationsEnabled = true,
+    this.isPro = false,
     required this.createdAt,
   });
 
@@ -55,6 +57,7 @@ class User {
       twoFactorEnabled: json['twoFactorEnabled'] as bool? ?? false,
       pushNotificationsEnabled:
           json['pushNotificationsEnabled'] as bool? ?? true,
+      isPro: json['isPro'] as bool? ?? false,
       createdAt: createdAt,
     );
   }
@@ -69,6 +72,7 @@ class User {
         'isActive': isActive,
         'twoFactorEnabled': twoFactorEnabled,
         'pushNotificationsEnabled': pushNotificationsEnabled,
+        'isPro': isPro,
         'createdAt': createdAt.toIso8601String(),
       };
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
 
 /// A reusable dialog that prompts the user for their 2FA TOTP code.
 /// Returns the entered code as a [String], or `null` if cancelled.
@@ -29,6 +31,8 @@ class _TotpVerificationDialogState extends State<TotpVerificationDialog> {
   final _controller = TextEditingController();
   String? _error;
 
+  static const _brand = AppColors.brand;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -47,24 +51,33 @@ class _TotpVerificationDialogState extends State<TotpVerificationDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
       title: Row(
         children: [
           Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFF6C5CE7).withOpacity(0.15),
+              color: isDark
+                  ? _brand.withOpacity(0.15)
+                  : _brand.withOpacity(0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.security, size: 20, color: Color(0xFF6C5CE7)),
+            child: Icon(Icons.security, size: 20, color: _brand),
           ),
           const SizedBox(width: 10),
-          const Text(
+          Text(
             '2FA Verification',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
@@ -74,9 +87,11 @@ class _TotpVerificationDialogState extends State<TotpVerificationDialog> {
         children: [
           Text(
             'Enter the 6-digit code from your authenticator app to continue.',
-            style: TextStyle(fontSize: 13, color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
@@ -86,42 +101,41 @@ class _TotpVerificationDialogState extends State<TotpVerificationDialog> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F]')),
             ],
-            style: const TextStyle(
-              fontSize: 22,
+            style: textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               letterSpacing: 6,
             ),
             decoration: InputDecoration(
               counterText: '',
               hintText: '000000',
-              hintStyle: TextStyle(
-                fontSize: 22,
+              hintStyle: textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
                 letterSpacing: 6,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.2),
+                color: scheme.onSurfaceVariant.withOpacity(0.2),
               ),
-              filled: true,
-              fillColor: theme.colorScheme.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: theme.dividerColor),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.lg,
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
             onSubmitted: (_) => _submit(),
           ),
           if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Color(0xFFE74C3C), fontSize: 12)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _error!,
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.error,
+              ),
+            ),
           ],
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             'You can also use a backup code',
-            style: TextStyle(fontSize: 11, color: theme.textTheme.bodyMedium?.color?.withOpacity(0.45)),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -130,15 +144,12 @@ class _TotpVerificationDialogState extends State<TotpVerificationDialog> {
           onPressed: () => Navigator.of(context).pop(null),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _submit,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6C5CE7),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          child: const Text(
+            'Verify',
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          child: const Text('Verify', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );

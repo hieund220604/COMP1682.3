@@ -7,6 +7,9 @@ import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/widgets/app_metric_tile.dart';
+import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/group_debt_card.dart';
+import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/group_spending_card.dart';
+import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/group_upcoming_card.dart';
 import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/members_preview_card.dart';
 
 class GroupOverviewTab extends StatelessWidget {
@@ -26,6 +29,7 @@ class GroupOverviewTab extends StatelessWidget {
   final Future<void> Function()? onCreatePaymentRequest;
   final Future<void> Function(String memberId)? onTransferOwnership;
   final Future<void> Function(String memberId, String role)? onUpdateMemberRole;
+  final void Function(int months)? onChangePeriod;
 
   const GroupOverviewTab({
     super.key,
@@ -44,6 +48,7 @@ class GroupOverviewTab extends StatelessWidget {
     this.onCreatePaymentRequest,
     this.onTransferOwnership,
     this.onUpdateMemberRole,
+    this.onChangePeriod,
   });
 
   @override
@@ -163,6 +168,32 @@ class GroupOverviewTab extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           if (dashboard != null) ...[
+            // ── NEW: Spending Analytics ──
+            if (dashboard!['spending'] != null)
+              GroupSpendingCard(
+                spending: dashboard!['spending'] as Map<String, dynamic>,
+                currency: currency,
+                onChangePeriod: onChangePeriod,
+              ),
+            if (dashboard!['spending'] != null)
+              const SizedBox(height: AppSpacing.lg),
+            // ── NEW: Settlement Health ──
+            if (dashboard!['debts'] != null)
+              GroupDebtCard(
+                debts: dashboard!['debts'] as Map<String, dynamic>,
+                currency: currency,
+              ),
+            if (dashboard!['debts'] != null)
+              const SizedBox(height: AppSpacing.lg),
+            // ── NEW: Upcoming Events ──
+            if (dashboard!['upcoming'] != null)
+              GroupUpcomingCard(
+                upcoming: dashboard!['upcoming'] as Map<String, dynamic>,
+                currency: currency,
+              ),
+            if (dashboard!['upcoming'] != null)
+              const SizedBox(height: AppSpacing.lg),
+            // ── Existing cards ──
             _PaymentRequestOverview(dashboard: dashboard!),
             const SizedBox(height: AppSpacing.lg),
             _TransferPendingCard(dashboard: dashboard!),

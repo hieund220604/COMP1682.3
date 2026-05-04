@@ -125,6 +125,58 @@ class InvoiceProvider with ChangeNotifier {
     }
   }
 
+  // ─── Update Invoice ─────────────────────────────────────
+  Future<bool> updateInvoice(
+    String groupId,
+    String invoiceId, {
+    required String title,
+    required double amountTotal,
+    required List<Map<String, dynamic>> items,
+    String? note,
+    String? currency,
+  }) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      final resp = await _dio.put('/invoices/$groupId/$invoiceId', data: {
+        'title': title,
+        'amountTotal': amountTotal,
+        'items': items,
+        if (note != null) 'note': note,
+        if (currency != null) 'currency': currency,
+      });
+      final invoice = Invoice.fromJson(resp.data['data']);
+      _currentInvoice = invoice;
+      _selectedInvoice = invoice;
+      final idx = _invoices.indexWhere((i) => i.id == invoiceId);
+      if (idx != -1) _invoices[idx] = invoice;
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  // ─── Delete Invoice ─────────────────────────────────────
+  Future<bool> deleteInvoice(String groupId, String invoiceId) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _dio.delete('/invoices/$groupId/$invoiceId');
+      _invoices.removeWhere((i) => i.id == invoiceId);
+      if (_currentInvoice?.id == invoiceId) _currentInvoice = null;
+      if (_selectedInvoice?.id == invoiceId) _selectedInvoice = null;
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      return false;
+    }
+  }
+
   // ─── Payment Requests ──────────────────────────────────
   Future<bool> createPaymentRequest(String groupId) async {
     _setLoading(true);

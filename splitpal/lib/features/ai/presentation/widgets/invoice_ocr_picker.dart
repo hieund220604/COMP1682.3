@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -79,8 +79,21 @@ class _OcrPickerSheet extends StatelessWidget {
   Future<void> _processImage(BuildContext context, File imageFile) async {
     if (!context.mounted) return;
 
+    // Show the loading overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => _OcrLoadingOverlay(imageFile: imageFile),
+    );
+
     final aiProvider = context.read<AiProvider>();
     final result = await aiProvider.processInvoiceImage(imageFile);
+
+    if (!context.mounted) return;
+
+    // Dismiss loading overlay
+    Navigator.of(context, rootNavigator: true).pop();
 
     if (!context.mounted) return;
 
@@ -448,3 +461,113 @@ class _OcrPreviewDialog extends StatelessWidget {
     }
   }
 }
+
+// â”€â”€â”€ OCR Loading Overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class _OcrLoadingOverlay extends StatelessWidget {
+  final File imageFile;
+
+  const _OcrLoadingOverlay({required this.imageFile});
+
+  String _statusText(double progress) {
+    if (progress < 0.3) return 'Preparing image...';
+    if (progress < 0.6) return 'Uploading...';
+    if (progress < 0.9) return 'Analyzing receipt...';
+    return 'Finishing up...';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Center(
+        child: Container(
+          width: 280,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Consumer<AiProvider>(
+            builder: (_, ai, __) {
+              final progress = ai.processingProgress;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Thumbnail
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      imageFile,
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Title
+                  const Text(
+                    'Processing Invoice',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.midnightBlue,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Status text
+                  Text(
+                    _statusText(progress),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.concrete,
+                      decoration: TextDecoration.none,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      minHeight: 4,
+                      backgroundColor: AppColors.clouds,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.brand,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Percentage
+                  Text(
+                    progress > 0 ? '${(progress * 100).toInt()}%' : '',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.silver,
+                      decoration: TextDecoration.none,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+

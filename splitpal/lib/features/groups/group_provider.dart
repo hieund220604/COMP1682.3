@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/dio_client.dart';
+import 'package:dio/dio.dart';
 
 /// Fat Provider — calls DioClient directly for all group operations.
 class GroupProvider extends ChangeNotifier {
@@ -76,6 +77,15 @@ class GroupProvider extends ChangeNotifier {
       });
       await fetchGroupsAndInvites();
       return true;
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['message'] != null) {
+        error = e.response?.data['message'];
+      } else {
+        error = e.message;
+      }
+      isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       error = e.toString();
       isLoading = false;

@@ -402,6 +402,16 @@ export const recurringBillService = {
         const group = await Group.findById(groupId);
         if (!group) throw new Error('Group not found');
 
+        const user = await User.findById(userId).select('isPro');
+        if (!user) throw new Error('User not found');
+
+        if (!user.isPro) {
+            const templateCount = await BillTemplate.countDocuments({ createdBy: userId, status: { $ne: 'ARCHIVED' } });
+            if (templateCount >= 2) {
+                throw new Error('You have reached the limit for creating Templates on a free account. Please upgrade to Pro to create unlimited Templates.');
+            }
+        }
+
         // Validate items
         if (!data.items || data.items.length === 0) {
             throw new Error('Template must have at least one item');

@@ -191,11 +191,20 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       ? const Center(
                           child: Text('No invoices yet'),
                         )
-                      : ListView.builder(
+                      : Builder(
+                          builder: (context) {
+                            // Sort: DRAFT first, preserve original order within each group
+                            final sorted = List.of(provider.invoices)
+                              ..sort((a, b) {
+                                final aIsDraft = a.status == 'DRAFT' ? 0 : 1;
+                                final bIsDraft = b.status == 'DRAFT' ? 0 : 1;
+                                return aIsDraft.compareTo(bIsDraft);
+                              });
+                            return ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: provider.invoices.length,
+                          itemCount: sorted.length,
                           itemBuilder: (context, index) {
-                            final invoice = provider.invoices[index];
+                            final invoice = sorted[index];
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               child: ListTile(
@@ -245,6 +254,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                   ).then((_) => _loadInvoices());
                                 },
                               ),
+                            );
+                          },
                             );
                           },
                         ),

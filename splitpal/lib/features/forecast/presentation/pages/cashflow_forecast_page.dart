@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/features/forecast/forecast_provider.dart';
 import 'package:splitpal/features/forecast/presentation/widgets/event_detail_sheet.dart';
+import 'package:splitpal/features/forecast/presentation/widgets/smart_tips_section.dart';
+import 'package:splitpal/features/forecast/presentation/widgets/spending_breakdown_chart.dart';
 
 class CashflowForecastPage extends StatefulWidget {
   const CashflowForecastPage({super.key});
@@ -21,6 +23,7 @@ class _CashflowForecastPageState extends State<CashflowForecastPage> {
   int? _highlightedDayIndex;
 
   static const _horizonOptions = [7, 14, 30];
+  static const _spendingPeriodOptions = [7, 14, 30, 60];
 
   @override
   void initState() {
@@ -81,7 +84,7 @@ class _CashflowForecastPageState extends State<CashflowForecastPage> {
           // ── Header metrics ────────────────────────────────────────────────
           if (summary != null)
             SliverToBoxAdapter(
-              child: _HeaderMetrics(summary: summary),
+              child: _HeaderMetrics(summary: summary, showHealthScore: true),
             ),
 
           // ── Horizon selector ──────────────────────────────────────────────
@@ -119,6 +122,58 @@ class _CashflowForecastPageState extends State<CashflowForecastPage> {
                         ),
             ),
           ),
+
+          // ── Smart Tips ─────────────────────────────────────────────────────
+          if (provider.smartTips.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: SmartTipsSection(tips: provider.smartTips),
+              ),
+            ),
+
+          // ── Spending Period Selector ────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: Row(
+                children: [
+                  Text(
+                    'Spending analysis:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ..._spendingPeriodOptions.map((d) {
+                    final selected = d == provider.spendingDays;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text('${d}d'),
+                        selected: selected,
+                        onSelected: (_) =>
+                            context.read<ForecastProvider>().setSpendingDays(d),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Spending Breakdown ─────────────────────────────────────────────
+          if (provider.spendingInsight != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SpendingBreakdownChart(
+                  insight: provider.spendingInsight!,
+                ),
+              ),
+            ),
 
           // ── Event list ────────────────────────────────────────────────────
           if (isLoading && days.isEmpty)
@@ -185,7 +240,8 @@ class _CashflowForecastPageState extends State<CashflowForecastPage> {
 
 class _HeaderMetrics extends StatelessWidget {
   final ForecastSummary summary;
-  const _HeaderMetrics({required this.summary});
+  final bool showHealthScore;
+  const _HeaderMetrics({required this.summary, this.showHealthScore = false});
 
   @override
   Widget build(BuildContext context) {
@@ -208,30 +264,43 @@ class _HeaderMetrics extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isSafe ? Icons.shield_outlined : Icons.warning_rounded,
-                  color: statusColor,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    statusMsg,
-                    style: TextStyle(
-                        color: statusColor, fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSafe ? Icons.shield_outlined : Icons.warning_rounded,
+                        color: statusColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          statusMsg,
+                          style: TextStyle(
+                              color: statusColor, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
+              if (showHealthScore) ...[
+                const SizedBox(width: 12),
+                _HealthScoreBadge(
+                  score: summary.healthScore,
+                  label: summary.healthLabel,
+                  color: summary.healthColor,
+                ),
               ],
-            ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(
@@ -266,6 +335,58 @@ class _HeaderMetrics extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HealthScoreBadge extends StatelessWidget {
+  final int score;
+  final String label;
+  final Color color;
+
+  const _HealthScoreBadge({
+    required this.score,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: 48,
+          height: 48,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: score / 100,
+                strokeWidth: 4,
+                backgroundColor: color.withOpacity(0.15),
+                valueColor: AlwaysStoppedAnimation(color),
+              ),
+              Text(
+                '$score',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

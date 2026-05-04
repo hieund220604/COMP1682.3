@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { SubscriptionMember } from '../models/SubscriptionMember';
 import { Subscription } from '../models/Subscription';
 import { Transfer } from '../models/Transfer';
+import { Transaction } from '../models/Transaction';
 import { PaymentRequest } from '../models/PaymentRequest';
 import {
     ForecastEvent,
@@ -11,6 +12,9 @@ import {
     ForecastAlert,
     ForecastSummary,
     ForecastResponse,
+    SpendingInsight,
+    CategoryBreakdown,
+    SmartTip,
 } from '../type/forecast';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -28,6 +32,28 @@ function addDays(base: Date, n: number): Date {
 function startOfDay(d: Date): Date {
     return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
+
+const OUTFLOW_TYPES = new Set([
+    'WITHDRAWAL',
+    'TRANSFER_SENT',
+    'TRANSFER_REFUND_SENT',
+    'SUBSCRIPTION_FEE',
+    'SETTLEMENT_SENT',
+    'EXPENSE_PAYMENT',
+    'VNPAY_PAYMENT',
+]);
+
+const CATEGORY_LABELS: Record<string, string> = {
+    WITHDRAWAL: 'Withdrawals',
+    TRANSFER_SENT: 'Transfers sent',
+    TRANSFER_REFUND_SENT: 'Transfer refunds',
+    SUBSCRIPTION_FEE: 'Subscriptions',
+    SETTLEMENT_SENT: 'Settlements',
+    EXPENSE_PAYMENT: 'Expense payments',
+    VNPAY_PAYMENT: 'VNPay payments',
+};
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // ── Core builder ───────────────────────────────────────────────────────────────
 
@@ -240,6 +266,7 @@ function buildAlerts(
     dailyForecasts: DailyForecast[],
     events: ForecastEvent[],
     currentBalance: number,
+    spendingInsight?: SpendingInsight,
 ): ForecastAlert[] {
     const alerts: ForecastAlert[] = [];
 
@@ -311,21 +338,323 @@ function buildAlerts(
         });
     }
 
+    // SPENDING_SPIKE: spending increased > 50% vs previous period
+    if (spendingInsight && spendingInsight.changePercent > 50) {
+        alerts.push({
+            type: 'SPENDING_SPIKE',
+            message: `Your spending increased by ${Math.round(spendingInsight.changePercent)}% compared to the previous period`,
+            severity: 'MEDIUM',
+            amount: spendingInsight.currentPeriodOutflow,
+        });
+    }
+
     return alerts;
+}
+
+// ── Spending Insight builder ───────────────────────────────────────────────────
+
+async function buildSpendingInsights(
+    userId: string,
+    periodDays: number,
+): Promise<SpendingInsight> {
+    const now = new Date();
+    const currentStart = addDays(now, -periodDays);
+    const previousStart = addDays(now, -periodDays * 2);
+
+    // Fetch transactions for both periods
+    const txns = await Transaction.find({
+        userId,
+        createdAt: { $gte: previousStart },
+    }).lean();
+
+    let currentOutflow = 0;
+    let previousOutflow = 0;
+    const categoryMap = new Map<string, { amount: number; count: number }>();
+    const dayOfWeekTotals = new Array(7).fill(0); // Sun=0 .. Sat=6
+    let subscriptionTotal = 0;
+
+    for (const tx of txns) {
+        const type = (tx as any).type as string;
+        if (!OUTFLOW_TYPES.has(type)) continue;
+
+        const amount = Number((tx as any).amount ?? 0);
+        const createdAt = new Date((tx as any).createdAt);
+
+        if (createdAt >= currentStart) {
+            // Current period
+            currentOutflow += amount;
+
+            // Category breakdown (current period only)
+            const cat = categoryMap.get(type) ?? { amount: 0, count: 0 };
+            cat.amount += amount;
+            cat.count += 1;
+            categoryMap.set(type, cat);
+
+            // Day-of-week (current period)
+            dayOfWeekTotals[createdAt.getDay()] += amount;
+
+            if (type === 'SUBSCRIPTION_FEE') {
+                subscriptionTotal += amount;
+            }
+        } else if (createdAt >= previousStart) {
+            // Previous period
+            previousOutflow += amount;
+        }
+    }
+
+    // Build category breakdown sorted by amount desc
+    const totalCurrent = currentOutflow || 1; // avoid div-by-zero
+    const categoryBreakdown: CategoryBreakdown[] = Array.from(categoryMap.entries())
+        .map(([category, { amount, count }]) => ({
+            category,
+            label: CATEGORY_LABELS[category] ?? category,
+            amount,
+            percent: Math.round((amount / totalCurrent) * 100),
+            count,
+        }))
+        .sort((a, b) => b.amount - a.amount);
+
+    // Trend
+    let changePercent = 0;
+    if (previousOutflow > 0) {
+        changePercent = ((currentOutflow - previousOutflow) / previousOutflow) * 100;
+    }
+    const trend: 'UP' | 'DOWN' | 'STABLE' =
+        changePercent > 10 ? 'UP' : changePercent < -10 ? 'DOWN' : 'STABLE';
+
+    // Peak spending day
+    const maxDayAmount = Math.max(...dayOfWeekTotals);
+    const peakDayIndex = maxDayAmount > 0 ? dayOfWeekTotals.indexOf(maxDayAmount) : -1;
+    const peakSpendingDay = peakDayIndex >= 0 ? DAY_NAMES[peakDayIndex] : null;
+
+    // Subscription monthly estimate (extrapolate from period)
+    const subscriptionMonthlyTotal = periodDays > 0
+        ? Math.round((subscriptionTotal / periodDays) * 30)
+        : 0;
+    const subscriptionPercent = currentOutflow > 0
+        ? Math.round((subscriptionTotal / currentOutflow) * 100)
+        : 0;
+
+    return {
+        periodDays,
+        currentPeriodOutflow: Math.round(currentOutflow * 100) / 100,
+        previousPeriodOutflow: Math.round(previousOutflow * 100) / 100,
+        changePercent: Math.round(changePercent * 10) / 10,
+        trend,
+        categoryBreakdown,
+        dailyAvgSpending: Math.round((currentOutflow / periodDays) * 100) / 100,
+        peakSpendingDay,
+        subscriptionMonthlyTotal,
+        subscriptionPercent,
+    };
+}
+
+// ── Smart Tips generator ───────────────────────────────────────────────────────
+
+function generateSmartTips(
+    summary: Omit<ForecastSummary, 'healthScore' | 'healthLabel'>,
+    spendingInsight: SpendingInsight,
+    dailyForecasts: DailyForecast[],
+): SmartTip[] {
+    const tips: SmartTip[] = [];
+    let id = 0;
+
+    // 1. Spending trend
+    if (spendingInsight.trend === 'UP' && spendingInsight.changePercent > 20) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '📈',
+            title: 'Spending is rising',
+            description: `Your spending increased by ${Math.round(spendingInsight.changePercent)}% compared to the previous period. Consider reviewing recent expenses.`,
+            type: 'WARNING',
+            priority: 2,
+        });
+    } else if (spendingInsight.trend === 'DOWN') {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '📉',
+            title: 'Great saving trend',
+            description: `Your spending decreased by ${Math.abs(Math.round(spendingInsight.changePercent))}% — keep it up!`,
+            type: 'INFO',
+            priority: 5,
+        });
+    }
+
+    // 2. Subscription burden
+    if (spendingInsight.subscriptionPercent > 50) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🔄',
+            title: 'High subscription burden',
+            description: `Subscriptions account for ${spendingInsight.subscriptionPercent}% of your spending. Review active subscriptions to optimize costs.`,
+            type: 'SAVING',
+            priority: 2,
+        });
+    } else if (spendingInsight.subscriptionPercent > 30) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🔄',
+            title: 'Subscription update',
+            description: `Subscriptions make up ${spendingInsight.subscriptionPercent}% of your spending (est. ${spendingInsight.subscriptionMonthlyTotal.toLocaleString()} đ/month).`,
+            type: 'INFO',
+            priority: 4,
+        });
+    }
+
+    // 3. Negative balance warning with action
+    if (summary.firstNegativeDate) {
+        const deficit = Math.abs(summary.minimumSafeBalance);
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🔴',
+            title: 'Top-up recommended',
+            description: `You need at least ${deficit.toLocaleString()} đ before ${summary.firstNegativeDate} to avoid a negative balance.`,
+            type: 'ACTION',
+            priority: 1,
+        });
+    }
+
+    // 4. Peak spending day
+    if (spendingInsight.peakSpendingDay) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '📊',
+            title: 'Peak spending day',
+            description: `You tend to spend the most on ${spendingInsight.peakSpendingDay}s. Plan ahead to manage your budget.`,
+            type: 'INFO',
+            priority: 6,
+        });
+    }
+
+    // 5. Expected inflow
+    if (summary.totalExpectedInflow > 0) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '💰',
+            title: 'Incoming payments',
+            description: `You have ${summary.totalExpectedInflow.toLocaleString()} đ in expected incoming payments. Follow up to ensure timely receipt.`,
+            type: 'INFO',
+            priority: 4,
+        });
+    }
+
+    // 6. All clear
+    if (summary.firstNegativeDate === null && summary.alerts.length === 0) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🎉',
+            title: 'Looking good!',
+            description: `Your finances are stable for the next ${summary.horizonDays} days. No action needed.`,
+            type: 'INFO',
+            priority: 7,
+        });
+    }
+
+    // 7. Clustered outflow
+    const hasClustered = summary.alerts.some(a => a.type === 'CLUSTERED_OUTFLOW');
+    if (hasClustered) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '⏰',
+            title: 'Payments bunched together',
+            description: `Multiple payments are due around the same time. Consider spacing them out if possible.`,
+            type: 'SAVING',
+            priority: 3,
+        });
+    }
+
+    // 8. Daily average insight
+    if (spendingInsight.dailyAvgSpending > 0) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '📋',
+            title: 'Daily spending average',
+            description: `You spend an average of ${Math.round(spendingInsight.dailyAvgSpending).toLocaleString()} đ per day over the last ${spendingInsight.periodDays} days.`,
+            type: 'INFO',
+            priority: 7,
+        });
+    }
+
+    // Sort by priority (lowest number = highest priority)
+    return tips.sort((a, b) => a.priority - b.priority);
+}
+
+// ── Health Score calculator ────────────────────────────────────────────────────
+
+function calculateHealthScore(
+    dailyForecasts: DailyForecast[],
+    alerts: ForecastAlert[],
+    spendingInsight: SpendingInsight,
+): { healthScore: number; healthLabel: string } {
+    let score = 0;
+
+    // Factor 1: No negative balance days (max 30 pts)
+    const totalDays = dailyForecasts.length || 1;
+    const safeDays = dailyForecasts.filter(d => d.closingBalanceSafe >= 0).length;
+    score += Math.round((safeDays / totalDays) * 30);
+
+    // Factor 2: Spending trend (max 20 pts)
+    if (spendingInsight.trend === 'DOWN') {
+        score += 20;
+    } else if (spendingInsight.trend === 'STABLE') {
+        score += 15;
+    } else {
+        // UP
+        score += Math.max(0, 15 - Math.floor(spendingInsight.changePercent / 10));
+    }
+
+    // Factor 3: No HIGH alerts (max 20 pts)
+    const highAlertCount = alerts.filter(a => a.severity === 'HIGH').length;
+    score += Math.max(0, 20 - highAlertCount * 5);
+
+    // Factor 4: Low subscription burden (max 15 pts)
+    if (spendingInsight.subscriptionPercent < 30) {
+        score += 15;
+    } else if (spendingInsight.subscriptionPercent < 50) {
+        score += 10;
+    } else {
+        score += 5;
+    }
+
+    // Factor 5: Has expected inflow (max 15 pts)
+    const hasInflow = dailyForecasts.some(d => d.inflows.length > 0);
+    score += hasInflow ? 15 : 10;
+
+    // Clamp to 0–100
+    score = Math.min(100, Math.max(0, score));
+
+    // Label
+    let healthLabel: string;
+    if (score >= 85) healthLabel = 'Excellent';
+    else if (score >= 70) healthLabel = 'Good';
+    else if (score >= 50) healthLabel = 'Fair';
+    else if (score >= 30) healthLabel = 'At Risk';
+    else healthLabel = 'Critical';
+
+    return { healthScore: score, healthLabel };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 export const forecastService = {
-    async getForecast(userId: string, horizonDays = 30): Promise<ForecastResponse> {
+    async getForecast(
+        userId: string,
+        horizonDays = 30,
+        spendingDays = 7,
+    ): Promise<ForecastResponse> {
         const user = await User.findById(userId).select('balance currency').lean();
         const currentBalance = Number((user as any)?.balance ?? 0);
 
-        const events = await buildForecastEvents(userId, horizonDays);
-        const dailyForecasts = simulateBalance(currentBalance, events, horizonDays);
-        const alerts = buildAlerts(dailyForecasts, events, currentBalance);
+        // Run in parallel: forecast events + spending insights
+        const [events, spendingInsight] = await Promise.all([
+            buildForecastEvents(userId, horizonDays),
+            buildSpendingInsights(userId, spendingDays),
+        ]);
 
-        // Derive summary
+        const dailyForecasts = simulateBalance(currentBalance, events, horizonDays);
+        const alerts = buildAlerts(dailyForecasts, events, currentBalance, spendingInsight);
+
+        // Derive core summary fields
         let firstNegativeDate: string | null = null;
         let minimumSafeBalance = currentBalance;
         let minimumExpectedBalance = currentBalance;
@@ -353,7 +682,8 @@ export const forecastService = {
             }
         });
 
-        const summary: ForecastSummary = {
+        // Build preliminary summary (without healthScore) for tip generation
+        const baseSummary = {
             currentBalance,
             horizonDays,
             firstNegativeDate,
@@ -364,11 +694,20 @@ export const forecastService = {
             alerts,
         };
 
-        return { summary, dailyForecasts, events };
+        const smartTips = generateSmartTips(baseSummary, spendingInsight, dailyForecasts);
+        const { healthScore, healthLabel } = calculateHealthScore(dailyForecasts, alerts, spendingInsight);
+
+        const summary: ForecastSummary = {
+            ...baseSummary,
+            healthScore,
+            healthLabel,
+        };
+
+        return { summary, dailyForecasts, events, spendingInsight, smartTips };
     },
 
     async getDashboardSummary(userId: string): Promise<ForecastSummary> {
-        const { summary } = await forecastService.getForecast(userId, 7);
+        const { summary } = await forecastService.getForecast(userId, 7, 7);
         return summary;
     },
 };

@@ -49,13 +49,50 @@ export interface ForecastAlert {
         | 'CLUSTERED_OUTFLOW'
         | 'SUBSCRIPTION_AT_RISK'
         | 'INCOMING_DEPENDENCY'
-        | 'HIGH_RETRY_MEMBER';
+        | 'HIGH_RETRY_MEMBER'
+        | 'SPENDING_SPIKE';
     date?: string;
     message: string;
     severity: 'HIGH' | 'MEDIUM' | 'LOW';
     amount?: number;
     relatedEventIds?: string[];
 }
+
+// ── Spending Insights ──────────────────────────────────────────────────────────
+
+export interface CategoryBreakdown {
+    category: string;
+    label: string;       // human-friendly label
+    amount: number;
+    percent: number;
+    count: number;
+}
+
+export interface SpendingInsight {
+    periodDays: number;
+    currentPeriodOutflow: number;
+    previousPeriodOutflow: number;
+    changePercent: number;
+    trend: 'UP' | 'DOWN' | 'STABLE';
+    categoryBreakdown: CategoryBreakdown[];
+    dailyAvgSpending: number;
+    peakSpendingDay: string | null;        // "Monday", "Friday" etc.
+    subscriptionMonthlyTotal: number;
+    subscriptionPercent: number;
+}
+
+// ── Smart Tips ─────────────────────────────────────────────────────────────────
+
+export interface SmartTip {
+    id: string;
+    icon: string;
+    title: string;
+    description: string;
+    type: 'SAVING' | 'WARNING' | 'INFO' | 'ACTION';
+    priority: number;  // 1 = highest
+}
+
+// ── Summary ────────────────────────────────────────────────────────────────────
 
 export interface ForecastSummary {
     currentBalance: number;
@@ -66,10 +103,16 @@ export interface ForecastSummary {
     totalConfirmedOutflow: number;
     totalExpectedInflow: number;
     alerts: ForecastAlert[];
+    healthScore: number;       // 0–100
+    healthLabel: string;       // 'Excellent' | 'Good' | 'Fair' | 'At Risk' | 'Critical'
 }
+
+// ── Response ───────────────────────────────────────────────────────────────────
 
 export interface ForecastResponse {
     summary: ForecastSummary;
     dailyForecasts: DailyForecast[];
     events: ForecastEvent[];
+    spendingInsight: SpendingInsight;
+    smartTips: SmartTip[];
 }

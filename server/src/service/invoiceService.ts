@@ -570,8 +570,12 @@ export const invoiceService = {
             throw new Error('Invoice not found');
         }
 
-        if (invoice.uploadedBy !== userId) {
-            throw new Error('Only the uploader can delete this invoice');
+        // DRAFT invoices can be deleted by any owner/admin of the group
+        // SUBMITTED invoices can only be deleted by the uploader
+        if (invoice.status !== 'DRAFT') {
+            if (invoice.uploadedBy !== userId) {
+                throw new Error('Only the uploader can delete this invoice');
+            }
         }
 
         if (invoice.isLocked) {

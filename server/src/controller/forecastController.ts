@@ -5,8 +5,8 @@ import { ResponseUtil } from '../util/responseUtil';
 
 export const forecastController = {
     /**
-     * GET /api/forecast?days=30
-     * Full forecast with daily breakdown.
+     * GET /api/forecast?days=30&spendingDays=7
+     * Full forecast with daily breakdown + spending insights.
      */
     async getForecast(req: Request, res: Response): Promise<void> {
         try {
@@ -18,7 +18,12 @@ export const forecastController = {
                 90,
             );
 
-            const data = await forecastService.getForecast(userId, days);
+            const spendingDays = Math.min(
+                Math.max(7, parseInt((req.query.spendingDays as string) ?? '7', 10) || 7),
+                60,
+            );
+
+            const data = await forecastService.getForecast(userId, days, spendingDays);
             ResponseUtil.success(res, data);
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to generate forecast');

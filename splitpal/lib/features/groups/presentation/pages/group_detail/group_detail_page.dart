@@ -36,6 +36,7 @@ class GroupDetailPage extends StatefulWidget {
 
 class _GroupDetailPageState extends State<GroupDetailPage> {
   Map<String, dynamic>? _dashboard;
+  int _months = 6;
 
   @override
   void initState() {
@@ -63,7 +64,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
 
   Future<void> _fetchDashboard() async {
     try {
-      final response = await AppServices.dio.get(ApiConstants.dashboardGroup(widget.groupId));
+      final response = await AppServices.dio.get(
+        '${ApiConstants.dashboardGroup(widget.groupId)}?months=$_months',
+      );
       if (!mounted) return;
       setState(() {
         _dashboard = response.data['data'] as Map<String, dynamic>?;
@@ -71,6 +74,11 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     } catch (_) {
       // swallow errors; overview tab still works without dashboard
     }
+  }
+
+  void _onChangePeriod(int months) {
+    setState(() => _months = months);
+    _fetchDashboard();
   }
 
   void _openInvite() {
@@ -399,6 +407,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     isOwnerOrAdmin ? _createPaymentRequest : null,
                 onTransferOwnership: resolvedRole == 'OWNER' ? _transferOwnership : null,
                 onUpdateMemberRole: isOwnerOrAdmin ? _updateMemberRole : null,
+                onChangePeriod: _onChangePeriod,
               ),
               GroupInvoicesTab(
                 groupId: widget.groupId,

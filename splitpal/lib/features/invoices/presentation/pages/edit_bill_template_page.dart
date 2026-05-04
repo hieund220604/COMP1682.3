@@ -8,30 +8,59 @@ import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/widgets/app_section_header.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
-import 'package:splitpal/features/auth/auth_provider.dart';
 
-class CreateBillTemplatePage extends StatefulWidget {
+class EditBillTemplatePage extends StatefulWidget {
   final String groupId;
+  final BillTemplate template;
 
-  const CreateBillTemplatePage({Key? key, required this.groupId}) : super(key: key);
+  const EditBillTemplatePage({
+    Key? key,
+    required this.groupId,
+    required this.template,
+  }) : super(key: key);
 
   @override
-  State<CreateBillTemplatePage> createState() => _CreateBillTemplatePageState();
+  State<EditBillTemplatePage> createState() => _EditBillTemplatePageState();
 }
 
-class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
+class _EditBillTemplatePageState extends State<EditBillTemplatePage> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
 
   // ── Step 1 State ─────────────────────────────────────────────────────────────
-  final _nameCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  String _billingCycle = 'MONTHLY';
-  int _billingDay = 5;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _descCtrl;
+  late String _billingCycle;
+  late int _billingDay;
   String? _payerId;
 
   // ── Step 2 State ─────────────────────────────────────────────────────────────
   final List<_ItemDraft> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.template;
+    _nameCtrl = TextEditingController(text: t.name);
+    _descCtrl = TextEditingController(text: t.description ?? '');
+    _billingCycle = t.billingCycle;
+    _billingDay = t.billingDay ?? (_billingCycle == 'WEEKLY' ? 1 : 5);
+    _payerId = t.payer.id;
+
+    for (final item in t.items) {
+      final draft = _ItemDraft();
+      draft.nameCtrl.text = item.name;
+      draft.amountCtrl.text = item.amount == 0 ? '0' : item.amount.toStringAsFixed(0);
+      draft.amount = item.amount;
+      draft.splitType = item.splitType;
+      draft.assignedTo = List<String>.from(item.assignedTo);
+      for (final split in item.splits) {
+        draft.splitControllers[split.userId] =
+            TextEditingController(text: split.value.toStringAsFixed(0));
+      }
+      _items.add(draft);
+    }
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,15 +81,6 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
         .toList();
   }
 
-  Map<String, String> get _memberNames {
-    final gp = context.read<GroupProvider>();
-    return {
-      for (final m in gp.currentGroupMembers)
-        (m as Map<String, dynamic>)['userId']?.toString() ?? '':
-            _getMemberName(m)
-    };
-  }
-
   double get _totalAmount => _items.fold(0, (s, i) => s + i.amount);
 
   bool get _step1Valid =>
@@ -72,52 +92,49 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
 
   void _goToStep(int step) {
     setState(() => _currentStep = step);
-    _pageController.animateToPage(
-      step,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    _pageController.animateToPage(step,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   Future<void> _submit() async {
     final members = _memberIds;
-    final request = BillTemplateRequest(
-      name: _nameCtrl.text.trim(),
-      description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-      billingCycle: _billingCycle,
-      billingDay: _billingCycle == 'DAILY' ? null : _billingDay,
-      items: _items.map((d) => BillTemplateItem(
-        name: d.nameCtrl.text,
-        amount: d.amount,
-        splitType: d.splitType,
-        assignedTo: d.assignedTo.isEmpty ? members : d.assignedTo,
-        splits: d.splitControllers.entries
-            .map((e) => BillTemplateItemSplit(userId: e.key, value: double.tryParse(e.value.text) ?? 0))
-            .where((s) => s.value > 0).toList(),
-      )).toList(),
-      payerId: _payerId,
-    );
+    final data = <String, dynamic>{
+      'name': _nameCtrl.text.trim(),
+      'description': _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+      'billingCycle': _billingCycle,
+      if (_billingCycle != 'DAILY') 'billingDay': _billingDay,
+      'items': _items
+          .map((d) => BillTemplateItem(
+                name: d.nameCtrl.text,
+                amount: d.amount,
+                splitType: d.splitType,
+                assignedTo: d.assignedTo.isEmpty ? members : d.assignedTo,
+                splits: d.splitControllers.entries
+                    .map((e) => BillTemplateItemSplit(
+                        userId: e.key,
+                        value: double.tryParse(e.value.text) ?? 0))
+                    .where((s) => s.value > 0)
+                    .toList(),
+              ).toJson())
+          .toList(),
+      if (_payerId != null) 'payerId': _payerId,
+    };
 
     final provider = context.read<BillTemplateProvider>();
-    final ok = await provider.createTemplate(widget.groupId, request);
+    final ok = await provider.updateTemplate(widget.groupId, widget.template.id, data);
 
     if (!mounted) return;
-
     if (ok) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Created template "${request.name}"'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Updated template "${_nameCtrl.text.trim()}"'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.errorMessage ?? 'An error occurred'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(provider.errorMessage ?? 'An error occurred'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
     }
   }
 
@@ -129,6 +146,9 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
     for (var i in _items) {
       i.nameCtrl.dispose();
       i.amountCtrl.dispose();
+      for (var c in i.splitControllers.values) {
+        c.dispose();
+      }
     }
     super.dispose();
   }
@@ -138,12 +158,10 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isPro = context.watch<AuthProvider>().user?.isPro ?? false;
-
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
-        title: const Text('Create Bill Template'),
+        title: const Text('Edit Bill Template'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
@@ -153,45 +171,15 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          if (!isPro)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Colors.amber.shade100,
-              child: Row(
-                children: [
-                  Icon(Icons.star, color: Colors.amber.shade800, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Free accounts are limited to 2 templates. Upgrade to PRO for unlimited access!',
-                      style: TextStyle(
-                        color: Colors.amber.shade900,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildStep1(),
-                _buildStep2(),
-                _buildStep3(),
-              ],
-            ),
-          ),
-        ],
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [_buildStep1(), _buildStep2(), _buildStep3()],
       ),
     );
   }
+
+  // ── Step 1: Basic Details ─────────────────────────────────────────────────────
 
   Widget _buildStep1() {
     final members = context.watch<GroupProvider>().currentGroupMembers;
@@ -206,11 +194,8 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppSectionHeader(
-            title: 'Step 1 of 3: Basic Details',
-          ),
+          AppSectionHeader(title: 'Step 1 of 3: Basic Details'),
           const SizedBox(height: AppSpacing.lg),
-
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,8 +205,6 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                   controller: _nameCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: _inputDeco('e.g., Rent, Electricity...'),
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _fieldLabel('Description (optional)'),
@@ -233,9 +216,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
               ],
             ),
           ),
-
           const SizedBox(height: AppSpacing.lg),
-
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,10 +231,9 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                   items: eligiblePayers.map((m) {
                     final map = m as Map<String, dynamic>;
                     final uid = map['userId']?.toString() ?? '';
-                    final name = _getMemberName(m);
                     return DropdownMenuItem<String>(
                       value: uid,
-                      child: Text(name, overflow: TextOverflow.ellipsis),
+                      child: Text(_getMemberName(m), overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: (v) => setState(() => _payerId = v),
@@ -261,9 +241,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
               ],
             ),
           ),
-
           const SizedBox(height: AppSpacing.lg),
-
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,9 +267,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                   _fieldLabel('Day of the month: $_billingDay'),
                   Slider(
                     value: _billingDay.toDouble(),
-                    min: 1,
-                    max: 28,
-                    divisions: 27,
+                    min: 1, max: 28, divisions: 27,
                     activeColor: Theme.of(context).colorScheme.primary,
                     label: 'Day $_billingDay',
                     onChanged: (v) => setState(() => _billingDay = v.round()),
@@ -300,7 +276,6 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
               ],
             ),
           ),
-
           const SizedBox(height: AppSpacing.xl),
           SizedBox(
             width: double.infinity,
@@ -314,6 +289,8 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
     );
   }
 
+  // ── Step 2: Items ─────────────────────────────────────────────────────────────
+
   Widget _buildStep2() {
     return Column(
       children: [
@@ -323,26 +300,21 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppSectionHeader(
-                  title: 'Step 2 of 3: Cost Items',
-                ),
+                AppSectionHeader(title: 'Step 2 of 3: Cost Items'),
                 const SizedBox(height: AppSpacing.lg),
                 if (_items.isEmpty)
                   AppCard(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     child: Center(
-                      child: Text(
-                        'No items yet. Tap + to add.',
+                      child: Text('No items yet. Tap + to add.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ),
                   ),
                 ..._items.asMap().entries.map((e) => _itemCard(e.key, e.value)),
                 const SizedBox(height: AppSpacing.md),
                 OutlinedButton.icon(
-                  onPressed: _addItem,
+                  onPressed: () => setState(() => _items.add(_ItemDraft())),
                   icon: const Icon(AppIcons.add),
                   label: const Text('Add Item'),
                 ),
@@ -352,19 +324,10 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Total',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.formatVND(_totalAmount),
+                        Text('Total', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Text(CurrencyFormatter.formatVND(_totalAmount),
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
+                            fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
                       ],
                     ),
                   ),
@@ -378,10 +341,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                OutlinedButton(
-                  onPressed: () => _goToStep(0),
-                  child: const Text('← Back'),
-                ),
+                OutlinedButton(onPressed: () => _goToStep(0), child: const Text('← Back')),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: FilledButton(
@@ -398,8 +358,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
   }
 
   Widget _itemCard(int index, _ItemDraft item) {
-    final gp = context.read<GroupProvider>();
-    final members = gp.currentGroupMembers;
+    final members = context.read<GroupProvider>().currentGroupMembers;
     final scheme = Theme.of(context).colorScheme;
 
     return Padding(
@@ -408,88 +367,71 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: item.nameCtrl,
-                    decoration: _inputDeco('Item Name (e.g., Rent)'),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: item.nameCtrl,
+                  decoration: _inputDeco('Item Name'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                IconButton(
-                  icon: Icon(AppIcons.delete, color: scheme.error),
-                  onPressed: () => setState(() => _items.removeAt(index)),
-                ),
-              ],
-            ),
+              ),
+              IconButton(
+                icon: Icon(AppIcons.delete, color: scheme.error),
+                onPressed: () => setState(() => _items.removeAt(index)),
+              ),
+            ]),
             const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: item.amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: _inputDeco('Amount (0 = Enter later)'),
-                    onChanged: (v) => setState(() => item.amount = double.tryParse(v) ?? 0),
-                  ),
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: item.amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: _inputDeco('Amount (0 = Enter later)'),
+                  onChanged: (v) => setState(() => item.amount = double.tryParse(v) ?? 0),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: scheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(AppRadii.sm),
-                  ),
-                  child: DropdownButton<String>(
-                    value: item.splitType,
-                    underline: const SizedBox(),
-                    items: const [
-                      DropdownMenuItem(value: 'EQUAL', child: Text('Equal')),
-                      DropdownMenuItem(value: 'PERCENTAGE', child: Text('Percentage')),
-                      DropdownMenuItem(value: 'CUSTOM', child: Text('Custom')),
-                    ],
-                    onChanged: (v) => setState(() => item.splitType = v!),
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
                 ),
-              ],
-            ),
+                child: DropdownButton<String>(
+                  value: item.splitType,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(value: 'EQUAL', child: Text('Equal')),
+                    DropdownMenuItem(value: 'PERCENTAGE', child: Text('Percentage')),
+                    DropdownMenuItem(value: 'CUSTOM', child: Text('Custom')),
+                  ],
+                  onChanged: (v) => setState(() => item.splitType = v!),
+                ),
+              ),
+            ]),
             if (item.amount == 0)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: Text(
-                  '⚡ Amount = 0: Payer will enter upon confirmation',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.tertiary,
-                  ),
-                ),
+                child: Text('⚡ Amount = 0: Payer will enter upon confirmation',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.tertiary)),
               ),
-
             const SizedBox(height: AppSpacing.md),
             _fieldLabel('Assigned To (Leave empty to assign all)'),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 8, runSpacing: 8,
               children: members.map((m) {
                 final uid = (m as Map<String, dynamic>)['userId']?.toString() ?? '';
                 if (uid.isEmpty) return const SizedBox.shrink();
                 final isSelected = item.assignedTo.contains(uid);
                 return FilterChip(
                   selected: isSelected,
-                  label: Text(
-                    _getMemberName(m),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected ? scheme.onPrimary : scheme.onSurface,
-                    ),
-                  ),
+                  label: Text(_getMemberName(m),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                      color: isSelected ? scheme.onPrimary : scheme.onSurface)),
                   selectedColor: scheme.primary,
                   checkmarkColor: scheme.onPrimary,
                   backgroundColor: scheme.surface,
-                  side: BorderSide(
-                    color: isSelected ? scheme.primary : scheme.outlineVariant,
-                  ),
+                  side: BorderSide(color: isSelected ? scheme.primary : scheme.outlineVariant),
                   onSelected: (selected) {
                     setState(() {
                       if (selected) {
@@ -503,7 +445,6 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                 );
               }).toList(),
             ),
-
             if (item.splitType != 'EQUAL' && item.assignedTo.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               _fieldLabel(item.splitType == 'PERCENTAGE' ? 'Split Percentages' : 'Custom Amounts'),
@@ -513,40 +454,29 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                   orElse: () => <String, dynamic>{},
                 );
                 item.splitControllers.putIfAbsent(uid, () => TextEditingController());
-                final controller = item.splitControllers[uid]!;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          _getMemberName(m),
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.w500,
-                          ),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Text(_getMemberName(m),
+                      style: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500))),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      flex: 1,
+                      child: TextFormField(
+                        controller: item.splitControllers[uid]!,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: _inputDeco('0').copyWith(
+                          suffix: item.splitType == 'PERCENTAGE'
+                              ? Text('%', style: TextStyle(color: scheme.onSurface)) : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                         ),
+                        onChanged: (_) => setState(() {}),
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        flex: 1,
-                        child: TextFormField(
-                          controller: controller,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: _inputDeco('0').copyWith(
-                            suffix: item.splitType == 'PERCENTAGE'
-                                ? Text('%', style: TextStyle(color: scheme.onSurface))
-                                : null,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ]),
                 );
-              }).toList(),
+              }),
             ],
           ],
         ),
@@ -554,31 +484,11 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
     );
   }
 
-  void _addItem() {
-    setState(() {
-      _items.add(_ItemDraft());
-    });
-  }
+  // ── Step 3: Preview ───────────────────────────────────────────────────────────
 
   Widget _buildStep3() {
     final members = context.watch<GroupProvider>().currentGroupMembers;
     final memberCount = members.length;
-
-    final now = DateTime.now();
-    DateTime nextDate;
-    if (_billingCycle == 'DAILY') {
-      nextDate = now.add(const Duration(days: 1));
-    } else if (_billingCycle == 'WEEKLY') {
-      final dow = now.weekday;
-      final diff = ((_billingDay - dow + 7) % 7).clamp(1, 7);
-      nextDate = now.add(Duration(days: diff));
-    } else {
-      nextDate = DateTime(
-        now.month == 12 ? now.year + 1 : now.year,
-        now.month == 12 ? 1 : now.month + 1,
-        _billingDay.clamp(1, 28),
-      );
-    }
 
     return Consumer<BillTemplateProvider>(
       builder: (context, provider, _) {
@@ -590,107 +500,68 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppSectionHeader(
-                      title: 'Step 3 of 3: Preview',
-                    ),
+                    AppSectionHeader(title: 'Step 3 of 3: Preview'),
                     const SizedBox(height: AppSpacing.lg),
-
                     AppCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Icon(AppIcons.refresh, color: Theme.of(context).colorScheme.primary),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  _nameCtrl.text.trim(),
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          Row(children: [
+                            Icon(AppIcons.refresh, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(_nameCtrl.text.trim(),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                            ),
+                          ]),
                           const SizedBox(height: AppSpacing.sm),
                           _previewRow('Cycle', _cycleDescription()),
-                          _previewRow(
-                            'First bill date',
-                            '${nextDate.day}/${nextDate.month}/${nextDate.year}',
-                            highlight: true,
-                          ),
                           _previewRow('Payer', _payerName(members)),
                           const Divider(height: AppSpacing.xl),
                           ..._items.map((item) => Padding(
                             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                            child: Row(
-                              children: [
-                                Expanded(child: Text(item.nameCtrl.text.isEmpty ? '(unnamed)' : item.nameCtrl.text)),
-                                Text(
-                                  item.amount == 0
-                                      ? 'Enter later'
-                                      : CurrencyFormatter.formatVND(item.amount),
-                                  style: TextStyle(
-                                    color: item.amount == 0 ? Theme.of(context).colorScheme.tertiary : null,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            child: Row(children: [
+                              Expanded(child: Text(item.nameCtrl.text.isEmpty ? '(unnamed)' : item.nameCtrl.text)),
+                              Text(
+                                item.amount == 0 ? 'Enter later' : CurrencyFormatter.formatVND(item.amount),
+                                style: TextStyle(
+                                  color: item.amount == 0 ? Theme.of(context).colorScheme.tertiary : null,
+                                  fontWeight: FontWeight.w600),
+                              ),
+                            ]),
                           )),
                           const Divider(height: AppSpacing.lg),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Total', style: Theme.of(context).textTheme.titleMedium),
-                              Text(
-                                CurrencyFormatter.formatVND(_totalAmount),
+                              Text(CurrencyFormatter.formatVND(_totalAmount),
                                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
+                                  fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
                             ],
                           ),
                         ],
                       ),
                     ),
-
                     if (_totalAmount > 0 && memberCount > 0) ...[
                       const SizedBox(height: AppSpacing.lg),
                       AppCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Estimated amount per person (Equal)',
+                            Text('Estimated amount per person (Equal)',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
+                                fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                             const SizedBox(height: AppSpacing.md),
                             ...members.map((m) => Padding(
                               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                              child: Row(
-                                children: [
-                                  Icon(AppIcons.person, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                  const SizedBox(width: AppSpacing.xs),
-                                  Expanded(
-                                    child: Text(
-                                      _getMemberName(m),
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                    )
-                                  ),
-                                  Text(
-                                    CurrencyFormatter.formatVND(_totalAmount / memberCount),
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              child: Row(children: [
+                                Icon(AppIcons.person, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(child: Text(_getMemberName(m), style: Theme.of(context).textTheme.bodyMedium)),
+                                Text(CurrencyFormatter.formatVND(_totalAmount / memberCount),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                              ]),
                             )),
                           ],
                         ),
@@ -705,10 +576,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Row(
                   children: [
-                    OutlinedButton(
-                      onPressed: () => _goToStep(1),
-                      child: const Text('← Back'),
-                    ),
+                    OutlinedButton(onPressed: () => _goToStep(1), child: const Text('← Back')),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: FilledButton.icon(
@@ -716,7 +584,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                         icon: provider.isLoading
                             ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(AppIcons.checkCircle),
-                        label: const Text('Create Template'),
+                        label: const Text('Save Changes'),
                       ),
                     ),
                   ],
@@ -728,6 +596,8 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
       },
     );
   }
+
+  // ── Shared Widgets ────────────────────────────────────────────────────────────
 
   String _cycleDescription() {
     switch (_billingCycle) {
@@ -743,10 +613,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
   String _payerName(List members) {
     if (members.isEmpty) return 'Unknown';
     final targetId = _payerId;
-    if (targetId == null) {
-      final first = members.first as Map<String, dynamic>;
-      return _getMemberName(first);
-    }
+    if (targetId == null) return _getMemberName(members.first);
     final m = members.cast<Map<String, dynamic>>().firstWhere(
       (m) => m['userId']?.toString() == targetId,
       orElse: () => <String, dynamic>{},
@@ -792,15 +659,10 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                 borderRadius: BorderRadius.circular(AppRadii.sm),
                 border: Border.all(color: sel ? scheme.primary : scheme.outlineVariant),
               ),
-              child: Text(
-                labels[i],
-                textAlign: TextAlign.center,
+              child: Text(labels[i], textAlign: TextAlign.center,
                 style: TextStyle(
                   color: sel ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
+                  fontSize: 12, fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
             ),
           ),
         );
@@ -810,12 +672,7 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
 
   Widget _fieldLabel(String label) => Padding(
     padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-    child: Text(
-      label,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontWeight: FontWeight.bold,
-      ),
-    ),
+    child: Text(label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
   );
 
   InputDecoration _inputDeco(String? hint) => InputDecoration(
@@ -834,19 +691,11 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: highlight ? Theme.of(context).colorScheme.primary : null,
-          ),
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: highlight ? Theme.of(context).colorScheme.primary : null)),
       ],
     ),
   );

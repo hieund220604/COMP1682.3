@@ -834,177 +834,166 @@ export const subscriptionService = {
             kicked: false,
         };
 
-        // Idempotency guard: check if already billed this cycle
-        const cycleStart = new Date(memberDoc.nextBillingDate);
-        switch (subscription.billingCycle as BillingCycle) {
-            case BillingCycle.DAILY: cycleStart.setDate(cycleStart.getDate() - 1); break;
-            case BillingCycle.WEEKLY: cycleStart.setDate(cycleStart.getDate() - 7); break;
-            case BillingCycle.MONTHLY: cycleStart.setMonth(cycleStart.getMonth() - 1); break;
-            case BillingCycle.YEARLY: cycleStart.setFullYear(cycleStart.getFullYear() - 1); break;
-        }
-        if (memberDoc.lastChargedAt > cycleStart) {
-            // Already charged this cycle â€” just advance nextBillingDate
-            const newNextDate = calculateNextBillingDate(
-                new Date(memberDoc.nextBillingDate),
-                subscription.billingCycle as BillingCycle,
-            );
-            await SubscriptionMember.findByIdAndUpdate(memberId, { nextBillingDate: newNextDate });
-            result.success = true;
+        // Reload fresh member state for the catch-up loop
+        let currentMember = await SubscriptionMember.findById(memberId);
+        if (!currentMember || currentMember.status !== 'ACTIVE') {
+            result.reason = 'Member not active';
             return result;
         }
 
-        const user = await User.findById(userId);
-        if (user && user.balance >= fee) {
-            // â”€â”€ SUCCESS PATH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        let currentNextBillingDate = new Date(currentMember.nextBillingDate);
+        let totalCyclesCharged = 0;
+        const MAX_CATCHUP_CYCLES = 30; // Safety cap
+
+        // CATCH-UP LOOP: charge for every missed cycle until nextBillingDate > now
+        while (currentNextBillingDate <= now && totalCyclesCharged < MAX_CATCHUP_CYCLES) {
+            if (totalCyclesCharged > 0) {
+                currentMember = await SubscriptionMember.findById(memberId);
+                if (!currentMember || currentMember.status !== 'ACTIVE') break;
+            }
+
+            // Idempotency guard
+            const cycleStart = new Date(currentNextBillingDate);
+            switch (subscription.billingCycle as BillingCycle) {
+                case BillingCycle.DAILY:   cycleStart.setDate(cycleStart.getDate() - 1); break;
+                case BillingCycle.WEEKLY:  cycleStart.setDate(cycleStart.getDate() - 7); break;
+                case BillingCycle.MONTHLY: cycleStart.setMonth(cycleStart.getMonth() - 1); break;
+                case BillingCycle.YEARLY:  cycleStart.setFullYear(cycleStart.getFullYear() - 1); break;
+            }
+
+            const lastCharged = currentMember!.lastChargedAt;
+            if (lastCharged && lastCharged > cycleStart) {
+                currentNextBillingDate = calculateNextBillingDate(
+                    currentNextBillingDate,
+                    subscription.billingCycle as BillingCycle,
+                );
+                await SubscriptionMember.findByIdAndUpdate(memberId, {
+                    nextBillingDate: currentNextBillingDate,
+                });
+                continue;
+            }
+
+            // Check balance
+            const user = await User.findById(userId);
+            if (!user || user.balance < fee) {
+                const newRetryCount = (currentMember!.retryCount ?? 0) + 1;
+                result.reason = `Insufficient balance: ${user?.balance ?? 0} < ${fee}`;
+
+                if (newRetryCount >= 3) {
+                    await SubscriptionMember.findByIdAndUpdate(memberId, {
+                        status: 'LEFT', leftAt: now, retryCount: newRetryCount,
+                    });
+                    result.kicked = true;
+
+                    await BillingHistory.create({
+                        subscriptionId, groupId: subscription.groupId, billingDate: now,
+                        amount: fee, currency: subscription.currency ?? 'VND',
+                        status: 'FAILED', membersCharged: 0, membersFailed: 1, totalCollected: 0,
+                        failureReason: `Member ${userId} kicked after 3 failed attempts`,
+                        memberResults: [{ userId, shareAmount: fee, success: false, reason: result.reason, categoryTagId: currentMember!.categoryTagId }],
+                    });
+
+                    try {
+                        await Promise.all([
+                            notificationService.notify(userId, NotificationType.SUBSCRIPTION_MEMBER_KICKED,
+                                'Removed from Subscription',
+                                `You have been removed from "${subscription.name}" after 3 failed payment attempts.`,
+                                { subscriptionId }),
+                            notificationService.notify(subscription.createdBy, NotificationType.SUBSCRIPTION_MEMBER_KICKED,
+                                'Member Removed',
+                                `A member was removed from "${subscription.name}" due to insufficient balance after 3 attempts.`,
+                                { subscriptionId }),
+                        ]);
+                    } catch (_) { /* silent */ }
+                } else {
+                    await SubscriptionMember.findByIdAndUpdate(memberId, { retryCount: newRetryCount });
+                    const retriesLeft = 3 - newRetryCount;
+                    try {
+                        await notificationService.notify(userId, NotificationType.SUBSCRIPTION_BILLING_FAILED,
+                            'Payment Failed',
+                            `Could not renew "${subscription.name}". Need ${fee.toLocaleString()} VND. ${retriesLeft} attempt(s) remaining before removal.`,
+                            { subscriptionId });
+                    } catch (_) { /* silent */ }
+                }
+
+                if (totalCyclesCharged > 0) {
+                    result.success = true;
+                    result.amount = fee * totalCyclesCharged;
+                }
+                await invalidateSubCache(subscriptionId);
+                return result;
+            }
+
+            // SUCCESS: charge this cycle
             const session = await mongoose.startSession();
+            let cycleSuccess = false;
             try {
                 session.startTransaction();
                 await User.findByIdAndUpdate(userId, { $inc: { balance: -fee } }, { session });
                 await User.findByIdAndUpdate(subscription.createdBy, { $inc: { balance: fee } }, { session });
 
-                const nextBillingDate = calculateNextBillingDate(
-                    new Date(memberDoc.nextBillingDate),
-                    subscription.billingCycle as BillingCycle,
-                );
+                const nextDate = calculateNextBillingDate(currentNextBillingDate, subscription.billingCycle as BillingCycle);
                 await SubscriptionMember.findByIdAndUpdate(memberId, {
-                    nextBillingDate,
-                    lastChargedAt: now,
-                    retryCount: 0,
+                    nextBillingDate: nextDate, lastChargedAt: now, retryCount: 0,
                 }, { session });
 
                 await session.commitTransaction();
-
-                result.success = true;
+                cycleSuccess = true;
+                currentNextBillingDate = nextDate;
             } catch (err: any) {
                 await session.abortTransaction();
                 result.reason = err.message;
+                if (totalCyclesCharged > 0) { result.success = true; result.amount = fee * totalCyclesCharged; }
+                await invalidateSubCache(subscriptionId);
+                return result;
             } finally {
                 session.endSession();
             }
 
-            if (result.success) {
-                // Log transactions
+            if (cycleSuccess) {
+                totalCyclesCharged++;
+
                 const memberAfter = await User.findById(userId);
                 const ownerAfter = await User.findById(subscription.createdBy);
                 await Promise.all([
                     transactionService.createTransaction({
-                        userId,
-                        groupId: subscription.groupId,
-                        type: TransactionType.SUBSCRIPTION_FEE,
-                        amount: fee,
-                        balanceBefore: (memberAfter?.balance ?? 0) + fee,
-                        balanceAfter: memberAfter?.balance ?? 0,
-                        currency: subscription.currency ?? 'VND',
-                        description: `Subscription renewal: ${subscription.name}`,
-                        referenceId: subscriptionId,
-                        referenceType: 'SUBSCRIPTION',
+                        userId, groupId: subscription.groupId, type: TransactionType.SUBSCRIPTION_FEE,
+                        amount: fee, balanceBefore: (memberAfter?.balance ?? 0) + fee, balanceAfter: memberAfter?.balance ?? 0,
+                        currency: subscription.currency ?? 'VND', description: `Subscription renewal: ${subscription.name}`,
+                        referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
                     }),
                     transactionService.createTransaction({
-                        userId: subscription.createdBy,
-                        groupId: subscription.groupId,
-                        type: TransactionType.TRANSFER_RECEIVED,
-                        amount: fee,
-                        balanceBefore: (ownerAfter?.balance ?? 0) - fee,
-                        balanceAfter: ownerAfter?.balance ?? 0,
-                        currency: subscription.currency ?? 'VND',
-                        description: `Subscription renewal payment from member: ${subscription.name}`,
-                        referenceId: subscriptionId,
-                        referenceType: 'SUBSCRIPTION',
+                        userId: subscription.createdBy, groupId: subscription.groupId, type: TransactionType.TRANSFER_RECEIVED,
+                        amount: fee, balanceBefore: (ownerAfter?.balance ?? 0) - fee, balanceAfter: ownerAfter?.balance ?? 0,
+                        currency: subscription.currency ?? 'VND', description: `Subscription renewal payment from member: ${subscription.name}`,
+                        referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
                     }),
                 ]);
 
-                // Billing history entry
                 await BillingHistory.create({
-                    subscriptionId,
-                    groupId: subscription.groupId,
-                    billingDate: now,
-                    amount: fee,
-                    currency: subscription.currency ?? 'VND',
-                    status: 'SUCCESS',
-                    membersCharged: 1,
-                    membersFailed: 0,
-                    totalCollected: fee,
-                    memberResults: [{ userId, shareAmount: fee, success: true, categoryTagId: memberDoc.categoryTagId }],
+                    subscriptionId, groupId: subscription.groupId, billingDate: now,
+                    amount: fee, currency: subscription.currency ?? 'VND',
+                    status: 'SUCCESS', membersCharged: 1, membersFailed: 0, totalCollected: fee,
+                    memberResults: [{ userId, shareAmount: fee, success: true, categoryTagId: currentMember!.categoryTagId }],
                 });
-
-                try {
-                    const nextBillingDateForNotif = calculateNextBillingDate(
-                        new Date(memberDoc.nextBillingDate),
-                        subscription.billingCycle as BillingCycle,
-                    );
-                    await notificationService.notify(
-                        userId,
-                        NotificationType.SUBSCRIPTION_BILLING_SUCCESS,
-                        'Subscription Renewed',
-                        `"${subscription.name}" renewed. ${fee.toLocaleString()} VND charged. Next: ${nextBillingDateForNotif.toDateString()}.`,
-                        { subscriptionId },
-                    );
-                } catch (_) { /* */ }
             }
-
-            await invalidateSubCache(subscriptionId);
-            return result;
         }
 
-        // â”€â”€ FAIL PATH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        const newRetryCount = (memberDoc.retryCount ?? 0) + 1;
-        result.reason = `Insufficient balance: ${user?.balance ?? 0} < ${fee}`;
-
-        if (newRetryCount >= 3) {
-            // Kick member
-            await SubscriptionMember.findByIdAndUpdate(memberId, {
-                status: 'LEFT',
-                leftAt: now,
-                retryCount: newRetryCount,
-            });
-            result.kicked = true;
-
-            await BillingHistory.create({
-                subscriptionId,
-                groupId: subscription.groupId,
-                billingDate: now,
-                amount: fee,
-                currency: subscription.currency ?? 'VND',
-                status: 'FAILED',
-                membersCharged: 0,
-                membersFailed: 1,
-                totalCollected: 0,
-                failureReason: `Member ${userId} kicked after 3 failed attempts`,
-                memberResults: [{ userId, shareAmount: fee, success: false, reason: result.reason, categoryTagId: memberDoc.categoryTagId }],
-            });
+        // After catching up, send ONE summary notification
+        if (totalCyclesCharged > 0) {
+            result.success = true;
+            result.amount = fee * totalCyclesCharged;
 
             try {
-                await Promise.all([
-                    notificationService.notify(
-                        userId,
-                        NotificationType.SUBSCRIPTION_MEMBER_KICKED,
-                        'Removed from Subscription',
-                        `You have been removed from "${subscription.name}" after 3 failed payment attempts.`,
-                        { subscriptionId },
-                    ),
-                    notificationService.notify(
-                        subscription.createdBy,
-                        NotificationType.SUBSCRIPTION_MEMBER_KICKED,
-                        'Member Removed',
-                        `A member was removed from "${subscription.name}" due to insufficient balance after 3 attempts.`,
-                        { subscriptionId },
-                    ),
-                ]);
-            } catch (_) { /* */ }
-        } else {
-            // Retry later
-            await SubscriptionMember.findByIdAndUpdate(memberId, { retryCount: newRetryCount });
+                const msg = totalCyclesCharged === 1
+                    ? `"${subscription.name}" renewed. ${fee.toLocaleString()} VND charged. Next: ${currentNextBillingDate.toDateString()}.`
+                    : `"${subscription.name}" caught up ${totalCyclesCharged} missed cycles. Total: ${(fee * totalCyclesCharged).toLocaleString()} VND. Next: ${currentNextBillingDate.toDateString()}.`;
+                await notificationService.notify(userId, NotificationType.SUBSCRIPTION_BILLING_SUCCESS, 'Subscription Renewed', msg, { subscriptionId });
+            } catch (_) { /* silent */ }
 
-            const retriesLeft = 3 - newRetryCount;
-            try {
-                await notificationService.notify(
-                    userId,
-                    NotificationType.SUBSCRIPTION_BILLING_FAILED,
-                    'Payment Failed',
-                    `Could not renew "${subscription.name}". Need ${fee.toLocaleString()} VND. ${retriesLeft} attempt(s) remaining before removal.`,
-                    { subscriptionId },
-                );
-            } catch (_) { /* */ }
+            if (totalCyclesCharged > 1) {
+                console.log(`[Subscription] Caught up ${totalCyclesCharged} missed cycles for member ${userId} in "${subscription.name}"`);
+            }
         }
 
         await invalidateSubCache(subscriptionId);

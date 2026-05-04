@@ -18,9 +18,12 @@ class ForecastProvider extends ChangeNotifier {
   // ─── Full forecast state ─────────────────────────────────────────────────
   List<DailyForecastModel> _dailyForecasts = [];
   List<ForecastEventModel> _events = [];
+  SpendingInsight? _spendingInsight;
+  List<SmartTip> _smartTips = [];
   bool _isFullLoading = false;
   String? _fullError;
   int _horizonDays = 7;
+  int _spendingDays = 7;
 
   // ─── Getters ─────────────────────────────────────────────────────────────
   ForecastSummary? get summary => _summary;
@@ -29,9 +32,12 @@ class ForecastProvider extends ChangeNotifier {
 
   List<DailyForecastModel> get dailyForecasts => _dailyForecasts;
   List<ForecastEventModel> get events => _events;
+  SpendingInsight? get spendingInsight => _spendingInsight;
+  List<SmartTip> get smartTips => _smartTips;
   bool get isFullLoading => _isFullLoading;
   String? get fullError => _fullError;
   int get horizonDays => _horizonDays;
+  int get spendingDays => _spendingDays;
 
   // ─── Actions ─────────────────────────────────────────────────────────────
 
@@ -53,13 +59,16 @@ class ForecastProvider extends ChangeNotifier {
   }
 
   /// Full forecast with daily breakdown — used by CashflowForecastPage.
-  Future<void> fetchFull({int days = 7}) async {
+  Future<void> fetchFull({int days = 7, int? spendingDays}) async {
     _horizonDays = days;
+    if (spendingDays != null) _spendingDays = spendingDays;
     _isFullLoading = true;
     _fullError = null;
     notifyListeners();
     try {
-      final res = await _dio.get('${ApiConstants.forecast}?days=$days');
+      final res = await _dio.get(
+        '${ApiConstants.forecast}?days=$days&spendingDays=$_spendingDays',
+      );
       final data = res.data['data'] as Map<String, dynamic>?;
       if (data != null) {
         final summaryJson = data['summary'] as Map<String, dynamic>?;
@@ -72,6 +81,15 @@ class ForecastProvider extends ChangeNotifier {
         _events = (data['events'] as List<dynamic>? ?? [])
             .map((e) => ForecastEventModel.fromJson(e as Map<String, dynamic>))
             .toList();
+
+        // New insight data
+        final spendingJson = data['spendingInsight'] as Map<String, dynamic>?;
+        if (spendingJson != null) {
+          _spendingInsight = SpendingInsight.fromJson(spendingJson);
+        }
+        _smartTips = (data['smartTips'] as List<dynamic>? ?? [])
+            .map((e) => SmartTip.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
     } catch (e) {
       _fullError = e.toString();
@@ -83,6 +101,10 @@ class ForecastProvider extends ChangeNotifier {
 
   /// Change horizon and re-fetch full data.
   Future<void> setHorizon(int days) => fetchFull(days: days);
+
+  /// Change spending analysis period and re-fetch.
+  Future<void> setSpendingDays(int days) =>
+      fetchFull(days: _horizonDays, spendingDays: days);
 
   /// Populate summary from dashboard response (avoids extra HTTP round-trip).
   void injectFromDashboard(Map<String, dynamic>? json) {

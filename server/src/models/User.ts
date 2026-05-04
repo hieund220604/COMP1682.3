@@ -14,6 +14,7 @@ export interface IUser extends Document {
     twoFactorSecret?: string;
     twoFactorEnabled: boolean;
     twoFactorBackupCodes?: string[];
+    isPro: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -71,6 +72,10 @@ const UserSchema = new Schema<IUser>({
     twoFactorBackupCodes: {
         type: [String],
         default: []
+    },
+    isPro: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true,

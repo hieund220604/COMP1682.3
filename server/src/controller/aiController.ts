@@ -1,9 +1,19 @@
 import { Request, Response } from 'express';
 import { ResponseUtil } from '../util/responseUtil';
 import { AIService } from '../service/aiService';
+import { User } from '../models/User';
 
 export const aiController = {
     async extractInvoice(req: Request, res: Response): Promise<void> {
+        // @ts-ignore
+        const userId = req.user?.id || req.user?._id;
+        if (userId) {
+            const user = await User.findById(userId);
+            if (user && !user.isPro) {
+                return ResponseUtil.error(res, 'The AI Scanner feature is only available for Pro accounts. Please upgrade to use this feature.', 403);
+            }
+        }
+
         const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
         const groupId = typeof req.body?.groupId === 'string' ? req.body.groupId : undefined;
 
@@ -20,6 +30,15 @@ export const aiController = {
         }
     },
     async extractInvoiceFromImage(req: Request, res: Response): Promise<void> {
+        // @ts-ignore
+        const userId = req.user?.id || req.user?._id;
+        if (userId) {
+            const user = await User.findById(userId);
+            if (user && !user.isPro) {
+                return ResponseUtil.error(res, 'The AI Scanner feature is only available for Pro accounts. Please upgrade to use this feature.', 403);
+            }
+        }
+
         if (!req.file || !req.file.buffer) {
             return ResponseUtil.validationError(res, 'file is required');
         }

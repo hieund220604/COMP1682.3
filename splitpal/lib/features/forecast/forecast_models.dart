@@ -40,6 +40,8 @@ class ForecastSummary {
   final double totalConfirmedOutflow;
   final double totalExpectedInflow;
   final List<ForecastAlert> alerts;
+  final int healthScore;
+  final String healthLabel;
 
   const ForecastSummary({
     required this.currentBalance,
@@ -50,6 +52,8 @@ class ForecastSummary {
     required this.totalConfirmedOutflow,
     required this.totalExpectedInflow,
     required this.alerts,
+    this.healthScore = 0,
+    this.healthLabel = 'Fair',
   });
 
   factory ForecastSummary.fromJson(Map<String, dynamic> j) => ForecastSummary(
@@ -66,6 +70,8 @@ class ForecastSummary {
         alerts: (j['alerts'] as List<dynamic>? ?? [])
             .map((a) => ForecastAlert.fromJson(a as Map<String, dynamic>))
             .toList(),
+        healthScore: (j['healthScore'] as num?)?.toInt() ?? 0,
+        healthLabel: j['healthLabel'] as String? ?? 'Fair',
       );
 
   bool get isSafe => firstNegativeDate == null;
@@ -76,6 +82,14 @@ class ForecastSummary {
     final neg = DateTime.tryParse(firstNegativeDate!);
     if (neg == null) return null;
     return neg.difference(DateTime.now()).inDays;
+  }
+
+  Color get healthColor {
+    if (healthScore >= 85) return const Color(0xFF27AE60);
+    if (healthScore >= 70) return const Color(0xFF2ECC71);
+    if (healthScore >= 50) return const Color(0xFFF39C12);
+    if (healthScore >= 30) return const Color(0xFFE67E22);
+    return const Color(0xFFE74C3C);
   }
 }
 
@@ -200,4 +214,129 @@ class DailyForecastModel {
 
   bool get hasEvents => outflows.isNotEmpty || inflows.isNotEmpty;
   bool get isNegative => closingBalanceSafe < 0;
+}
+
+// ── Category Breakdown ────────────────────────────────────────────────────────
+
+class CategoryBreakdown {
+  final String category;
+  final String label;
+  final double amount;
+  final int percent;
+  final int count;
+
+  const CategoryBreakdown({
+    required this.category,
+    required this.label,
+    required this.amount,
+    required this.percent,
+    required this.count,
+  });
+
+  factory CategoryBreakdown.fromJson(Map<String, dynamic> j) =>
+      CategoryBreakdown(
+        category: j['category'] as String? ?? '',
+        label: j['label'] as String? ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        percent: (j['percent'] as num?)?.toInt() ?? 0,
+        count: (j['count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+// ── Spending Insight ──────────────────────────────────────────────────────────
+
+class SpendingInsight {
+  final int periodDays;
+  final double currentPeriodOutflow;
+  final double previousPeriodOutflow;
+  final double changePercent;
+  final String trend; // UP | DOWN | STABLE
+  final List<CategoryBreakdown> categoryBreakdown;
+  final double dailyAvgSpending;
+  final String? peakSpendingDay;
+  final double subscriptionMonthlyTotal;
+  final int subscriptionPercent;
+
+  const SpendingInsight({
+    required this.periodDays,
+    required this.currentPeriodOutflow,
+    required this.previousPeriodOutflow,
+    required this.changePercent,
+    required this.trend,
+    required this.categoryBreakdown,
+    required this.dailyAvgSpending,
+    this.peakSpendingDay,
+    required this.subscriptionMonthlyTotal,
+    required this.subscriptionPercent,
+  });
+
+  factory SpendingInsight.fromJson(Map<String, dynamic> j) => SpendingInsight(
+        periodDays: (j['periodDays'] as num?)?.toInt() ?? 7,
+        currentPeriodOutflow:
+            (j['currentPeriodOutflow'] as num?)?.toDouble() ?? 0,
+        previousPeriodOutflow:
+            (j['previousPeriodOutflow'] as num?)?.toDouble() ?? 0,
+        changePercent: (j['changePercent'] as num?)?.toDouble() ?? 0,
+        trend: j['trend'] as String? ?? 'STABLE',
+        categoryBreakdown: (j['categoryBreakdown'] as List<dynamic>? ?? [])
+            .map((e) =>
+                CategoryBreakdown.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        dailyAvgSpending:
+            (j['dailyAvgSpending'] as num?)?.toDouble() ?? 0,
+        peakSpendingDay: j['peakSpendingDay'] as String?,
+        subscriptionMonthlyTotal:
+            (j['subscriptionMonthlyTotal'] as num?)?.toDouble() ?? 0,
+        subscriptionPercent:
+            (j['subscriptionPercent'] as num?)?.toInt() ?? 0,
+      );
+
+  bool get isUp => trend == 'UP';
+  bool get isDown => trend == 'DOWN';
+}
+
+// ── Smart Tip ─────────────────────────────────────────────────────────────────
+
+class SmartTip {
+  final String id;
+  final String icon;
+  final String title;
+  final String description;
+  final String type; // SAVING | WARNING | INFO | ACTION
+  final int priority;
+
+  const SmartTip({
+    required this.id,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.type,
+    required this.priority,
+  });
+
+  factory SmartTip.fromJson(Map<String, dynamic> j) => SmartTip(
+        id: j['id'] as String? ?? '',
+        icon: j['icon'] as String? ?? '💡',
+        title: j['title'] as String? ?? '',
+        description: j['description'] as String? ?? '',
+        type: j['type'] as String? ?? 'INFO',
+        priority: (j['priority'] as num?)?.toInt() ?? 5,
+      );
+
+  bool get isAction => type == 'ACTION';
+  bool get isWarning => type == 'WARNING';
+  bool get isSaving => type == 'SAVING';
+
+  Color get typeColor {
+    switch (type) {
+      case 'ACTION':
+        return const Color(0xFFE53E3E);
+      case 'WARNING':
+        return const Color(0xFFDD6B20);
+      case 'SAVING':
+        return const Color(0xFF38A169);
+      default:
+        return const Color(0xFF3182CE);
+    }
+  }
 }

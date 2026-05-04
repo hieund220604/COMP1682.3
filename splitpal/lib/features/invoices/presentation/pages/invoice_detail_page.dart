@@ -33,6 +33,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   Invoice? _currentInvoice;
   bool _isLoading = true;
   bool _isPayingNow = false;
+  bool _isDeleting = false;
+
+  // Brand-derived palette
+  static const _brand = AppColors.brand;
 
   @override
   void initState() {
@@ -82,7 +86,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8472A), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white),
               onPressed: () {
                 Navigator.pop(ctx);
                 _navigateToEditDraft();
@@ -110,7 +114,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8472A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Confirm'),
           ),
@@ -130,7 +134,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Invoice confirmed and sent to members!'),
-          backgroundColor: const Color(0xFFE8472A),
+          backgroundColor: _brand,
         ),
       );
       await _loadInvoiceDetail();
@@ -159,6 +163,61 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     // Reload if changes were made
     if (result == true && mounted) {
       await _loadInvoiceDetail();
+    }
+  }
+
+  /// Delete invoice after user confirmation.
+  Future<void> _deleteInvoice() async {
+    if (_currentInvoice == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Invoice'),
+        content: Text(
+          'Are you sure you want to delete "${_currentInvoice!.title}"? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    final provider = context.read<InvoiceProvider>();
+    final ok = await provider.deleteInvoice(widget.groupId, widget.invoiceId);
+
+    if (!mounted) return;
+    setState(() => _isDeleting = false);
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invoice deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true); // return true to signal deletion
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Failed to delete invoice'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -208,6 +267,26 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return false;
   }
 
+  /// Whether the current user can edit this invoice.
+  /// DRAFT: owner/admin can edit. SUBMITTED: uploader OR owner/admin.
+  bool _canEditInvoice(Invoice invoice) {
+    if (invoice.isLocked) return false;
+    final currentUserId = context.read<AuthProvider>().user?.id;
+    if (currentUserId == null) return false;
+    if (context.read<GroupProvider>().isOwnerOrAdmin) return true;
+    return invoice.uploadedBy == currentUserId;
+  }
+
+  /// Whether the current user can delete this invoice.
+  /// DRAFT: owner/admin can delete. SUBMITTED: uploader OR owner/admin.
+  bool _canDeleteInvoice(Invoice invoice) {
+    if (invoice.isLocked) return false;
+    final currentUserId = context.read<AuthProvider>().user?.id;
+    if (currentUserId == null) return false;
+    if (context.read<GroupProvider>().isOwnerOrAdmin) return true;
+    return invoice.uploadedBy == currentUserId;
+  }
+
   Future<void> _handlePayNow() async {
     if (_currentInvoice == null) return;
     
@@ -241,6 +320,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
       return Scaffold(
@@ -269,12 +349,21 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         title: const Text('Invoice Details'),
         centerTitle: true,
         actions: [
-          if (invoice.status == 'DRAFT' && context.read<GroupProvider>().isOwnerOrAdmin)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              tooltip: 'Edit amounts',
-              onPressed: _navigateToEditDraft,
-            ),
+          if (!invoice.isLocked) ...[
+            if (invoice.status == 'DRAFT' || _canEditInvoice(invoice))
+              IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: 'Edit invoice',
+                onPressed: _navigateToEditDraft,
+              ),
+            if (invoice.status == 'DRAFT' || _canDeleteInvoice(invoice))
+              IconButton(
+                icon: Icon(Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error),
+                tooltip: 'Delete invoice',
+                onPressed: _isDeleting ? null : _deleteInvoice,
+              ),
+          ],
         ],
       ),
       body: RefreshIndicator(
@@ -292,18 +381,26 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   margin: const EdgeInsets.only(bottom: AppSpacing.md),
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
+                    color: isDark
+                        ? _brand.withOpacity(0.08)
+                        : AppColors.brandSurface,
                     borderRadius: BorderRadius.circular(AppRadii.md),
-                    border: Border.all(color: scheme.outlineVariant),
+                    border: Border.all(
+                      color: _brand.withOpacity(isDark ? 0.2 : 0.15),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: scheme.onSurfaceVariant, size: 20),
+                      Icon(Icons.info_outline, color: _brand.withOpacity(0.7), size: 20),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
                           'This recurring invoice is pending confirmation. You can edit amounts before submitting.',
-                          style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                          style: textTheme.bodySmall?.copyWith(
+                            color: isDark
+                                ? _brand.withOpacity(0.85)
+                                : AppColors.brandDark,
+                          ),
                         ),
                       ),
                     ],
@@ -368,74 +465,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // Total Card
-              AppCard(
-                color: scheme.primaryContainer,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          invoice.hasCurrencyConversion ? 'Original Total' : 'Total Amount',
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                        Text(
-                          CurrencyFormatter.formatCurrency(invoice.amountTotal, invoice.currency),
-                          style: textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (invoice.hasCurrencyConversion) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: scheme.surface.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(AppRadii.md),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Converted (${invoice.baseCurrency ?? 'VND'})',
-                                  style: textTheme.bodyMedium,
-                                ),
-                                Text(
-                                  CurrencyFormatter.formatCurrency(
-                                    invoice.convertedAmountTotal!, invoice.baseCurrency ?? 'VND'),
-                                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Row(
-                              children: [
-                                Icon(Icons.lock_outline, size: 12, color: scheme.onSurfaceVariant),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '1 ${invoice.currency} = ${invoice.exchangeRate!.toStringAsFixed(invoice.exchangeRate! < 1 ? 6 : 2)} ${invoice.baseCurrency ?? 'VND'}',
-                                  style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              // Total Card — brand-tinted instead of primaryContainer
+              _buildTotalCard(context, invoice, isDark),
               const SizedBox(height: 32),
 
               // Action Buttons
@@ -469,11 +500,87 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                                 : const Text('Confirm & Notify', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _isDeleting ? null : _deleteInvoice,
+                            icon: _isDeleting
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                : Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                            label: Text(
+                              _isDeleting ? 'Deleting...' : 'Delete Invoice',
+                              style: TextStyle(color: Theme.of(context).colorScheme.error),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Theme.of(context).colorScheme.error.withOpacity(0.5)),
+                            ),
+                          ),
+                        ),
                       ],
+                      // SUBMITTED invoices — allow edit + delete for the uploader
+                      if (invoice.status == 'SUBMITTED' && !invoice.isLocked && _canEditInvoice(invoice)) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonalIcon(
+                            onPressed: _navigateToEditDraft,
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Edit Invoice'),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _isDeleting ? null : _deleteInvoice,
+                            icon: _isDeleting
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                : Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                            label: Text(
+                              _isDeleting ? 'Deleting...' : 'Delete Invoice',
+                              style: TextStyle(color: Theme.of(context).colorScheme.error),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Theme.of(context).colorScheme.error.withOpacity(0.5)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ] else if (!isOwnerOrAdmin && invoice.status == 'SUBMITTED' && !invoice.isLocked && _canDeleteInvoice(invoice)) ...[
+                      // Non-admin uploaders can still edit/delete their own
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonalIcon(
+                          onPressed: _navigateToEditDraft,
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Edit Invoice'),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: _isDeleting ? null : _deleteInvoice,
+                          icon: _isDeleting
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                          label: Text(
+                            _isDeleting ? 'Deleting...' : 'Delete Invoice',
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Theme.of(context).colorScheme.error.withOpacity(0.5)),
+                          ),
+                        ),
+                      ),
                     ],
                     
                     // Pay Now button for non-admin users who owe money
                     if (!isOwnerOrAdmin && invoice.status == 'SUBMITTED' && userOwes) ...[
+                      const SizedBox(height: AppSpacing.md),
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -497,46 +604,162 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     );
   }
 
+  Widget _buildTotalCard(BuildContext context, Invoice invoice, bool isDark) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  _brand.withOpacity(0.15),
+                  AppColors.brandDark.withOpacity(0.10),
+                ]
+              : [
+                  AppColors.brandSurface,
+                  _brand.withOpacity(0.08),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(
+          color: _brand.withOpacity(isDark ? 0.25 : 0.18),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                invoice.hasCurrencyConversion ? 'Original Total' : 'Total Amount',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : AppColors.brandDark,
+                ),
+              ),
+              Text(
+                CurrencyFormatter.formatCurrency(invoice.amountTotal, invoice.currency),
+                style: textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: _brand,
+                ),
+              ),
+            ],
+          ),
+          if (invoice.hasCurrencyConversion) ...[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.white.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(AppRadii.md),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Converted (${invoice.baseCurrency ?? 'VND'})',
+                        style: textTheme.bodyMedium,
+                      ),
+                      Text(
+                        CurrencyFormatter.formatCurrency(
+                          invoice.convertedAmountTotal!, invoice.baseCurrency ?? 'VND'),
+                        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Icon(Icons.lock_outline, size: 12, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        '1 ${invoice.currency} = ${invoice.exchangeRate!.toStringAsFixed(invoice.exchangeRate! < 1 ? 6 : 2)} ${invoice.baseCurrency ?? 'VND'}',
+                        style: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusBadge(BuildContext context) {
     if (_currentInvoice == null) return const SizedBox.shrink();
     
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final scheme = Theme.of(context).colorScheme;
+
     Color badgeColor;
+    Color badgeTextColor;
+    Color badgeBgColor;
     String statusText;
 
     switch (_currentInvoice!.status) {
       case 'DRAFT':
         badgeColor = scheme.outline;
+        badgeTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+        badgeBgColor = isDark
+            ? scheme.surfaceContainerHigh
+            : const Color(0xFFF1F5F9);
         statusText = 'Draft';
         break;
       case 'SUBMITTED':
-        badgeColor = scheme.primary;
+        badgeColor = _brand;
+        badgeTextColor = Colors.white;
+        badgeBgColor = _brand;
         statusText = 'Submitted';
         break;
       case 'PAID':
-        badgeColor = Colors.blue.shade600;
+        badgeColor = scheme.tertiary;
+        badgeTextColor = Colors.white;
+        badgeBgColor = scheme.tertiary;
         statusText = 'Paid';
         break;
       case 'LOCKED':
-        badgeColor = Colors.green.shade600;
+        badgeColor = scheme.tertiary;
+        badgeTextColor = Colors.white;
+        badgeBgColor = scheme.tertiary;
         statusText = 'Locked';
         break;
       default:
         badgeColor = scheme.outlineVariant;
+        badgeTextColor = scheme.onSurfaceVariant;
+        badgeBgColor = scheme.surfaceContainerHigh;
         statusText = _currentInvoice!.status;
     }
+
+    // For Draft, use a tonal style; for others, use filled
+    final isDraft = _currentInvoice!.status == 'DRAFT';
 
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
         decoration: BoxDecoration(
-          color: badgeColor,
+          color: badgeBgColor,
           borderRadius: BorderRadius.circular(AppRadii.pill),
+          border: isDraft
+              ? Border.all(color: badgeColor.withOpacity(0.4))
+              : null,
         ),
         child: Text(
           statusText.toUpperCase(),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: badgeTextColor,
             fontSize: 12,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.0,
@@ -553,6 +776,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -561,10 +785,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
+              color: isDark
+                  ? _brand.withOpacity(0.12)
+                  : _brand.withOpacity(0.08),
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: Icon(icon, color: scheme.onSurfaceVariant, size: 24),
+            child: Icon(icon, color: _brand.withOpacity(0.8), size: 24),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -596,6 +822,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   Widget _buildItemCard(BuildContext context, int index, InvoiceItem item) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -606,12 +833,24 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'ITEM $index',
-                style: textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.0,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _brand.withOpacity(0.12)
+                      : _brand.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                ),
+                child: Text(
+                  'ITEM $index',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: _brand,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ),
               Text(
@@ -639,14 +878,20 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
+                    color: isDark
+                        ? _brand.withOpacity(0.08)
+                        : _brand.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(AppRadii.md),
-                    border: Border.all(color: scheme.outlineVariant),
+                    border: Border.all(
+                      color: _brand.withOpacity(isDark ? 0.18 : 0.12),
+                    ),
                   ),
                   child: Text(
                     name,
                     style: textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurface,
+                      color: isDark
+                          ? scheme.onSurface
+                          : AppColors.brandDark,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

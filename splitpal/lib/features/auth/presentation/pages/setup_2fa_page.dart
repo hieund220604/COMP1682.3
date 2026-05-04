@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 
 class Setup2FAPage extends StatefulWidget {
@@ -19,6 +21,8 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   String? _errorMessage;
   bool _isLoading = false;
   final _codeController = TextEditingController();
+
+  static const _brand = AppColors.brand;
 
   @override
   void initState() {
@@ -88,18 +92,8 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Set Up 2FA',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Set Up 2FA'),
       ),
       body: SafeArea(
         child: _buildBody(),
@@ -110,8 +104,8 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   Widget _buildBody() {
     switch (_step) {
       case 0:
-        return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF6C5CE7)),
+        return Center(
+          child: CircularProgressIndicator(color: _brand),
         );
       case 1:
         return _buildQRCodeStep();
@@ -125,69 +119,80 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   }
 
   Widget _buildQRCodeStep() {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
+          // Icon container
           Container(
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: const Color(0xFF6C5CE7).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
+              color: isDark
+                  ? _brand.withOpacity(0.15)
+                  : _brand.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.qr_code_2,
               size: 36,
-              color: Color(0xFF6C5CE7),
+              color: _brand,
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          const SizedBox(height: AppSpacing.lg),
+          Text(
             'Scan QR Code',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Scan this QR code with your authenticator app\n(Google Authenticator, Authy, etc.)',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withOpacity(0.7),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           // QR Code Image
           if (_qrCodeUrl != null)
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                border: Border.all(
+                  color: scheme.outlineVariant.withOpacity(0.6),
+                ),
               ),
               child: _buildQRImage(),
             ),
           if (_errorMessage != null && _qrCodeUrl == null)
-            Text(
-              _errorMessage!,
-              style: const TextStyle(color: Color(0xFFE74C3C), fontSize: 13),
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Text(
+                _errorMessage!,
+                style: textTheme.bodySmall?.copyWith(
+                  color: scheme.error,
+                ),
+              ),
             ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
           // Manual key
           if (_manualKey != null) ...[
             Text(
               'Or enter this key manually:',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.white.withOpacity(0.7),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: _manualKey!));
@@ -196,11 +201,16 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
                 );
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                  color: isDark
+                      ? scheme.surfaceContainerHigh
+                      : scheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -208,45 +218,36 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
                     Flexible(
                       child: Text(
                         _manualKey!,
-                        style: const TextStyle(
-                          fontSize: 14,
+                        style: textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
                           fontFamily: 'monospace',
                           letterSpacing: 2,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.copy, size: 18, color: Colors.white.withOpacity(0.5)),
+                    const SizedBox(width: AppSpacing.sm),
+                    Icon(Icons.copy, size: 18, color: scheme.onSurfaceVariant),
                   ],
                 ),
               ),
             ),
           ],
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xxl),
           SizedBox(
             width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
+            height: 52,
+            child: FilledButton(
               onPressed: () => setState(() {
                 _step = 2;
                 _errorMessage = null;
               }),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text(
                 'Next',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
         ],
       ),
     );
@@ -275,8 +276,12 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   }
 
   Widget _buildVerifyStep() {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -285,90 +290,73 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: const Color(0xFF6C5CE7).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
+              color: isDark
+                  ? _brand.withOpacity(0.15)
+                  : _brand.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.pin,
               size: 36,
-              color: Color(0xFF6C5CE7),
+              color: _brand,
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          const SizedBox(height: AppSpacing.lg),
+          Text(
             'Enter Verification Code',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Enter the 6-digit code shown in\nyour authenticator app',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withOpacity(0.7),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xxl),
           TextField(
             controller: _codeController,
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             maxLength: 6,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: const TextStyle(
-              fontSize: 28,
+            style: textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.white,
               letterSpacing: 8,
             ),
             decoration: InputDecoration(
               counterText: '',
               hintText: '000000',
-              hintStyle: TextStyle(
-                fontSize: 28,
+              hintStyle: textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.white.withOpacity(0.2),
+                color: scheme.onSurfaceVariant.withOpacity(0.2),
                 letterSpacing: 8,
               ),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.08),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.xl,
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             ),
             onSubmitted: (_) => _handleVerify(),
           ),
           if (_errorMessage != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Text(
               _errorMessage!,
-              style: const TextStyle(color: Color(0xFFE74C3C), fontSize: 13),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.error,
+              ),
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           SizedBox(
             width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
+            height: 52,
+            child: FilledButton(
               onPressed: _isLoading ? null : _handleVerify,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                disabledBackgroundColor: const Color(0xFF6C5CE7).withOpacity(0.5),
-              ),
               child: _isLoading
                   ? const SizedBox(
                       width: 24,
@@ -381,7 +369,7 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           TextButton(
             onPressed: () => setState(() {
               _step = 1;
@@ -390,7 +378,9 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
             }),
             child: Text(
               'Back to QR Code',
-              style: TextStyle(color: Colors.white.withOpacity(0.6)),
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -399,86 +389,100 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
   }
 
   Widget _buildBackupCodesStep() {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
+          // Success icon
           Container(
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: const Color(0xFF27AE60).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
+              color: isDark
+                  ? scheme.tertiary.withOpacity(0.15)
+                  : scheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.check_circle,
               size: 36,
-              color: Color(0xFF27AE60),
+              color: scheme.tertiary,
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          const SizedBox(height: AppSpacing.lg),
+          Text(
             '2FA Enabled!',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             'Save these backup codes in a safe place.\nEach code can only be used once.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withOpacity(0.7),
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
+          // Backup codes container
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE74C3C).withOpacity(0.3)),
+              color: isDark
+                  ? _brand.withOpacity(0.06)
+                  : AppColors.brandSurface,
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              border: Border.all(
+                color: _brand.withOpacity(isDark ? 0.2 : 0.15),
+              ),
             ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.withOpacity(0.8)),
+                    Icon(Icons.warning_amber_rounded, size: 18, color: _brand),
                     const SizedBox(width: 6),
                     Text(
                       'Backup Codes',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.amber.withOpacity(0.9),
+                      style: textTheme.labelLarge?.copyWith(
+                        color: _brand,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
                   children: _backupCodes.map((code) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(8),
+                        color: isDark
+                            ? scheme.surfaceContainerHigh
+                            : scheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(AppRadii.sm),
+                        border: Border.all(
+                          color: scheme.outlineVariant.withOpacity(0.6),
+                        ),
                       ),
                       child: Text(
                         code,
-                        style: const TextStyle(
+                        style: textTheme.bodyMedium?.copyWith(
                           fontFamily: 'monospace',
-                          fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
                           letterSpacing: 1.5,
                         ),
                       ),
@@ -488,7 +492,7 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           // Copy all button
           OutlinedButton.icon(
             onPressed: () {
@@ -500,32 +504,28 @@ class _Setup2FAPageState extends State<Setup2FAPage> {
             icon: const Icon(Icons.copy, size: 18),
             label: const Text('Copy All Codes'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: BorderSide(color: Colors.white.withOpacity(0.3)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.md,
+              ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xxl),
           SizedBox(
             width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
+            height: 52,
+            child: FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
               child: const Text(
                 'Done',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
         ],
       ),
     );

@@ -138,7 +138,7 @@ InvoiceSchema.index({ templateId: 1 });
 // Idempotency: prevent duplicate auto-generation for same template+period
 InvoiceSchema.index(
     { templateId: 1, billingPeriod: 1 },
-    { unique: true, sparse: true }
+    { unique: true, partialFilterExpression: { templateId: { $type: 'string' }, billingPeriod: { $type: 'string' } } }
 );
 
 export const Invoice = mongoose.model<IInvoice>('Invoice', InvoiceSchema);

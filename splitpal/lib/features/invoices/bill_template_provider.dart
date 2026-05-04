@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/network/dio_client.dart';
 import '../../models/bill_template.dart';
 import '../../models/invoice.dart';
+import 'package:dio/dio.dart';
 
 class BillTemplateProvider with ChangeNotifier {
   final DioClient _dio;
@@ -66,6 +67,14 @@ class BillTemplateProvider with ChangeNotifier {
       _selectedTemplate = template;
       _setLoading(false);
       return true;
+    } on DioException catch (e) {
+      if (e.response?.data is Map && e.response?.data['message'] != null) {
+        _setError(e.response?.data['message']);
+      } else {
+        _setError(e.message);
+      }
+      _setLoading(false);
+      return false;
     } catch (e) {
       _setError(e.toString());
       _setLoading(false);

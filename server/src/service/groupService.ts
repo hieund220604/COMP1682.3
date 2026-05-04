@@ -53,6 +53,16 @@ async function createUniqueJoinCode(): Promise<string> {
 
 export const groupService = {
     async createGroup(userId: string, data: CreateGroupRequest): Promise<GroupResponse> {
+        const user = await User.findById(userId).select('_id email displayName avatarUrl isPro');
+        if (!user) throw new Error('User not found');
+
+        if (!user.isPro) {
+            const groupCount = await Group.countDocuments({ createdBy: userId, deletedAt: null });
+            if (groupCount >= 3) {
+                throw new Error('You have reached the limit for creating groups on a free account. Please upgrade to Pro to create unlimited groups.');
+            }
+        }
+
         const joinCode = await createUniqueJoinCode();
 
         const group = await Group.create({
@@ -68,8 +78,6 @@ export const groupService = {
             userId: userId,
             role: 'OWNER'
         });
-
-        const user = await User.findById(userId).select('_id email displayName avatarUrl');
 
         return {
             id: group._id.toString(),

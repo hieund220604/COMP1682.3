@@ -7,7 +7,10 @@ import 'package:splitpal/models/bill_template.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/icons/app_icons.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/core/widgets/upgrade_pro_dialog.dart';
 import 'create_bill_template_page.dart';
+import 'edit_bill_template_page.dart';
 
 /// Manage recurring bill templates list page.
 class BillTemplateListPage extends StatefulWidget {
@@ -40,8 +43,8 @@ class _BillTemplateListPageState extends State<BillTemplateListPage> {
       appBar: AppBar(
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
+        centerTitle: true,
         title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Recurring Bills', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             Text(
@@ -164,12 +167,34 @@ class _BillTemplateListPageState extends State<BillTemplateListPage> {
   }
 
   void _openCreate(BuildContext context) {
+    final authProvider = context.read<AuthProvider>();
+    final isPro = authProvider.user?.isPro ?? false;
+    final provider = context.read<BillTemplateProvider>();
+    
+    // Count templates created by this user in the current group
+    final activeCount = provider.activeTemplates
+        .where((t) => t.createdBy == authProvider.user?.id)
+        .length;
+
+    if (!isPro && activeCount >= 2) {
+      _showUpgradeDialog(context);
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CreateBillTemplatePage(groupId: widget.groupId),
       ),
     ).then((_) => _load());
+  }
+
+  void _showUpgradeDialog(BuildContext context) {
+    UpgradeProDialog.show(
+      context,
+      description: 'You have reached the limit of 2 templates for free accounts.\n\n'
+          'Upgrade to PRO to create unlimited recurring bill templates and unlock more features!',
+    );
   }
 }
 
@@ -436,13 +461,22 @@ class _TemplateCardState extends State<_TemplateCard> {
                             onTap: () => _resume(context),
                           ),
 
-                        // Archive
+                        // Edit
                         if (t.status != 'ARCHIVED')
                           _ActionChip(
-                            icon: Icons.archive_outlined,
-                            label: 'Archive',
-                            color: scheme.outline,
-                            onTap: () => _archive(context),
+                            icon: Icons.edit_outlined,
+                            label: 'Edit',
+                            color: scheme.primary,
+                            onTap: () => _edit(context),
+                          ),
+
+                        // Delete
+                        if (t.status != 'ARCHIVED')
+                          _ActionChip(
+                            icon: Icons.delete_outline,
+                            label: 'Delete',
+                            color: scheme.error,
+                            onTap: () => _delete(context),
                           ),
                       ],
                     ),
@@ -523,19 +557,31 @@ class _TemplateCardState extends State<_TemplateCard> {
     if (ok) widget.onRefresh();
   }
 
-  Future<void> _archive(BuildContext context) async {
+  void _edit(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditBillTemplatePage(
+          groupId: widget.groupId,
+          template: t,
+        ),
+      ),
+    ).then((_) => widget.onRefresh());
+  }
+
+  Future<void> _delete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
-        title: const Text('Archive template'),
-        content: Text('Are you sure you want to archive "${t.name}"?\n\nThis template will no longer generate new bills.'),
+        title: const Text('Delete template'),
+        content: Text('Are you sure you want to delete "${t.name}"?\n\nThis template will no longer generate new bills.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.outline),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Archive'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -548,8 +594,8 @@ class _TemplateCardState extends State<_TemplateCard> {
     setState(() => _isActionLoading = false);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'Archived "${t.name}"' : (provider.errorMessage ?? 'Error')),
-      backgroundColor: ok ? Colors.grey : Theme.of(context).colorScheme.error,
+      content: Text(ok ? 'Deleted "${t.name}"' : (provider.errorMessage ?? 'Error')),
+      backgroundColor: ok ? Colors.green : Theme.of(context).colorScheme.error,
     ));
     if (ok) widget.onRefresh();
   }
