@@ -32,13 +32,13 @@ jobs:
         run: printf '%s' "$KEYSTORE_B64" | base64 --decode > splitpal/android/app/release.jks
 
       - name: Create production .env
-        working-directory: splitpal
         run: |
-          cat > .env << EOF
+          cat > splitpal/.env << 'ENVEOF'
           API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}
           GEMINI_API_KEY=${{ secrets.PRODUCTION_GEMINI_KEY }}
           GOOGLE_WEB_CLIENT_ID=${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}
-          EOF
+          ENVEOF
+          sed -i 's/^[[:space:]]*//' splitpal/.env
 
       - name: Install dependencies
         working-directory: splitpal
@@ -47,7 +47,7 @@ jobs:
       - name: Build APK
         working-directory: splitpal
         env:
-          KEYSTORE_PATH: android/app/release.jks
+          KEYSTORE_PATH: release.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}

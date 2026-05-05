@@ -22,13 +22,13 @@ jobs:
           cache: true
 
       - name: Create production .env
-        working-directory: splitpal
         run: |
-          cat > .env << EOF
+          cat > splitpal/.env << 'ENVEOF'
           API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}
           GEMINI_API_KEY=${{ secrets.PRODUCTION_GEMINI_KEY }}
           GOOGLE_WEB_CLIENT_ID=${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}
-          EOF
+          ENVEOF
+          sed -i 's/^[[:space:]]*//' splitpal/.env
 
       - name: Install dependencies
         working-directory: splitpal
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build web
         working-directory: splitpal
-        run: flutter build web --release --web-renderer canvaskit
+        run: flutter build web --release
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
