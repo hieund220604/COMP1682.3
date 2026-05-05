@@ -9,8 +9,9 @@ npm-debug.log
 .agents/
 *md/
 postman/
-*.yml
-*.test
+# Server test configs (không chặn .github/workflows/*.yml)
+server/tests/*.yml
+server/tests/*.test
 # Firebase Credentials & Service Accounts
 serviceAccountKey.json
 google-services.json
