@@ -30,6 +30,10 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > splitpal/android/app/release.jks
 
+      - name: Decode google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > splitpal/android/app/google-services.json
+
       - name: Create production .env
         working-directory: splitpal
         run: |
