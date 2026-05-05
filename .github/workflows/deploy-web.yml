@@ -36,7 +36,11 @@ jobs:
 
       - name: Build web
         working-directory: splitpal
-        run: flutter build web --release --dart-define=API_BASE_URL=${{ secrets.PRODUCTION_API_URL }} --dart-define=GEMINI_API_KEY=${{ secrets.PRODUCTION_GEMINI_KEY }} --dart-define=GOOGLE_WEB_CLIENT_ID=${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}
+        run: |
+          API_URL=$(printf '%s' "${{ secrets.PRODUCTION_API_URL }}" | tr -d '\n\r\t ')
+          GEMINI_KEY=$(printf '%s' "${{ secrets.PRODUCTION_GEMINI_KEY }}" | tr -d '\n\r\t ')
+          GOOGLE_CID=$(printf '%s' "${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}" | tr -d '\n\r\t ')
+          flutter build web --release --dart-define=API_BASE_URL=$API_URL --dart-define=GEMINI_API_KEY=$GEMINI_KEY --dart-define=GOOGLE_WEB_CLIENT_ID=$GOOGLE_CID
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
