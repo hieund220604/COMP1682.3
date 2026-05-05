@@ -35,12 +35,10 @@ jobs:
 
       - name: Create production .env
         run: |
-          cat > splitpal/.env << 'ENVEOF'
-          API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}
-          GEMINI_API_KEY=${{ secrets.PRODUCTION_GEMINI_KEY }}
-          GOOGLE_WEB_CLIENT_ID=${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}
-          ENVEOF
-          sed -i 's/^[[:space:]]*//' splitpal/.env
+          echo "API_BASE_URL=${{ secrets.PRODUCTION_API_URL }}" > splitpal/.env
+          echo "GEMINI_API_KEY=${{ secrets.PRODUCTION_GEMINI_KEY }}" >> splitpal/.env
+          echo "GOOGLE_WEB_CLIENT_ID=${{ secrets.PRODUCTION_GOOGLE_CLIENT_ID }}" >> splitpal/.env
+          cat splitpal/.env
 
       - name: Install dependencies
         working-directory: splitpal
