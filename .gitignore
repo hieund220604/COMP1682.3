@@ -14,7 +14,7 @@ server/tests/*.yml
 server/tests/*.test
 # Firebase Credentials & Service Accounts
 serviceAccountKey.json
-google-services.json
+# google-services.json is safe to commit (public config only)
 GoogleService-Info.plist
 firebase-service-account.json
 **/serviceAccountKey.json

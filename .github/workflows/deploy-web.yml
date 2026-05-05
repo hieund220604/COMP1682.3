@@ -21,11 +21,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_B64: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: printf '%s' "$GOOGLE_SERVICES_B64" | base64 --decode > splitpal/android/app/google-services.json
-
       - name: Create production .env
         working-directory: splitpal
         run: |
