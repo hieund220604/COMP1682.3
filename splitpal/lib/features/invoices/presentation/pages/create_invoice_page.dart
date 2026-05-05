@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -45,6 +47,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
   String _selectedCurrency = 'VND';
   String _groupBaseCurrency = 'VND';
+  File? _receiptImage;
+  bool _isUploadingImage = false;
 
   static const _supportedCurrencies = [
     'VND', 'USD', 'EUR', 'GBP', 'JPY', 'KRW', 'CNY', 'THB',
@@ -236,17 +240,37 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       final assigneesList = raw['assignees'] as List<dynamic>? ?? [];
       final shared = raw['shared'] == true;
 
+      // Per-item splitType from AI (overrides root if present)
+      final perItemSplitType = (raw['splitType'] as String? ?? '').toLowerCase().trim();
+      final effectiveSplitMethod = perItemSplitType.isNotEmpty
+          ? (perItemSplitType == 'custom_amount' ? 'CUSTOM_AMOUNT' : perItemSplitType == 'equal' ? 'EQUAL' : rootSplitMethod)
+          : (shared ? 'EQUAL' : rootSplitMethod);
+
       final newItem = InvoiceItemData(
         nameController: TextEditingController(text: name),
         amountController: TextEditingController(text: itemAmount.toStringAsFixed(2)),
-        splitType: toUiSplitType(rootSplitMethod),
+        splitType: toUiSplitType(effectiveSplitMethod),
         assignedTo: [],
       );
 
       bool hasAssignedSpecifics = false;
 
-      // --- Apply per-person split values based on canonical method ---
-      if (rootSplitMethod == 'CUSTOM_AMOUNT') {
+      // --- Try per-item customAmounts first (from AI mixed-assignment) ---
+      final perItemCustomAmounts = raw['customAmounts'] as List<dynamic>? ?? [];
+      if (perItemCustomAmounts.isNotEmpty) {
+        for (var customObj in perItemCustomAmounts) {
+          final amountVal = customObj['amount'] is num ? (customObj['amount'] as num).toDouble() : 0.0;
+          final uid = _findUserId((customObj['name'] as String? ?? ''));
+          if (uid != null && !newItem.assignedTo.contains(uid)) {
+            newItem.assignedTo.add(uid);
+            newItem.splitControllers[uid] = TextEditingController(text: amountVal.toStringAsFixed(2));
+            hasAssignedSpecifics = true;
+          }
+        }
+      }
+
+      // --- Fallback: Apply root-level split details ---
+      if (!hasAssignedSpecifics && effectiveSplitMethod == 'CUSTOM_AMOUNT') {
         final customList = rootSplitDetails['customAmounts'] as List<dynamic>? ?? [];
         for (var customObj in customList) {
           final amountVal = customObj['amount'] is num ? (customObj['amount'] as num).toDouble() : 0.0;
@@ -257,7 +281,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             hasAssignedSpecifics = true;
           }
         }
-      } else if (rootSplitMethod == 'PERCENTAGE') {
+      } else if (!hasAssignedSpecifics && rootSplitMethod == 'PERCENTAGE') {
         final percentList = rootSplitDetails['percentages'] as List<dynamic>? ?? [];
         for (var pObj in percentList) {
           final percentVal = pObj['percentage'] is num ? (pObj['percentage'] as num).toDouble() : 0.0;
@@ -268,7 +292,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
             hasAssignedSpecifics = true;
           }
         }
-      } else if (rootSplitMethod == 'SHARES') {
+      } else if (!hasAssignedSpecifics && rootSplitMethod == 'SHARES') {
         // Convert share ratios to percentages so the UI PERCENTAGE mode displays them correctly
         final shareList = rootSplitDetails['shares'] as List<dynamic>? ?? [];
         final totalShares = shareList.fold<double>(
@@ -293,6 +317,10 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           final uid = _findUserId(pName.toString());
           if (uid != null && !newItem.assignedTo.contains(uid)) {
             newItem.assignedTo.add(uid);
+            // Pre-fill custom amount if this is a person-specific item
+            if (effectiveSplitMethod == 'CUSTOM_AMOUNT' && assigneesList.length == 1) {
+              newItem.splitControllers[uid] = TextEditingController(text: itemAmount.toStringAsFixed(2));
+            }
             hasAssignedSpecifics = true;
           }
         }
@@ -362,6 +390,22 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     }).toList();
 
     final provider = context.read<InvoiceProvider>();
+    
+    String? uploadedImageUrl;
+    if (_receiptImage != null) {
+      setState(() => _isUploadingImage = true);
+      uploadedImageUrl = await provider.uploadInvoiceImage(_receiptImage!.path);
+      setState(() => _isUploadingImage = false);
+      if (uploadedImageUrl == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload image. Please try again.')),
+          );
+        }
+        return;
+      }
+    }
+
     final success = await provider.createInvoice(
       groupId: widget.groupId,
       title: _titleController.text,
@@ -369,6 +413,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       items: items,
       note: _noteController.text.isEmpty ? null : _noteController.text,
       currency: _selectedCurrency,
+      imageUrl: uploadedImageUrl,
     );
 
     if (success) {
@@ -533,8 +578,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
           Consumer<InvoiceProvider>(
             builder: (context, provider, child) {
               return TextButton(
-                onPressed: provider.isLoading ? null : _createInvoice,
-                child: provider.isLoading
+                onPressed: (provider.isLoading || _isUploadingImage) ? null : _createInvoice,
+                child: (provider.isLoading || _isUploadingImage)
                     ? const SizedBox(
                         width: 20,
                         height: 20,
@@ -566,26 +611,23 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  border: Border.all(
-                    color: scheme.primary.withOpacity(0.3),
-                  ),
+                  color: AppColors.brand,
                   borderRadius: BorderRadius.circular(AppRadii.md),
                 ),
                 child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.lightbulb_outline,
-                      color: scheme.primary,
+                      color: Colors.white,
                       size: 20,
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text(
                         'Tip: Use the camera button to capture & auto-fill invoice details',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: scheme.primary,
+                          color: Colors.white,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -790,6 +832,11 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
               const SizedBox(height: 24),
 
+              // ── Per-Person Breakdown ────────────────────────────────────
+              _buildPerPersonBreakdown(scheme, textTheme),
+
+              const SizedBox(height: 24),
+
               // Total Card
               Container(
                 padding: const EdgeInsets.all(20),
@@ -830,11 +877,212 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 24),
+
+              // Attached Image Preview
+              if (_receiptImage != null) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'ATTACHED RECEIPT',
+                      style: TextStyle(
+                        color: scheme.outline,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20, color: Colors.red),
+                      onPressed: () => setState(() => _receiptImage = null),
+                      tooltip: 'Remove image',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    _receiptImage!,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ],
+              
+              if (_receiptImage == null) ...[
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picker = ImagePicker();
+                    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+                    if (pickedFile != null) {
+                      setState(() => _receiptImage = File(pickedFile.path));
+                    }
+                  },
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('Attach Receipt Image'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: scheme.primary,
+                    side: BorderSide(color: scheme.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 40),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildPerPersonBreakdown(ColorScheme scheme, TextTheme textTheme) {
+    // Aggregate shares per user across all items
+    final Map<String, double> shareMap = {};
+    final currentUserId = context.read<AuthProvider>().user?.id ??
+        AppServices.tokenManager.getUserId() ??
+        '';
+
+    for (final item in _items) {
+      final amount = double.tryParse(item.amountController.text.trim()) ?? 0;
+      if (amount <= 0 || item.assignedTo.isEmpty) continue;
+
+      final n = item.assignedTo.length;
+      final splitType = _normalizeSplitType(item.splitType);
+
+      if (splitType == 'EQUAL') {
+        final baseShare = (amount / n).floorToDouble();
+        final remainder = amount - (baseShare * n);
+
+        for (final uid in item.assignedTo) {
+          double userShare = baseShare;
+          // Uploader absorbs the rounding remainder
+          if (uid == currentUserId) {
+            userShare = baseShare + remainder;
+          }
+          shareMap[uid] = (shareMap[uid] ?? 0) + userShare;
+        }
+      } else if (splitType == 'CUSTOM') {
+        for (final uid in item.assignedTo) {
+          final ctrl = item.splitControllers[uid];
+          final val = double.tryParse(ctrl?.text.trim() ?? '') ?? 0;
+          shareMap[uid] = (shareMap[uid] ?? 0) + val;
+        }
+      } else if (splitType == 'PERCENTAGE') {
+        for (final uid in item.assignedTo) {
+          final ctrl = item.splitControllers[uid];
+          final pct = double.tryParse(ctrl?.text.trim() ?? '') ?? 0;
+          shareMap[uid] = (shareMap[uid] ?? 0) + (amount * pct / 100);
+        }
+      }
+    }
+
+    if (shareMap.isEmpty) return const SizedBox.shrink();
+
+    // Sort entries: uploader first, then alphabetically by name
+    final entries = shareMap.entries.toList()
+      ..sort((a, b) {
+        if (a.key == currentUserId) return -1;
+        if (b.key == currentUserId) return 1;
+        final nameA = _memberName(a.key);
+        final nameB = _memberName(b.key);
+        return nameA.compareTo(nameB);
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PER-PERSON BREAKDOWN',
+          style: TextStyle(
+            color: scheme.outline,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          child: Column(
+            children: [
+              for (int i = 0; i < entries.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    color: scheme.outlineVariant.withAlpha(80),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: scheme.primaryContainer,
+                        child: Text(
+                          _memberName(entries[i].key)
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style: TextStyle(
+                            color: scheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _memberName(entries[i].key),
+                              style: textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (entries[i].key == currentUserId)
+                              Text(
+                                'You (uploader)',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontSize: 10,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        CurrencyFormatter.formatCurrency(
+                            entries[i].value, _selectedCurrency),
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _memberName(String userId) {
+    for (final m in _groupMembers) {
+      if (m['id'] == userId) return m['name'] as String? ?? 'Unknown';
+    }
+    return 'Unknown';
   }
 
   Widget _buildLabel(String text, bool required) {

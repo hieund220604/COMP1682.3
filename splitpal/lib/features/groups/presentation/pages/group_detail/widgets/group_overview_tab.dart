@@ -56,8 +56,8 @@ class GroupOverviewTab extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final totalSpent = (balance?['totalSpent'] ?? 0).toDouble();
-    final netBalance = (balance?['netBalance'] ?? 0).toDouble();
+    final totalSpent = _sd(balance?['totalSpent']);
+    final netBalance = _sd(balance?['netBalance']);
 
     final netLabel = netBalance == 0
         ? 'Settled'
@@ -182,6 +182,7 @@ class GroupOverviewTab extends StatelessWidget {
               GroupDebtCard(
                 debts: dashboard!['debts'] as Map<String, dynamic>,
                 currency: currency,
+                groupId: groupId,
               ),
             if (dashboard!['debts'] != null)
               const SizedBox(height: AppSpacing.lg),
@@ -280,8 +281,8 @@ class _PaymentRequestOverview extends StatelessWidget {
           Text('Payment requests', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.md),
           ...prs.map((pr) {
-            final double total = (pr['totalAmount'] ?? 0).toDouble();
-            final double collected = (pr['collectedAmount'] ?? 0).toDouble();
+            final double total = _sd(pr['totalAmount']);
+            final double collected = _sd(pr['collectedAmount']);
             final double pct = total == 0 ? 0 : (collected / total).clamp(0, 1);
             final expiresAt = pr['expiresAt'] != null
                 ? DateTime.tryParse(pr['expiresAt'] as String)
@@ -333,7 +334,7 @@ class _TransferPendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pending = dashboard['transfersPending'] as Map<String, dynamic>? ?? {};
-    final total = (pending['totalAmount'] ?? 0).toDouble();
+    final total = _sd(pending['totalAmount']);
     final count = pending['count'] ?? 0;
     if (count == 0) return const SizedBox.shrink();
     return AppCard(
@@ -504,4 +505,15 @@ class _QuickActionSquare extends StatelessWidget {
       ),
     );
   }
+}
+
+double _sd(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  if (v is Map) {
+    final d = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (d != null) return double.tryParse(d.toString()) ?? 0.0;
+  }
+  return 0.0;
 }

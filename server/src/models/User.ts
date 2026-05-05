@@ -79,7 +79,9 @@ const UserSchema = new Schema<IUser>({
     }
 }, {
     timestamps: true,
-    collection: 'users'
+    collection: 'users',
+    toJSON: { getters: true },
+    toObject: { getters: true }
 });
 
 // Indexes

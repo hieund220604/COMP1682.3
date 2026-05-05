@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
 import '../pages/budget_page.dart';
@@ -104,206 +106,381 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
     final provider = context.watch<ReceiptProvider>();
     final tags = provider.tags;
     final canSave = _file != null && _selectedTagIds.isNotEmpty && !_uploading;
-    final colorScheme = Theme.of(context).colorScheme;
 
+    // ── Pre-capture state: camera/gallery picker ──
     if (_file == null) {
-      return Container(
-        height: 400,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Container(
-              width: 40,
-              height: 5,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade400,
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            Icon(Icons.camera_alt, size: 64, color: colorScheme.primary),
-            const SizedBox(height: 16),
-            Text('Add Receipt', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('Snap a photo of your receipt to upload it.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600)),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                onPressed: () => _pick(ImageSource.camera),
-                icon: const Icon(Icons.photo_camera),
-                label: const Text('Take Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                onPressed: () => _pick(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library),
-                label: const Text('Choose from Gallery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      );
+      return _buildPickerSheet(context);
     }
+
+    // ── Post-capture state: image preview + tagging ──
+    return _buildPreviewSheet(context, provider, tags, canSave);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Initial picker (no image yet)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildPickerSheet(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 400,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        children: [
+          Container(
+            width: 40, height: 5,
+            margin: const EdgeInsets.only(bottom: AppSpacing.xl),
+            decoration: BoxDecoration(
+              color: AppColors.silver,
+              borderRadius: BorderRadius.circular(AppRadii.pill),
+            ),
+          ),
+          Icon(Icons.camera_alt, size: 64, color: scheme.primary),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Add Receipt',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Snap a photo of your receipt to upload it.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.concrete),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity, height: 56,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+              ),
+              onPressed: () => _pick(ImageSource.camera),
+              icon: const Icon(Icons.photo_camera),
+              label: const Text('Take Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity, height: 56,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.md)),
+              ),
+              onPressed: () => _pick(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library),
+              label: const Text('Choose from Gallery', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Post-capture: full-screen image with bottom overlay
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildPreviewSheet(
+    BuildContext context,
+    ReceiptProvider provider,
+    List<ReceiptTag> tags,
+    bool canSave,
+  ) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: AppColors.charcoal,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
       ),
       child: Stack(
         children: [
+          // ── Full-bleed image ──
           Positioned.fill(
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              child: _fileBytes != null 
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
+              child: _fileBytes != null
                   ? Image.memory(_fileBytes!, fit: BoxFit.cover)
                   : Image.file(_file!, fit: BoxFit.cover),
             ),
           ),
+
+          // ── Bottom gradient scrim ──
           Positioned(
             left: 0, right: 0, bottom: 0,
-            height: 350,
+            height: 380,
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black54, Colors.black87, Colors.black],
+                  colors: [
+                    Colors.transparent,
+                    AppColors.charcoal.withOpacity(0.6),
+                    AppColors.charcoal.withOpacity(0.92),
+                    AppColors.charcoal,
+                  ],
+                  stops: const [0.0, 0.3, 0.6, 1.0],
                 ),
               ),
             ),
           ),
+
+          // ── Bottom controls ──
           Positioned(
-            left: 16, right: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            bottom: bottomInset + AppSpacing.xl,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Error banner
                 if (provider.error != null)
-                   Container(
-                     padding: const EdgeInsets.all(8),
-                     margin: const EdgeInsets.only(bottom: 8),
-                     decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.8), borderRadius: BorderRadius.circular(8)),
-                     child: Text(provider.error!, style: const TextStyle(color: Colors.white)),
-                   ),
-                if (tags.isEmpty)
-                  TextButton.icon(
-                    style: TextButton.styleFrom(backgroundColor: Colors.black45),
-                    onPressed: _openTagManager, 
-                    icon: const Icon(Icons.add, color: Colors.amber),
-                    label: const Text('Create required tag', style: TextStyle(color: Colors.amber))
-                  )
-                else 
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                         ...tags.map((t) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              showCheckmark: false,
-                              label: Text(t.name, style: TextStyle(color: _selectedTagIds.contains(t.id) ? Colors.black : Colors.white, fontWeight: FontWeight.bold)),
-                              selected: _selectedTagIds.contains(t.id),
-                              selectedColor: Colors.amber,
-                              backgroundColor: Colors.black45,
-                              side: BorderSide.none,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              onSelected: (_) {
-                                 setState(() {
-                                   if (_selectedTagIds.contains(t.id)) _selectedTagIds.remove(t.id);
-                                   else _selectedTagIds.add(t.id);
-                                 });
-                              }
-                            ),
-                         )),
-                         ActionChip(
-                           label: const Icon(Icons.settings, size: 18, color: Colors.white),
-                           backgroundColor: Colors.black45,
-                           side: BorderSide.none,
-                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                           onPressed: _openTagManager,
-                         )
-                      ]
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                 const SizedBox(height: 12),
-                 Row(
-                   children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                          child: TextField(
-                            controller: _amountCtrl,
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
-                            decoration: InputDecoration(
-                              hintText: 'Total Amount',
-                              hintStyle: const TextStyle(color: Colors.grey),
-                              border: InputBorder.none,
-                              prefixIcon: _scanning 
-                                  ? Container(width: 16, height: 16, padding: const EdgeInsets.all(12), child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.orange))
-                                  : const Icon(Icons.attach_money, color: Colors.orange, size: 20),
-                            )
-                          ),
-                        )
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                          child: TextField(
-                            controller: _noteCtrl,
-                            style: const TextStyle(color: Colors.black, fontSize: 16),
-                            decoration: const InputDecoration(
-                              hintText: 'Add a note...',
-                              hintStyle: TextStyle(color: Colors.grey),
-                              border: InputBorder.none,
-                            )
-                          ),
-                        )
-                      ),
-                      const SizedBox(width: 12),
-                     GestureDetector(
-                       onTap: canSave ? _save : null,
-                       child: CircleAvatar(
-                         radius: 26,
-                         backgroundColor: canSave ? Colors.amber : Colors.grey.shade800,
-                         child: _uploading 
-                             ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)) 
-                             : Icon(Icons.send, color: canSave ? Colors.black : Colors.white54, size: 24),
-                       ),
-                     )
-                  ]
-                )
-              ]
-            )
+                  _buildErrorBanner(provider.error!),
+
+                // Tags
+                _buildTagSection(tags),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Amount + Note + Send
+                _buildInputRow(canSave),
+              ],
+            ),
           ),
+
+          // ── Close button ──
           Positioned(
-            top: 24, left: 16,
-            child: CircleAvatar(
-              backgroundColor: Colors.black54,
-              child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.of(context).pop()),
-            )
-          )
-        ]
-      )
+            top: AppSpacing.xl, left: AppSpacing.lg,
+            child: _buildCloseButton(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Error banner
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildErrorBanner(String error) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0xFFB91C1C).withOpacity(0.85),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white, size: 16),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(error,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Tag section: wrapping chips, no horizontal truncation
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildTagSection(List<ReceiptTag> tags) {
+    if (tags.isEmpty) {
+      return TextButton.icon(
+        style: TextButton.styleFrom(
+          backgroundColor: Colors.black45,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.pill)),
+        ),
+        onPressed: _openTagManager,
+        icon: const Icon(Icons.add, color: Colors.white, size: 18),
+        label: const Text('Create a category', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      );
+    }
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        ...tags.map((t) {
+          final isSelected = _selectedTagIds.contains(t.id);
+          return ChoiceChip(
+            showCheckmark: false,
+            label: Text(
+              t.name.toUpperCase(),
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                letterSpacing: 0.5,
+              ),
+            ),
+            selected: isSelected,
+            selectedColor: AppColors.brand,
+            backgroundColor: Colors.black45,
+            side: isSelected
+                ? const BorderSide(color: AppColors.brandLight, width: 1.5)
+                : BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.pill)),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+            onSelected: (_) {
+              setState(() {
+                if (_selectedTagIds.contains(t.id)) {
+                  _selectedTagIds.remove(t.id);
+                } else {
+                  _selectedTagIds.add(t.id);
+                }
+              });
+            },
+          );
+        }),
+        ActionChip(
+          label: const Icon(Icons.tune, size: 16, color: Colors.white70),
+          backgroundColor: Colors.black38,
+          side: BorderSide.none,
+          shape: const CircleBorder(),
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          onPressed: _openTagManager,
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Input row: Amount | Note | Send
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildInputRow(bool canSave) {
+    // Shared input decoration that kills ALL theme borders
+    const noBorders = InputBorder.none;
+
+    return Row(
+      children: [
+        // Amount field
+        Expanded(
+          flex: 3,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.brand,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: TextField(
+              controller: _amountCtrl,
+              keyboardType: TextInputType.number,
+              cursorColor: Colors.white70,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.transparent,
+                hintText: '0',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                border: noBorders,
+                enabledBorder: noBorders,
+                focusedBorder: noBorders,
+                errorBorder: noBorders,
+                disabledBorder: noBorders,
+                prefixIcon: _scanning
+                    ? Container(
+                        width: 16, height: 16,
+                        padding: const EdgeInsets.all(12),
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white70,
+                        ),
+                      )
+                    : Icon(Icons.payments_outlined, color: Colors.white.withOpacity(0.5), size: 20),
+                prefixIconConstraints: const BoxConstraints(minWidth: 36),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: AppSpacing.sm),
+
+        // Note field
+        Expanded(
+          flex: 4,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.brand,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: TextField(
+              controller: _noteCtrl,
+              cursorColor: Colors.white70,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.transparent,
+                hintText: 'Note (optional)',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                border: noBorders,
+                enabledBorder: noBorders,
+                focusedBorder: noBorders,
+                errorBorder: noBorders,
+                disabledBorder: noBorders,
+                prefixIcon: Icon(Icons.edit_note, color: Colors.white.withOpacity(0.5), size: 20),
+                prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: AppSpacing.md),
+
+        // Send button
+        GestureDetector(
+          onTap: canSave ? _save : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 48, height: 48,
+            decoration: BoxDecoration(
+              color: canSave ? AppColors.brand : Colors.black38,
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+            ),
+            child: _uploading
+                ? const Center(
+                    child: SizedBox(
+                      height: 20, width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    ),
+                  )
+                : Icon(
+                    Icons.check,
+                    color: canSave ? Colors.white : Colors.white.withOpacity(0.3),
+                    size: 22,
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Close button
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildCloseButton() {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: AppColors.charcoal.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+        ),
+        child: const Icon(Icons.close, color: Colors.white, size: 20),
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
+import 'package:splitpal/features/receipts/presentation/widgets/icon_helpers.dart';
 
 Color colorFromHex(String hex) {
   final buffer = StringBuffer();
@@ -84,7 +85,7 @@ class _TagEditorModalState extends State<_TagEditorModal> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.tag?.name ?? '');
     _budgetCtrl = TextEditingController(text: widget.tag?.monthlyBudget != null ? widget.tag!.monthlyBudget!.toInt().toString() : '');
-    _iconCtrl = TextEditingController(text: widget.tag?.icon ?? '🏷️');
+    _iconCtrl = TextEditingController(text: materialIconToEmoji(widget.tag?.icon) ?? widget.tag?.icon ?? '🏷️');
     _selectedColor = widget.tag?.color ?? _colors.first;
   }
 
@@ -118,8 +119,14 @@ class _TagEditorModalState extends State<_TagEditorModal> {
     } else {
       await provider.updateTag(widget.tag!.id, name: name, color: _selectedColor, monthlyBudget: budget, icon: icon);
     }
-    
-    if (mounted) Navigator.pop(context);
+
+    // Reload budget summary so the page reflects changes
+    if (mounted) {
+      final now = DateTime.now();
+      final monthStr = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+      provider.loadBudgetSummary(monthStr);
+      Navigator.pop(context);
+    }
   }
 
   @override

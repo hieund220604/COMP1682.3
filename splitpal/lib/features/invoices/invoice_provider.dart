@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/network/dio_client.dart';
 import '../../models/invoice.dart';
@@ -71,6 +72,24 @@ class InvoiceProvider with ChangeNotifier {
       _setError(e.toString());
       _setLoading(false);
       return false;
+    }
+  }
+
+  // ─── Upload Image ───────────────────────────────────────
+  Future<String?> uploadInvoiceImage(String imagePath) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(imagePath),
+      });
+      final resp = await _dio.post('/upload', data: formData);
+      _setLoading(false);
+      return resp.data['data']['url'] as String?;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      return null;
     }
   }
 

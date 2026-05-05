@@ -324,7 +324,7 @@ class _MemberRowState extends State<_MemberRow> {
     final canManage = widget.currentUserRole == 'OWNER' || 
                      widget.currentUserRole == 'ADMIN';
 
-    return Row(
+    final row = Row(
       children: [
         CircleAvatar(
           radius: 22,
@@ -381,26 +381,27 @@ class _MemberRowState extends State<_MemberRow> {
               ),
             ),
           ),
-          if (canManage && role != 'Owner') ...[
+          if (canManage && role != 'Owner' && _isLoading) ...[
             const SizedBox(width: AppSpacing.md),
-            if (_isLoading)
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              IconButton(
-                icon: const Icon(AppIcons.more),
-                onPressed: () => _showRoleOptions(context),
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                padding: EdgeInsets.zero,
-                iconSize: 20,
-              ),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ],
         ],
       ],
     );
+
+    if (canManage && role != null && role != 'Owner' && !_isLoading) {
+      return GestureDetector(
+        onLongPress: () => _showRoleOptions(context),
+        behavior: HitTestBehavior.opaque,
+        child: row,
+      );
+    }
+
+    return row;
   }
 }
 

@@ -150,8 +150,8 @@ class GroupProvider extends ChangeNotifier {
         );
         if (userBalance != null) {
           currentGroupBalance = {
-            'totalSpent': (userBalance['totalLent'] ?? 0).toDouble(),
-            'netBalance': (userBalance['netBalance'] ?? 0).toDouble(),
+            'totalSpent': _safeDouble(userBalance['totalLent']),
+            'netBalance': _safeDouble(userBalance['netBalance']),
           };
         }
       }
@@ -267,4 +267,15 @@ class GroupProvider extends ChangeNotifier {
       return false;
     }
   }
+}
+
+double _safeDouble(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  if (v is Map) {
+    final d = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (d != null) return double.tryParse(d.toString()) ?? 0.0;
+  }
+  return 0.0;
 }

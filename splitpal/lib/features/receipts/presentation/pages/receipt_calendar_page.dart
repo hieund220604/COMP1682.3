@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'day_receipts_page.dart';
 import 'budget_page.dart';
 import 'budget_page.dart';
@@ -159,6 +160,38 @@ class _ReceiptCalendarPageState extends State<ReceiptCalendarPage> {
                 IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right)),
               ],
             ),
+            const SizedBox(height: 8),
+            // Monthly total
+            if (!provider.isLoadingMonth)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total this month',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      CurrencyFormatter.formatVND(provider.monthSummary.fold<double>(
+                        0, (sum, s) => sum + s.totalAmount,
+                      )),
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             Expanded(
               child: provider.isLoadingMonth

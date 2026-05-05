@@ -29,12 +29,12 @@ class _GroupSpendingCardState extends State<GroupSpendingCard> {
     final textTheme = Theme.of(context).textTheme;
     final s = widget.spending;
 
-    final thisMonth = (s['thisMonth'] as num?)?.toDouble() ?? 0;
-    final lastMonth = (s['lastMonth'] as num?)?.toDouble() ?? 0;
-    final changePercent = (s['changePercent'] as num?)?.toDouble() ?? 0;
+    final thisMonth = _sn(s['thisMonth'])?.toDouble() ?? 0;
+    final lastMonth = _sn(s['lastMonth'])?.toDouble() ?? 0;
+    final changePercent = _sn(s['changePercent'])?.toDouble() ?? 0;
     final trend = s['trend'] as String? ?? 'STABLE';
-    final totalAllTime = (s['totalAllTime'] as num?)?.toDouble() ?? 0;
-    final months = (s['months'] as num?)?.toInt() ?? 6;
+    final totalAllTime = _sn(s['totalAllTime'])?.toDouble() ?? 0;
+    final months = _sn(s['months'])?.toInt() ?? 6;
     final monthlyTrend = (s['monthlyTrend'] as List?) ?? [];
     final byMember = (s['byMember'] as List?) ?? [];
 
@@ -157,8 +157,8 @@ class _GroupSpendingCardState extends State<GroupSpendingCard> {
             ),
             const SizedBox(height: 10),
             ...byMember.take(5).map((m) {
-              final total = (m['total'] as num?)?.toDouble() ?? 0;
-              final percent = (m['percent'] as num?)?.toInt() ?? 0;
+              final total = _sn(m['total'])?.toDouble() ?? 0;
+              final percent = _sn(m['percent'])?.toInt() ?? 0;
               final name = m['displayName'] as String? ?? 'Unknown';
               final count = m['invoiceCount'] as int? ?? 0;
               return _MemberBar(
@@ -255,14 +255,14 @@ class _MonthlyBarChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final maxVal = data.fold<double>(
-        1, (a, m) => ((m['total'] as num?)?.toDouble() ?? 0) > a ? (m['total'] as num).toDouble() : a);
+        1, (a, m) => (_sn(m['total'])?.toDouble() ?? 0) > a ? (_sn(m['total'])?.toDouble() ?? 0) : a);
 
     return SizedBox(
       height: 80,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: data.map<Widget>((m) {
-          final total = (m['total'] as num?)?.toDouble() ?? 0;
+          final total = _sn(m['total'])?.toDouble() ?? 0;
           final month = m['month'] as String? ?? '';
           final ratio = (total / maxVal).clamp(0.0, 1.0);
           final barH = total == 0 ? 4.0 : (6 + ratio * 50).clamp(4.0, 50.0);
@@ -403,8 +403,8 @@ class _AllMembersSheet extends StatelessWidget {
               itemCount: members.length,
               itemBuilder: (context, index) {
                 final m = members[index];
-                final total = (m['total'] as num?)?.toDouble() ?? 0;
-                final percent = (m['percent'] as num?)?.toInt() ?? 0;
+                final total = _sn(m['total'])?.toDouble() ?? 0;
+                final percent = _sn(m['percent'])?.toInt() ?? 0;
                 final name = m['displayName'] as String? ?? 'Unknown';
                 final count = m['invoiceCount'] as int? ?? 0;
                 return _MemberBar(
@@ -421,4 +421,15 @@ class _AllMembersSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+num? _sn(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  if (v is Map) {
+    final d = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (d != null) return num.tryParse(d.toString());
+  }
+  return null;
 }

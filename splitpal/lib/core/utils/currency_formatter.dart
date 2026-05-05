@@ -15,10 +15,11 @@ class CurrencyFormatter {
       return formatVND(amount);
     }
     
-    // For other currencies, use default formatting
+    // For other currencies: show decimals only when they exist
+    final hasDecimals = (amount % 1) != 0;
     final formatter = NumberFormat.currency(
       symbol: _getCurrencySymbol(currency),
-      decimalDigits: 2,
+      decimalDigits: hasDecimals ? 2 : 0,
     );
     return formatter.format(amount);
   }

@@ -58,7 +58,7 @@ class GroupUpcomingCard extends StatelessWidget {
             const SizedBox(height: 8),
             ...subscriptions.map((sub) {
               final name = sub['name'] as String? ?? 'Subscription';
-              final totalAmount = (sub['totalAmount'] as num?)?.toDouble() ?? 0;
+              final totalAmount = _sn(sub['totalAmount'])?.toDouble() ?? 0;
               final memberCount = sub['memberCount'] as int? ?? 0;
               final cycle = sub['billingCycle'] as String? ?? '';
               final nextDateStr = sub['nextBillingDate'] as String?;
@@ -165,7 +165,7 @@ class GroupUpcomingCard extends StatelessWidget {
             const SizedBox(height: 8),
             ...paymentRequests.map((pr) {
               final id = (pr['id'] ?? '').toString();
-              final daysLeft = (pr['daysLeft'] as num?)?.toInt() ?? 0;
+              final daysLeft = _sn(pr['daysLeft'])?.toInt() ?? 0;
               final expiresAtStr = pr['expiresAt'] as String?;
               final expiresAt = expiresAtStr != null ? DateTime.tryParse(expiresAtStr) : null;
 
@@ -253,4 +253,15 @@ class GroupUpcomingCard extends StatelessWidget {
         return cycle;
     }
   }
+}
+
+num? _sn(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  if (v is Map) {
+    final d = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (d != null) return num.tryParse(d.toString());
+  }
+  return null;
 }

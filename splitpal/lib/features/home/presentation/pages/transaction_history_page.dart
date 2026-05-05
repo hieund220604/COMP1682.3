@@ -266,7 +266,7 @@ class _TransactionCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
-                'Balance: ${CurrencyFormatter.formatCurrency((item['balanceAfter'] as num?)?.toDouble() ?? 0.0, currency)}',
+                'Balance: ${CurrencyFormatter.formatCurrency(_safeDouble(item['balanceAfter']), currency)}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -339,4 +339,15 @@ class _TransactionCard extends StatelessWidget {
 
     return output;
   }
+}
+
+double _safeDouble(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0.0;
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? 0.0;
+  }
+  return 0.0;
 }

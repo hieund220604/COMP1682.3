@@ -12,6 +12,7 @@
     "test:concurrency": "ts-node scripts/concurrency-smoke.ts",
     "seed": "ts-node src/seed.ts",
     "seed:test": "ts-node scripts/seed-test-data.ts",
+    "seed:demo": "ts-node scripts/seed-demo.ts",
     "seed:perf": "ts-node tests/seed-perf-data.ts",
     "test:load": "npx -y artillery@latest run tests/load-test.yml",
     "test:stress": "npx -y artillery@latest run tests/stress-test.yml",

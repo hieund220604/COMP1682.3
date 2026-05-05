@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/models/invoice.dart';
+import 'package:splitpal/features/ai/presentation/widgets/debt_reminder_dialog.dart';
 
 class GroupDebtCard extends StatelessWidget {
   final Map<String, dynamic> debts;
   final String currency;
+  final String groupId;
 
   const GroupDebtCard({
     super.key,
     required this.debts,
     required this.currency,
+    required this.groupId,
   });
 
   @override
@@ -18,8 +23,8 @@ class GroupDebtCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final totalOutstanding = (debts['totalOutstanding'] as num?)?.toDouble() ?? 0;
-    final settledPercent = (debts['settledPercent'] as num?)?.toInt() ?? 100;
+    final totalOutstanding = _sn(debts['totalOutstanding'])?.toDouble() ?? 0;
+    final settledPercent = _sn(debts['settledPercent'])?.toInt() ?? 100;
     final items = (debts['items'] as List?) ?? [];
 
     if (totalOutstanding == 0 && items.isEmpty) {
@@ -127,7 +132,7 @@ class GroupDebtCard extends StatelessWidget {
             ...items.take(5).map((item) {
               final debtorName = item['debtorName'] as String? ?? 'Unknown';
               final creditorName = item['creditorName'] as String? ?? 'Unknown';
-              final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+              final amount = _sn(item['amount'])?.toDouble() ?? 0;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -171,7 +176,7 @@ class GroupDebtCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     // Amount
                     Text(
                       CurrencyFormatter.formatCurrency(amount, currency),
@@ -179,6 +184,39 @@ class GroupDebtCard extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.red.shade600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // AI Remind button
+                    InkWell(
+                      onTap: () {
+                        final dummyTransfer = Transfer(
+                          id: item['id']?.toString() ?? 'debt',
+                          paymentRequestId: '',
+                          groupId: groupId,
+                          fromUserId: item['debtorId']?.toString() ?? '',
+                          toUserId: item['creditorId']?.toString() ?? '',
+                          amount: amount,
+                          status: 'PENDING',
+                          otpVerified: false,
+                          createdAt: DateTime.now(),
+                        );
+                        DebtReminderDialog.show(
+                          context,
+                          debtorName: debtorName,
+                          transfers: [dummyTransfer],
+                          currency: currency,
+                          groupId: groupId,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.auto_awesome,
+                          size: 16,
+                          color: AppColors.brand,
+                        ),
                       ),
                     ),
                   ],
@@ -202,4 +240,15 @@ class GroupDebtCard extends StatelessWidget {
       ),
     );
   }
+}
+
+num? _sn(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  if (v is Map) {
+    final d = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (d != null) return num.tryParse(d.toString());
+  }
+  return null;
 }

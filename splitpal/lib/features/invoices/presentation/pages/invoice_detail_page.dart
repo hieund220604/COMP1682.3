@@ -439,6 +439,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               ),
               const SizedBox(height: AppSpacing.md),
 
+              const SizedBox(height: AppSpacing.md),
+
               // Date Card
               _buildInfoCard(
                 context,
@@ -446,6 +448,48 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 title: 'Created Date',
                 content: _formatDate(invoice.createdAt),
               ),
+
+              if (invoice.imageUrl?.isNotEmpty ?? false) ...[
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  'ATTACHED RECEIPT',
+                  style: textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  child: Image.network(
+                    invoice.imageUrl!,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Column(
+                          children: [
+                            Icon(Icons.broken_image_outlined, 
+                              size: 48, 
+                              color: Theme.of(context).colorScheme.outline
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              'Image not available',
+                              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+              
               const SizedBox(height: AppSpacing.xl),
 
               // Items Section
@@ -464,6 +508,10 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               }).toList(),
 
               const SizedBox(height: AppSpacing.xl),
+
+              // Per-Person Breakdown
+              _buildPerPersonBreakdown(context, invoice, isDark),
+              const SizedBox(height: AppSpacing.lg),
 
               // Total Card — brand-tinted instead of primaryContainer
               _buildTotalCard(context, invoice, isDark),
@@ -900,7 +948,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Share per person: ${CurrencyFormatter.formatCurrency(item.sharePerPerson, _currentInvoice!.currency)}',
+              'Share per person: ${CurrencyFormatter.formatCurrency((item.amount / item.assignedTo.length).floorToDouble(), _currentInvoice!.currency)}',
               style: textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
@@ -909,6 +957,112 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPerPersonBreakdown(BuildContext context, Invoice invoice, bool isDark) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    // Aggregate each person's total share across all items
+    // Rounding rule: debtors get floor(amount/N), uploader absorbs remainder
+    final Map<String, double> perPersonTotal = {};
+    final Map<String, String> personNames = {};
+    final uploaderId = invoice.uploadedBy;
+
+    for (final item in invoice.items) {
+      if (item.assignedTo.isEmpty) continue;
+
+      final n = item.assignedTo.length;
+      final baseShare = (item.amount / n).floorToDouble();
+      final uploaderShare = item.amount - (baseShare * (n - 1));
+
+      for (int i = 0; i < item.assignedTo.length; i++) {
+        final uid = item.assignedTo[i];
+        final name = i < item.assignedToNames.length
+            ? item.assignedToNames[i]
+            : uid;
+        final share = (uid == uploaderId) ? uploaderShare : baseShare;
+        perPersonTotal[uid] = (perPersonTotal[uid] ?? 0) + share;
+        personNames[uid] = name;
+      }
+    }
+
+    if (perPersonTotal.isEmpty) return const SizedBox.shrink();
+
+    final entries = perPersonTotal.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PER-PERSON BREAKDOWN',
+          style: textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            children: entries.asMap().entries.map((mapEntry) {
+              final uid = mapEntry.value.key;
+              final amount = mapEntry.value.value;
+              final name = personNames[uid] ?? uid;
+              final isLast = mapEntry.key == entries.length - 1;
+
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: isDark
+                            ? _brand.withOpacity(0.15)
+                            : _brand.withOpacity(0.08),
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _brand,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        CurrencyFormatter.formatCurrency(amount, invoice.currency),
+                        style: textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: _brand,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!isLast)
+                    Divider(
+                      height: AppSpacing.lg,
+                      color: scheme.outlineVariant.withOpacity(0.3),
+                    ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 

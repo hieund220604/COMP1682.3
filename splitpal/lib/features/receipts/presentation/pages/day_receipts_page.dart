@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
@@ -61,7 +62,7 @@ class _DayReceiptsPageState extends State<DayReceiptsPage> {
             if (totalDayAmount > 0)
               Text(
                 'Daily Total: ${totalDayAmount.toStringAsFixed(0)} VND',
-                style: const TextStyle(fontSize: 14, color: Colors.amber, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 14, color: AppColors.brand, fontWeight: FontWeight.bold),
               ),
           ],
         ),
@@ -168,7 +169,7 @@ class _ReceiptCard extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
                         'Amount: ${receipt.totalAmount.toStringAsFixed(0)} VND',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amber),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.brand),
                       ),
                     ),
                   if ((receipt.note ?? '').isNotEmpty)
@@ -181,8 +182,20 @@ class _ReceiptCard extends StatelessWidget {
                     runSpacing: 6,
                     children: receipt.tags
                         .map((t) => Chip(
-                              label: Text(t.name),
-                              backgroundColor: colorScheme.surfaceVariant,
+                              label: Text(
+                                t.name.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              backgroundColor: AppColors.brand,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
                             ))
                         .toList(),
                   ),

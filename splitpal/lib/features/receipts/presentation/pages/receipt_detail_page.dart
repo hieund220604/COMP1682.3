@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:splitpal/core/constants/app_colors.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
@@ -152,19 +153,39 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
                 runSpacing: 6,
                 children: tags
                     .map(
-                      (t) => FilterChip(
-                        label: Text(t.name),
-                        selected: _selectedTagIds.contains(t.id),
-                        onSelected: (_) {
-                          setState(() {
-                            if (_selectedTagIds.contains(t.id)) {
-                              _selectedTagIds.remove(t.id);
-                            } else {
-                              _selectedTagIds.add(t.id);
-                            }
-                          });
-                        },
-                      ),
+                      (t) {
+                        final isSelected = _selectedTagIds.contains(t.id);
+                        return FilterChip(
+                          showCheckmark: false,
+                          label: Text(
+                            t.name.toUpperCase(),
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppColors.charcoal,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: AppColors.brand,
+                          backgroundColor: AppColors.clouds,
+                          side: isSelected
+                              ? const BorderSide(color: AppColors.brandDark)
+                              : BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          onSelected: (_) {
+                            setState(() {
+                              if (_selectedTagIds.contains(t.id)) {
+                                _selectedTagIds.remove(t.id);
+                              } else {
+                                _selectedTagIds.add(t.id);
+                              }
+                            });
+                          },
+                        );
+                      },
                     )
                     .toList(),
               ),

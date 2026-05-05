@@ -8,6 +8,7 @@ import {
     MessageSender,
     ReplyMessage
 } from '../type/chat';
+import { encryptionService } from './encryptionService';
 
 // Helper to transform user to MessageSender
 const transformSender = (user: { _id: any; displayName: string | null; avatarUrl: string | null }): MessageSender => ({
@@ -21,7 +22,7 @@ const transformMessage = (raw: any): MessageType => ({
     id: raw._id.toString(),
     groupId: raw.groupId,
     senderId: raw.senderId,
-    content: raw.content,
+    content: raw.content ? encryptionService.decrypt(raw.content) : raw.content,
     messageType: raw.messageType,
     fileUrl: raw.fileUrl,
     fileName: raw.fileName,
@@ -31,7 +32,7 @@ const transformMessage = (raw: any): MessageType => ({
     sender: raw.sender ? transformSender(raw.sender) : undefined,
     replyTo: raw.replyTo ? {
         id: raw.replyTo._id.toString(),
-        content: raw.replyTo.content,
+        content: raw.replyTo.content ? encryptionService.decrypt(raw.replyTo.content) : raw.replyTo.content,
         messageType: raw.replyTo.messageType,
         sender: transformSender(raw.replyTo.sender)
     } : null
@@ -52,10 +53,15 @@ export const chatService = {
         }
 
         // Create message
+        // Encrypt message content before saving to database
+        const encryptedContent = data.content
+            ? encryptionService.encrypt(data.content)
+            : null;
+
         const message = await Message.create({
             groupId,
             senderId,
-            content: data.content || null,
+            content: encryptedContent,
             messageType: data.messageType,
             fileUrl: data.fileUrl || null,
             fileName: data.fileName || null,

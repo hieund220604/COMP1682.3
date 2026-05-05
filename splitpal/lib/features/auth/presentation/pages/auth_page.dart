@@ -299,24 +299,7 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 12),
                     _buildToggleAuthMode(),
                     
-                    if (authProvider.errorMessage != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE74C3C).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          authProvider.errorMessage!,
-                          style: const TextStyle(
-                            color: Color(0xFFC0392B),
-                            fontSize: 13,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
+
                     
                     const SizedBox(height: 24),
                     

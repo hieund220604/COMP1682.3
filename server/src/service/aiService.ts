@@ -107,18 +107,40 @@ Item extraction rules:
 4. "200k/người, 4 người" → quantity = 4, unitPrice = 200000, amount = 800000.
 5. "3 × 30k" or "3 * 30k" → quantity = 3, unitPrice = 30000, amount = 90000.
 
+MIXED-ASSIGNMENT RULES (CRITICAL — read carefully):
+A single message may contain BOTH person-specific items AND shared items. You MUST handle them INDEPENDENTLY:
+1. Person-specific item: "[item] [price] cho [Person]" or "[Person] [item] [price]"
+   → Create a SEPARATE item, set assignees = ["Person"], shared = false, splitType = "custom_amount".
+   → CRITICAL: Also add a "customAmounts" array INSIDE this item with the person's exact amount pre-filled.
+   → Example: "Trà sữa 45k cho Test User 4" → { name: "Trà sữa", amount: 45000, assignees: ["Test User 4"], shared: false, splitType: "custom_amount", customAmounts: [{"name": "Test User 4", "amount": 45000}] }
+2. Shared item: "[item] [price] chia đều cả nhóm/chia đều/cả bàn/chung"
+   → Create a SEPARATE item, set assignees = [] (empty, meaning ALL members), shared = true, splitType = "equal".
+   → Example: "bánh mì 25k chia đều cả nhóm" → { name: "Bánh mì", amount: 25000, assignees: [], shared: true, splitType: "equal" }
+3. When a message has BOTH types, create ALL items independently. Do NOT merge them.
+   → Example: "Trà sữa 45k cho Test User 4, cà phê 30k cho Test User 2, bánh mì 25k chia đều cả nhóm"
+   → items = [
+       { name: "Trà sữa", amount: 45000, assignees: ["Test User 4"], shared: false, splitType: "custom_amount", customAmounts: [{"name": "Test User 4", "amount": 45000}] },
+       { name: "Cà phê", amount: 30000, assignees: ["Test User 2"], shared: false, splitType: "custom_amount", customAmounts: [{"name": "Test User 2", "amount": 30000}] },
+       { name: "Bánh mì", amount: 25000, assignees: [], shared: true, splitType: "equal" }
+     ]
+4. amountTotal = sum of ALL items (person-specific + shared).
+5. For mixed-assignment messages, set the ROOT splitMethod = "custom_amount". But each item has its OWN splitType that overrides the root.
+6. If a name appears WITHOUT "cho" but right next to an item+price, it still means assigned to that person.
+   → Example: "bim bim User 5 17 nghìn" → { name: "Bim bim", amount: 17000, assignees: ["User 5"], shared: false, splitType: "custom_amount", customAmounts: [{"name": "User 5", "amount": 17000}] }
+
 Assignee rules:
 1. Titles before names: "anh X", "chị X", "em X", "bạn X" → assignee = "X" or keep full form
 2. First-person ("tôi", "mình", "tao", "tau") → assign to "Người gửi"
 3. Exclusion ("mọi người trừ Nam") → set splitMethod = "equal", note "excludes Nam" in reviewNotes
-4. Shared/common ("ăn chung", "cả bàn", "ship", "VAT") => shared = true.
+4. Shared/common ("ăn chung", "cả bàn", "cả nhóm", "chia đều", "ship", "VAT") => shared = true, assignees = [].
+5. IMPORTANT: When assignees = [] and shared = true, the frontend will assign this item to ALL group members automatically.
 
 ADVANCED SPLIT METHOD AND ASSIGNMENT LOGIC (CRITICAL):
 You must deduce "splitMethod" and build "splitDetails" systematically.
 1. Return EXACTLY ONE of: "equal", "percentage", "custom_amount", "shares", "unknown".
-2. "equal": Use when the text says "chia đều", "ai cũng như nhau", "mỗi người ...", "cứ chia đôi/ba/N". Set splitDetails.perPersonAmount.
+2. "equal": Use when ALL items are shared equally among everyone. "chia đều", "mỗi người ...".
 3. "shares": Use when the text says "tỷ lệ X:Y", "chia 2:1", "ăn gấp đôi". Set splitDetails.shares = [{"name":"A", "share":2}, ...].
-4. "custom_amount": Use when the text explicitly maps specific people to specific money amounts.
+4. "custom_amount": Use when the text maps specific people to specific money amounts, OR when there is a MIX of person-specific and shared items.
    - Example 1: "Nam 50k, Linh 30k" => customAmounts = [{"name":"Nam", "amount":50000}, {"name":"Linh", "amount":30000}].
    - Example 2 (The Remainder Logic): "Nam 500k, Linh 300k, anh Hùng lo phần còn lại", Total = 1200000.
      * Step 1: Identify custom amounts (Nam 500k, Linh 300k). Total specific = 800000.

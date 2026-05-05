@@ -1,4 +1,16 @@
 /// Unified User model — replaces User entity + UserModel.
+
+/// Safely parse balance that might be Decimal128 Map, num, or String.
+double _parseBalance(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0;
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? 0;
+  }
+  return 0;
+}
 class User {
   final String id;
   final String email;
@@ -51,7 +63,7 @@ class User {
       email: json['email'] as String? ?? '',
       displayName: json['displayName'] as String?,
       avatarUrl: json['avatarUrl'] as String?,
-      balance: balanceRaw == null ? 0 : (balanceRaw as num).toDouble(),
+      balance: _parseBalance(balanceRaw),
       currency: currencyRaw as String? ?? 'VND',
       isActive: isActive,
       twoFactorEnabled: json['twoFactorEnabled'] as bool? ?? false,

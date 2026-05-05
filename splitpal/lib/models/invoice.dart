@@ -1,5 +1,18 @@
 // Unified Invoice models — replaces entity + model pairs.
 
+/// Safely parse a numeric value that might be a Decimal128 Map, num, or String.
+double _safeDouble(dynamic v, [double fallback = 0.0]) {
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  if (v is Map) {
+    // MongoDB Decimal128: {"\$numberDecimal": "100000"}
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? fallback;
+  }
+  return fallback;
+}
+
 class Invoice {
   final String id;
   final String groupId;
@@ -61,7 +74,7 @@ class Invoice {
       id: json['id'] ?? json['_id'] ?? '',
       groupId: json['groupId'] ?? '',
       title: json['title'] ?? '',
-      amountTotal: (json['amountTotal'] ?? 0).toDouble(),
+      amountTotal: _safeDouble(json['amountTotal']),
       currency: json['currency'] ?? 'VND',
       uploadedBy: json['uploadedBy'] is Map
           ? (json['uploadedBy']['id'] ?? '')
@@ -84,10 +97,10 @@ class Invoice {
           json['createdAt'] ?? DateTime.now().toIso8601String()),
       items: items,
       convertedAmountTotal: json['convertedAmountTotal'] != null
-          ? (json['convertedAmountTotal']).toDouble()
+          ? _safeDouble(json['convertedAmountTotal'])
           : null,
       exchangeRate: json['exchangeRate'] != null
-          ? (json['exchangeRate']).toDouble()
+          ? _safeDouble(json['exchangeRate'])
           : null,
       baseCurrency: json['baseCurrency'],
     );
@@ -146,11 +159,11 @@ class InvoiceItem {
       id: json['id'] ?? json['_id'] ?? '',
       invoiceId: json['invoiceId'] ?? '',
       name: json['name'] ?? '',
-      amount: (json['amount'] ?? 0).toDouble(),
+      amount: _safeDouble(json['amount']),
       splitType: json['splitType'] ?? 'EQUAL',
       assignedTo: assignedTo,
       assignedToNames: assignedToNames,
-      sharePerPerson: (json['sharePerPerson'] ?? 0).toDouble(),
+      sharePerPerson: _safeDouble(json['sharePerPerson']),
       splits: _parseSplits(json['splits']),
     );
   }
@@ -336,7 +349,7 @@ class Transfer {
       toUserId: toUserId,
       fromName: fromName,
       toName: toName,
-      amount: (json['amount'] ?? 0).toDouble(),
+      amount: _safeDouble(json['amount']),
       status: json['status'] ?? 'PENDING',
       paidAt: json['paidAt'] != null ? DateTime.parse(json['paidAt']) : null,
       otpVerified: json['otpVerified'] ?? false,
@@ -344,11 +357,11 @@ class Transfer {
           json['createdAt'] ?? DateTime.now().toIso8601String()),
       originalCurrency: json['originalCurrency'],
       originalAmount: json['originalAmount'] != null
-          ? (json['originalAmount']).toDouble()
+          ? _safeDouble(json['originalAmount'])
           : null,
       convertedCurrency: json['convertedCurrency'],
       exchangeRate: json['exchangeRate'] != null
-          ? (json['exchangeRate']).toDouble()
+          ? _safeDouble(json['exchangeRate'])
           : null,
     );
   }
@@ -375,9 +388,9 @@ class MyBalance {
     }
 
     return MyBalance(
-      totalOwed: (json['totalOwed'] ?? 0).toDouble(),
-      totalOwedToMe: (json['totalOwedToMe'] ?? 0).toDouble(),
-      netBalance: (json['netBalance'] ?? 0).toDouble(),
+      totalOwed: _safeDouble(json['totalOwed']),
+      totalOwedToMe: _safeDouble(json['totalOwedToMe']),
+      netBalance: _safeDouble(json['netBalance']),
       debts: debts,
     );
   }
@@ -397,6 +410,6 @@ class DebtSummary {
   factory DebtSummary.fromJson(Map<String, dynamic> json) => DebtSummary(
         creditorId: json['creditorId'] ?? '',
         creditorName: json['creditorName'] ?? '',
-        amount: (json['amount'] ?? 0).toDouble(),
+        amount: _safeDouble(json['amount']),
       );
 }

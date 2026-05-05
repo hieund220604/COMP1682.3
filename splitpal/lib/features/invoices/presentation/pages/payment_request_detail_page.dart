@@ -923,9 +923,9 @@ class _PaymentRequestDetail {
       expiresAt: DateTime.tryParse((json['expiresAt'] ?? '').toString()),
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
-      totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
-      totalTransfers: (json['totalTransfers'] as num?)?.toInt() ?? 0,
-      completedTransfers: (json['completedTransfers'] as num?)?.toInt() ?? 0,
+      totalAmount: _safeNum(json['totalAmount'])?.toDouble() ?? 0,
+      totalTransfers: _safeNum(json['totalTransfers'])?.toInt() ?? 0,
+      completedTransfers: _safeNum(json['completedTransfers'])?.toInt() ?? 0,
       userBreakdowns: _parseList(
         json['userBreakdowns'],
         (e) => _UserPaymentBreakdown.fromJson(e),
@@ -971,13 +971,13 @@ class _TransferSummary {
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       fromUser: _UserSummary.fromJson(json['fromUser']),
       toUser: _UserSummary.fromJson(json['toUser']),
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      amount: _safeNum(json['amount'])?.toDouble() ?? 0,
       status: (json['status'] ?? '').toString(),
       paidAt: json['paidAt'] == null ? null : DateTime.tryParse(json['paidAt'].toString()),
       originalCurrency: json['originalCurrency']?.toString(),
-      originalAmount: (json['originalAmount'] as num?)?.toDouble(),
+      originalAmount: _safeNum(json['originalAmount'])?.toDouble(),
       convertedCurrency: json['convertedCurrency']?.toString(),
-      exchangeRate: (json['exchangeRate'] as num?)?.toDouble(),
+      exchangeRate: _safeNum(json['exchangeRate'])?.toDouble(),
     );
   }
 }
@@ -997,7 +997,7 @@ class _UserPaymentBreakdown {
     final json = raw is Map ? Map<String, dynamic>.from(raw) : const <String, dynamic>{};
     return _UserPaymentBreakdown(
       user: _UserSummary.fromJson(json['user']),
-      netBalance: (json['netBalance'] as num?)?.toDouble() ?? 0,
+      netBalance: _safeNum(json['netBalance'])?.toDouble() ?? 0,
       debts: _parseList(json['debts'], (e) => _UserDebtBreakdown.fromJson(e)),
     );
   }
@@ -1024,8 +1024,8 @@ class _UserDebtBreakdown {
       invoiceId: (json['invoiceId'] ?? '').toString(),
       invoiceTitle: (json['invoiceTitle'] ?? '').toString(),
       creditor: _UserSummary.fromJson(json['creditor']),
-      originalAmount: (json['originalAmount'] as num?)?.toDouble() ?? 0,
-      remainingAmount: (json['remainingAmount'] as num?)?.toDouble() ?? 0,
+      originalAmount: _safeNum(json['originalAmount'])?.toDouble() ?? 0,
+      remainingAmount: _safeNum(json['remainingAmount'])?.toDouble() ?? 0,
     );
   }
 }
@@ -1057,4 +1057,16 @@ class _UserSummary {
 List<T> _parseList<T>(dynamic raw, T Function(dynamic e) mapper) {
   if (raw is! List) return const [];
   return raw.map(mapper).toList(growable: false);
+}
+
+/// Safely parse a numeric value that might be a Decimal128 Map, num, or String.
+num? _safeNum(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v);
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return num.tryParse(dec.toString());
+  }
+  return null;
 }

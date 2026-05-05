@@ -82,6 +82,10 @@ function validateItemSplits(item: InvoiceItemInput): void {
 
 /**
  * Calculate how much a specific debtor owes for one invoice item.
+ * All debtors get Math.floor of their share.
+ * The uploader (creditor) naturally absorbs the rounding remainder
+ * because they are excluded from debt creation — they collect
+ * sum(floor shares) which is always ≤ item amount.
  */
 function calculateShareForUser(
     item: { amount: number; assignedTo: string[]; splitType?: string; splits?: InvoiceItemSplit[] },
@@ -199,6 +203,7 @@ export const invoiceService = {
                 );
 
                 // Calculate debt per user using the appropriate split method
+                // Uploader absorbs rounding remainder (they are skipped from debt creation)
                 const debtMap = new Map<string, number>();
 
                 for (let i = 0; i < invoiceItems.length; i++) {

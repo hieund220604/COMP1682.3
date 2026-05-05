@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'package:splitpal/models/budget_summary.dart';
+import 'package:splitpal/features/receipts/presentation/widgets/icon_helpers.dart';
 
 import '../widgets/budget_modals.dart';
 
@@ -218,7 +219,10 @@ class _BudgetCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                    child: Text(summary.tag.icon ?? '🏷️', style: const TextStyle(fontSize: 20)),
+                    child: Text(
+                      materialIconToEmoji(summary.tag.icon) ?? summary.tag.icon ?? '🏷️',
+                      style: const TextStyle(fontSize: 20),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
