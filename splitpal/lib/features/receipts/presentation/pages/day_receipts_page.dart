@@ -148,14 +148,21 @@ class _ReceiptCard extends StatelessWidget {
                 _fixUrl(receipt.imageUrl),
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (_, error, ___) => Container(
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) => Container(
                   color: Colors.grey.shade200,
                   alignment: Alignment.center,
-                  child: Text(
-                    'Failed to load: ${_fixUrl(receipt.imageUrl)}\nError: $error',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: Colors.red),
-                  ),
+                  child: const Icon(Icons.broken_image, size: 40, color: Colors.grey),
                 ),
               ),
             ),
