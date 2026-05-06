@@ -174,7 +174,7 @@ class InvoiceItem {
       if (e is Map) {
         return InvoiceItemSplit(
           userId: (e['userId'] ?? '').toString(),
-          value: (e['value'] ?? 0).toDouble(),
+          value: _safeDouble(e['value']),
         );
       }
       return InvoiceItemSplit(userId: '', value: 0);

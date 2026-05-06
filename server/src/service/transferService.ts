@@ -418,13 +418,13 @@ export const transferService = {
                 // 1. Update User Balances
                 await User.findByIdAndUpdate(
                     transfer.fromUserId,
-                    { balance: fromUserBalanceBefore - amount },
+                    { $inc: { balance: -amount } },
                     { session }
                 );
 
                 await User.findByIdAndUpdate(
                     transfer.toUserId,
-                    { balance: toUserBalanceBefore + amount },
+                    { $inc: { balance: amount } },
                     { session }
                 );
 

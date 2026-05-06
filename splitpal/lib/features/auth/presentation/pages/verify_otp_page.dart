@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:splitpal/features/onboarding/presentation/pages/onboarding_page.dart';
 
 import 'package:splitpal/features/auth/auth_provider.dart';
 
@@ -90,11 +89,11 @@ class _VerifyOTPPageState extends State<VerifyOTPPage> {
     );
 
     if (success && mounted) {
-      // Auto-login: go straight into the app and keep token that was saved by the repository.
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        OnboardingPage.routeName,
-        (route) => false,
-      );
+      // Clear the entire navigation stack and go to root.
+      // Consumer in main.dart sees AuthState.authenticated and routes to
+      // OnboardingPage (for new users, shouldShowOnboarding defaults to true)
+      // or HomeShellPage if onboarding was previously disabled.
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 

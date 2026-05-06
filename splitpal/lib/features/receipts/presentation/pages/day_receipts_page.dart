@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/constants/app_colors.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
@@ -61,7 +62,7 @@ class _DayReceiptsPageState extends State<DayReceiptsPage> {
             Text('Receipts on ${widget.date}'),
             if (totalDayAmount > 0)
               Text(
-                'Daily Total: ${totalDayAmount.toStringAsFixed(0)} VND',
+                'Daily Total: ${CurrencyFormatter.formatCurrency(totalDayAmount, "VND")}',
                 style: TextStyle(fontSize: 14, color: AppColors.brand, fontWeight: FontWeight.bold),
               ),
           ],
@@ -175,7 +176,7 @@ class _ReceiptCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
-                        'Amount: ${receipt.totalAmount.toStringAsFixed(0)} VND',
+                        'Amount: ${CurrencyFormatter.formatCurrency(receipt.totalAmount, "VND")}',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.brand),
                       ),
                     ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'verify_otp_page.dart';
-import 'verify_2fa_page.dart';
 import 'forgot_password_page.dart';
 import 'package:splitpal/features/onboarding/presentation/pages/onboarding_page.dart';
 import 'package:splitpal/features/home/presentation/pages/home_shell_page.dart';
@@ -46,13 +45,8 @@ class _AuthPageState extends State<AuthPage> {
       if (!mounted) return;
 
       if (error == '2FA_REQUIRED') {
-        // Navigate to 2FA verification page
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const Verify2FAPage(),
-          ),
-        );
+        // Consumer in main.dart watches AuthState.requires2FA
+        // and automatically renders Verify2FAPage — no manual push needed.
         return;
       }
 

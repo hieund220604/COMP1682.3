@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/dio_client.dart';
+import '../../core/utils/safe_parse.dart';
 
 // Inline data classes (too small for separate model files)
 class ExchangeRate {
@@ -95,8 +96,8 @@ class ExchangeProvider extends ChangeNotifier {
         from: data['fromCurrency'] ?? _fromCurrency,
         to: data['toCurrency'] ?? _toCurrency,
         amount: _amount,
-        convertedAmount: (data['convertedAmount'] ?? 0).toDouble(),
-        rate: (data['rate'] ?? 0).toDouble(),
+        convertedAmount: safeDouble(data['convertedAmount']),
+        rate: safeDouble(data['rate']),
       );
       _error = null;
     } catch (e) {
@@ -116,7 +117,7 @@ class ExchangeProvider extends ChangeNotifier {
         'to': to,
         'amount': amount,
       });
-      return (resp.data['data']['convertedAmount'] ?? 0).toDouble();
+      return safeDouble(resp.data['data']['convertedAmount']);
     } catch (_) {
       return null;
     }

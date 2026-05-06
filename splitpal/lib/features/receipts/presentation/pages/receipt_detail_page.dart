@@ -4,6 +4,7 @@ import 'package:splitpal/core/constants/app_colors.dart';
 
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
+import 'package:intl/intl.dart';
 import 'budget_page.dart';
 
 class ReceiptDetailPage extends StatefulWidget {
@@ -51,7 +52,8 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
       }
       if (found != null) {
         _receipt = found;
-        _amountCtrl.text = found.totalAmount.toStringAsFixed(0);
+        final formatter = NumberFormat('#,##0', 'en_US');
+        _amountCtrl.text = formatter.format(found.totalAmount.round());
         _noteCtrl.text = found.note ?? '';
         _selectedTagIds.addAll(found.tags.map((t) => t.id));
         setState(() {});

@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../core/network/dio_client.dart';
@@ -10,19 +10,16 @@ class UploadRepository {
 
   UploadRepository({required DioClient dioClient}) : _dioClient = dioClient;
 
-  Future<String> uploadImage(File file) async {
-    final bytes = await file.readAsBytes();
-    final fileName = file.path.split('/').last;
-    return uploadImageBytes(bytes, fileName);
-  }
-
+  /// Primary cross-platform upload method — works on Web, Mobile, and Desktop.
+  /// Always prefer this over [uploadImage] which requires dart:io.
   Future<String> uploadImageBytes(Uint8List bytes, String fileName) async {
     try {
+      final subtype = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(
           bytes,
           filename: fileName,
-          contentType: MediaType('image', fileName.toLowerCase().endsWith('png') ? 'png' : 'jpeg'),
+          contentType: MediaType('image', subtype),
         ),
       });
 

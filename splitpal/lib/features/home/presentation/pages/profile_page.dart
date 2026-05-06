@@ -776,7 +776,14 @@ class _AppSwitch extends StatelessWidget {
   }
 }
 
-class _LogoutCard extends StatelessWidget {
+class _LogoutCard extends StatefulWidget {
+  @override
+  State<_LogoutCard> createState() => _LogoutCardState();
+}
+
+class _LogoutCardState extends State<_LogoutCard> {
+  bool _isLoggingOut = false;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -784,7 +791,7 @@ class _LogoutCard extends StatelessWidget {
     return Column(
       children: [
         ElevatedButton.icon(
-          onPressed: () => _handleLogout(context),
+          onPressed: _isLoggingOut ? null : () => _handleLogout(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: colorScheme.surface,
             foregroundColor: colorScheme.primary,
@@ -797,7 +804,13 @@ class _LogoutCard extends StatelessWidget {
             ),
             elevation: 0,
           ),
-          icon: const Icon(Icons.logout),
+          icon: _isLoggingOut
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.logout),
           label: const Text(
             'Logout',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
@@ -813,7 +826,9 @@ class _LogoutCard extends StatelessWidget {
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // Show confirmation dialog
+    // Guard: prevent double-tap opening 2 dialogs
+    if (_isLoggingOut) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -832,14 +847,19 @@ class _LogoutCard extends StatelessWidget {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
-      final auth = context.read<AuthProvider>();
+    if (confirmed != true || !context.mounted) return;
 
-      // Navigate to root first to clear the stack and avoid any unmounted widget issues
-      Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
+    setState(() => _isLoggingOut = true);
 
-      // Perform logout (main.dart will automatically rebuild and show AuthPage)
-      await auth.logout();
-    }
+    final auth = context.read<AuthProvider>();
+    await auth.logout();
+
+    if (!context.mounted) return;
+
+    // Clear the entire navigation stack so no previously-pushed routes
+    // (GroupDetail, InvoiceDetail, etc.) remain on top of the AuthPage
+    // that Consumer will now render.
+    Navigator.of(context, rootNavigator: true)
+        .pushNamedAndRemoveUntil('/', (route) => false);
   }
 }

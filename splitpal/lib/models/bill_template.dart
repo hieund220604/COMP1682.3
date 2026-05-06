@@ -1,5 +1,17 @@
 /// BillTemplate models for recurring invoice feature.
 
+/// Safely parse a numeric value that might be a Decimal128 Map, num, or String.
+double _safeDouble(dynamic v, [double fallback = 0.0]) {
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? fallback;
+  }
+  return fallback;
+}
+
 class BillTemplateItemSplit {
   final String userId;
   final double value;
@@ -9,7 +21,7 @@ class BillTemplateItemSplit {
   factory BillTemplateItemSplit.fromJson(Map<String, dynamic> json) =>
       BillTemplateItemSplit(
         userId: json['userId'] ?? '',
-        value: (json['value'] ?? 0).toDouble(),
+        value: _safeDouble(json['value']),
       );
 
   Map<String, dynamic> toJson() => {'userId': userId, 'value': value};
@@ -33,7 +45,7 @@ class BillTemplateItem {
   factory BillTemplateItem.fromJson(Map<String, dynamic> json) {
     return BillTemplateItem(
       name: json['name'] ?? '',
-      amount: (json['amount'] ?? 0).toDouble(),
+      amount: _safeDouble(json['amount']),
       splitType: json['splitType'] ?? 'EQUAL',
       assignedTo: (json['assignedTo'] as List?)
               ?.map((e) => e.toString())

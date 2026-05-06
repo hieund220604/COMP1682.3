@@ -1,5 +1,17 @@
 // Unified Subscription models — v2
 
+/// Safely parse a numeric value that might be a Decimal128 Map, num, or String.
+double _safeDouble(dynamic v, [double fallback = 0.0]) {
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? fallback;
+  }
+  return fallback;
+}
+
 class Subscription {
   final String id;
   final String groupId;
@@ -88,9 +100,7 @@ class Subscription {
       groupName: json['groupName'] as String?,
       name: (json['name'] ?? '').toString(),
       description: json['description'] as String?,
-      amount: (json['amount'] is num)
-          ? (json['amount'] as num).toDouble()
-          : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
+      amount: _safeDouble(json['amount']),
       currency: (json['currency'] ?? 'VND').toString(),
       billingCycle: (json['billingCycle'] ?? '').toString(),
       status: (json['status'] ?? '').toString(),
@@ -151,9 +161,7 @@ class SubscriptionMember {
     return SubscriptionMember(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       userId: (json['userId'] ?? user?['id'] ?? user?['_id'] ?? '').toString(),
-      amount: (json['amount'] is num)
-          ? (json['amount'] as num).toDouble()
-          : double.tryParse(json['amount']?.toString() ?? '') ?? 0,
+      amount: _safeDouble(json['amount']),
       status: (json['status'] ?? '').toString(),
       joinedAt: parseDate(json['joinedAt']),
       nextBillingDate: parseDate(json['nextBillingDate']),

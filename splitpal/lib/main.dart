@@ -281,6 +281,10 @@ class _AppInitializerState extends State<_AppInitializer> {
   void _setupAuthListener() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
+    // Wire DioClient force-logout callback — runs when refresh token expires mid-session.
+    // Must be done here (not in AppServices.init) because AuthProvider isn't available yet at init time.
+    AppServices.dio.onForceLogout = authProvider.forceLogout;
+
     authProvider.addListener(() {
       if (authProvider.isAuthenticated) {
         AppServices.socket.connect();

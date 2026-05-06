@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:splitpal/models/receipt.dart';
+import 'package:splitpal/core/utils/safe_parse.dart';
 
 class BudgetSummary {
   final ReceiptTag tag;
@@ -21,12 +21,12 @@ class BudgetSummary {
         name: json['name'] ?? '',
         icon: json['icon'],
         color: json['color'] ?? 'blue',
-        monthlyBudget: json['monthlyBudget']?.toDouble(),
+      monthlyBudget: json['monthlyBudget'] != null ? safeDouble(json['monthlyBudget']) : null,
         isArchived: json['isArchived'] ?? false,
       ),
-      spent: (json['spent'] ?? 0).toDouble(),
-      remaining: json['remaining']?.toDouble(),
-      percentage: json['percentage']?.toDouble(),
+      spent: safeDouble(json['spent']),
+      remaining: safeDoubleOrNull(json['remaining']),
+      percentage: safeDoubleOrNull(json['percentage']),
     );
   }
 }

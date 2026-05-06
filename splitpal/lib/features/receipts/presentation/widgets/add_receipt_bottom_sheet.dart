@@ -9,6 +9,7 @@ import 'package:splitpal/core/constants/app_colors.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
+import 'package:intl/intl.dart';
 import '../pages/budget_page.dart';
 
 class AddReceiptBottomSheet extends StatefulWidget {
@@ -64,7 +65,8 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
             setState(() {
                _scanning = false;
                if (amount != null && amount > 0) {
-                 _amountCtrl.text = amount.toStringAsFixed(0);
+                 final formatter = NumberFormat('#,##0', 'en_US');
+                 _amountCtrl.text = formatter.format(amount.round());
                }
             });
           }

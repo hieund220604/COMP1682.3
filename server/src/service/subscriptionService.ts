@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Subscription Service â€” v2
  *
  * Core model:
@@ -439,9 +439,10 @@ export const subscriptionService = {
         const fee = Number(subscription.amount);
         const member = await User.findById(userId);
         if (!member) throw new Error('User not found');
-        if (member.balance < fee) {
+        const memberBalance = Number(member.balance);
+        if (memberBalance < fee) {
             throw new Error(
-                `Insufficient balance. Need ${fee} VND to join. Current balance: ${member.balance} VND. Short by ${fee - member.balance} VND.`,
+                `Insufficient balance. Need ${fee} VND to join. Current balance: ${memberBalance} VND. Short by ${fee - memberBalance} VND.`,
             );
         }
 
@@ -453,7 +454,7 @@ export const subscriptionService = {
             session.startTransaction();
 
             const memberDoc = await User.findById(userId).session(session);
-            if (!memberDoc || memberDoc.balance < fee) {
+            if (!memberDoc || Number(memberDoc.balance) < fee) {
                 await session.abortTransaction();
                 throw new Error('Insufficient balance (race condition). Please try again.');
             }
@@ -492,8 +493,8 @@ export const subscriptionService = {
                 groupId: subscription.groupId,
                 type: TransactionType.SUBSCRIPTION_FEE,
                 amount: fee,
-                balanceBefore: (memberAfter?.balance ?? 0) + fee,
-                balanceAfter: memberAfter?.balance ?? 0,
+                balanceBefore: Number(memberAfter?.balance ?? 0) + fee,
+                balanceAfter: Number(memberAfter?.balance ?? 0),
                 currency: subscription.currency,
                 description: `Joined subscription: ${subscription.name}`,
                 referenceId: invite.subscriptionId,
@@ -504,8 +505,8 @@ export const subscriptionService = {
                 groupId: subscription.groupId,
                 type: TransactionType.TRANSFER_RECEIVED,
                 amount: fee,
-                balanceBefore: (ownerAfter?.balance ?? 0) - fee,
-                balanceAfter: ownerAfter?.balance ?? 0,
+                balanceBefore: Number(ownerAfter?.balance ?? 0) - fee,
+                balanceAfter: Number(ownerAfter?.balance ?? 0),
                 currency: subscription.currency,
                 description: `Member joined "${subscription.name}"`,
                 referenceId: invite.subscriptionId,
@@ -662,10 +663,10 @@ export const subscriptionService = {
 
         if (obligation > 0) {
             const user = await User.findById(userId);
-            if (!user || user.balance < obligation) {
-                const balance = user?.balance ?? 0;
+            const userBalance = Number(user?.balance ?? 0);
+            if (!user || userBalance < obligation) {
                 throw new Error(
-                    `Insufficient balance. Need ${obligation} VND to leave. Current balance: ${balance} VND. Short by ${obligation - balance} VND.`,
+                    `Insufficient balance. Need ${obligation} VND to leave. Current balance: ${userBalance} VND. Short by ${obligation - userBalance} VND.`,
                 );
             }
 
@@ -675,7 +676,7 @@ export const subscriptionService = {
                 session.startTransaction();
 
                 const memberDoc = await User.findById(userId).session(session);
-                if (!memberDoc || memberDoc.balance < obligation) {
+                if (!memberDoc || Number(memberDoc.balance) < obligation) {
                     await session.abortTransaction();
                     throw new Error('Insufficient balance (race condition).');
                 }
@@ -705,8 +706,8 @@ export const subscriptionService = {
                     groupId: subscription.groupId,
                     type: TransactionType.SUBSCRIPTION_FEE,
                     amount: obligation,
-                    balanceBefore: (memberAfter?.balance ?? 0) + obligation,
-                    balanceAfter: memberAfter?.balance ?? 0,
+                    balanceBefore: Number(memberAfter?.balance ?? 0) + obligation,
+                    balanceAfter: Number(memberAfter?.balance ?? 0),
                     currency: subscription.currency,
                     description: `Left subscription: ${subscription.name} (current cycle settlement)`,
                     referenceId: subscriptionId,
@@ -717,8 +718,8 @@ export const subscriptionService = {
                     groupId: subscription.groupId,
                     type: TransactionType.TRANSFER_RECEIVED,
                     amount: obligation,
-                    balanceBefore: (ownerAfter?.balance ?? 0) - obligation,
-                    balanceAfter: ownerAfter?.balance ?? 0,
+                    balanceBefore: Number(ownerAfter?.balance ?? 0) - obligation,
+                    balanceAfter: Number(ownerAfter?.balance ?? 0),
                     currency: subscription.currency,
                     description: `Member left "${subscription.name}" â€” cycle settlement`,
                     referenceId: subscriptionId,
@@ -875,9 +876,10 @@ export const subscriptionService = {
 
             // Check balance
             const user = await User.findById(userId);
-            if (!user || user.balance < fee) {
+            const userBalance = Number(user?.balance ?? 0);
+            if (!user || userBalance < fee) {
                 const newRetryCount = (currentMember!.retryCount ?? 0) + 1;
-                result.reason = `Insufficient balance: ${user?.balance ?? 0} < ${fee}`;
+                result.reason = `Insufficient balance: ${userBalance} < ${fee}`;
 
                 if (newRetryCount >= 3) {
                     await SubscriptionMember.findByIdAndUpdate(memberId, {

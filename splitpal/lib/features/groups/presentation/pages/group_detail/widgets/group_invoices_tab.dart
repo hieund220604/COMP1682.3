@@ -49,6 +49,8 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
           widget.groupId,
           status: invoiceStatusToParam(_filter),
         );
+    // Guard: widget may have been disposed while the first await was in flight
+    if (!mounted) return;
     // Load templates for Owner/Admin view
     if (widget.isOwnerOrAdmin) {
       await context.read<BillTemplateProvider>().loadTemplates(widget.groupId);

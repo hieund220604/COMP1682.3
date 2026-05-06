@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../../core/network/dio_client.dart';
 import '../../models/invoice.dart';
@@ -76,12 +78,20 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   // ─── Upload Image ───────────────────────────────────────
-  Future<String?> uploadInvoiceImage(String imagePath) async {
+  /// Upload image bytes to the server — works on all platforms (Web, Mobile, Desktop).
+  /// On web, `File` and file paths are unavailable, so bytes are used universally.
+  Future<String?> uploadInvoiceImageBytes(Uint8List bytes, String fileName) async {
     _setLoading(true);
     _setError(null);
     try {
+      final ext = fileName.toLowerCase();
+      final subtype = ext.endsWith('.png') ? 'png' : 'jpeg';
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(imagePath),
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: fileName,
+          contentType: MediaType('image', subtype),
+        ),
       });
       final resp = await _dio.post('/upload', data: formData);
       _setLoading(false);

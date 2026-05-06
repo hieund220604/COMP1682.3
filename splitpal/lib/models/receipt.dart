@@ -3,6 +3,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Unified Receipt models — replaces entity + model pairs.
 
+/// Safely parse a numeric value that might be a Decimal128 Map, num, or String.
+double _safeDouble(dynamic v, [double fallback = 0.0]) {
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  if (v is Map) {
+    final dec = v['\$numberDecimal'] ?? v['numberDecimal'];
+    if (dec != null) return double.tryParse(dec.toString()) ?? fallback;
+  }
+  return fallback;
+}
+
 class Receipt {
   final String id;
   final String imageUrl;
@@ -36,7 +48,7 @@ class Receipt {
     return Receipt(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       imageUrl: _fixLocalhost(json['imageUrl'] ?? ''),
-      totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      totalAmount: _safeDouble(json['totalAmount']),
       note: json['note'],
       receiptDate: DateTime.parse(
           json['receiptDate'] ?? json['date'] ?? DateTime.now().toIso8601String()),
@@ -71,7 +83,7 @@ class ReceiptTag {
         id: (json['id'] ?? json['_id'] ?? '').toString(),
         name: json['name'] ?? json['label'] ?? json['id'] ?? '',
         color: json['color'] ?? 'blue',
-        monthlyBudget: json['monthlyBudget']?.toDouble(),
+        monthlyBudget: json['monthlyBudget'] != null ? _safeDouble(json['monthlyBudget']) : null,
         icon: json['icon'],
         isArchived: json['isArchived'] ?? false,
       );
@@ -103,7 +115,7 @@ class ReceiptDaySummary {
       ReceiptDaySummary(
         date: json['date'] ?? '',
         count: (json['count'] ?? 0) as int,
-        totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+        totalAmount: _safeDouble(json['totalAmount']),
         thumbUrls: (json['thumbUrls'] as List<dynamic>?)
                 ?.map((e) => _fixLocalhost(e.toString()))
                 .toList() ??

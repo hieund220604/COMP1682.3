@@ -46,9 +46,9 @@ const UserSchema = new Schema<IUser>({
         default: 'inactive'
     },
     balance: {
-        type: Number,
-        default: 0
-    },
+        type: mongoose.Schema.Types.Decimal128,
+        default: mongoose.Types.Decimal128.fromString('0'),
+    } as any,
     currency: {
         type: String,
         default: 'VND'
@@ -80,8 +80,17 @@ const UserSchema = new Schema<IUser>({
 }, {
     timestamps: true,
     collection: 'users',
-    toJSON: { getters: true },
-    toObject: { getters: true }
+    toJSON: {
+        getters: true,
+        transform: (_doc: any, ret: any) => {
+            // Convert Decimal128 fields to plain numbers in JSON output
+            if (ret.balance && typeof ret.balance === 'object' && typeof ret.balance.toString === 'function') {
+                ret.balance = parseFloat(ret.balance.toString());
+            }
+            return ret;
+        },
+    },
+    toObject: { getters: true },
 });
 
 // Indexes

@@ -206,7 +206,7 @@ class _TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = (item['type'] as String? ?? '').trim();
     final amountRaw = item['amount'];
-    final double amount = amountRaw is num ? amountRaw.toDouble() : 0.0;
+    final double amount = _safeDouble(amountRaw);
     final currency = (item['currency'] as String? ?? 'VND').trim();
     final description = _localizedDescription((item['description'] as String?)?.trim());
     final createdAtRaw = item['createdAt'] as String?;

@@ -23,6 +23,8 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/constants/api_constants.dart';
 import 'package:splitpal/features/forecast/forecast_provider.dart';
 import 'package:splitpal/features/forecast/presentation/widgets/forecast_risk_card.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
+import 'package:splitpal/core/utils/safe_parse.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -207,10 +209,10 @@ class _WalletBalanceCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     final user = context.select((AuthProvider p) => p.user);
-    final balance = (summary?['user']?['balance'] ?? user?.balance ?? 0.0).toDouble();
+    final balance = safeDouble(summary?['user']?['balance'] ?? user?.balance ?? 0.0);
     final currency =
         summary?['user']?['currency'] ?? user?.currency ?? AppConstants.defaultCurrency;
-    final balanceStr = '$currency ${balance.toStringAsFixed(2)}';
+    final balanceStr = CurrencyFormatter.formatCurrency(balance, currency);
 
     return InkWell(
       borderRadius: BorderRadius.circular(24),

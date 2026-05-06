@@ -252,7 +252,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Logout ─────────────────────────────────────────────
+  // ─── Logout ───────────────────────────────────────
   Future<void> logout() async {
     _setState(AuthState.loading);
     try {
@@ -271,13 +271,20 @@ class AuthProvider extends ChangeNotifier {
         await GoogleSignIn.instance.signOut().timeout(const Duration(seconds: 2));
         await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 2));
       } catch (_) {}
-
+    } finally {
+      // Always clear local state, even if server call or social sign-out fails
       await _tokenManager.clearAll();
       _user = null;
       _setState(AuthState.unauthenticated);
-    } catch (e) {
-      _setError(_extractError(e));
     }
+  }
+
+  /// Called by DioClient when a 401 + refresh token failure forces session clear.
+  /// Clears in-memory user state so Consumer in main.dart redirects to AuthPage.
+  void forceLogout() {
+    _user = null;
+    _tempToken = null;
+    _setState(AuthState.unauthenticated);
   }
 
   // ─── Get Current User ───────────────────────────────────
@@ -452,11 +459,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ─── 2FA ────────────────────────────────────────────────
+  // ─── 2FA ──────────────────────────────────────────
   Future<String?> verify2FALogin({required String token}) async {
     if (_tempToken == null) return 'No pending 2FA session';
     _errorMessage = null;
-    notifyListeners();
+    // Set loading so any widget watching isLoading shows a spinner
+    _setState(AuthState.loading);
 
     try {
       final resp = await _dio.post(
@@ -466,16 +474,17 @@ class AuthProvider extends ChangeNotifier {
       final authResp = AuthResponse.fromJson(resp.data);
       if (!authResp.success || authResp.data == null) {
         _errorMessage = authResp.error?.message ?? '2FA verification failed';
-        _state = AuthState.requires2FA;
+        _state = AuthState.requires2FA; // restore — still on 2FA screen
         notifyListeners();
         return _errorMessage;
       }
+      // Success: _saveAuthData sets state to authenticated
       await _saveAuthData(authResp.data!);
       _tempToken = null;
       return null;
     } catch (e) {
       _errorMessage = _extractError(e);
-      _state = AuthState.requires2FA;
+      _state = AuthState.requires2FA; // restore — still on 2FA screen
       notifyListeners();
       return _errorMessage;
     }

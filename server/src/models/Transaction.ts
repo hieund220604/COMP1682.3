@@ -28,17 +28,17 @@ const TransactionSchema = new Schema<ITransaction>({
         required: true
     },
     amount: {
-        type: Number,
-        required: true
-    },
+        type: mongoose.Schema.Types.Decimal128,
+        required: true,
+    } as any,
     balanceBefore: {
-        type: Number,
-        required: true
-    },
+        type: mongoose.Schema.Types.Decimal128,
+        required: true,
+    } as any,
     balanceAfter: {
-        type: Number,
-        required: true
-    },
+        type: mongoose.Schema.Types.Decimal128,
+        required: true,
+    } as any,
     currency: {
         type: String,
         default: 'VND',
@@ -58,7 +58,22 @@ const TransactionSchema = new Schema<ITransaction>({
     }
 }, {
     timestamps: { createdAt: true, updatedAt: false },
-    collection: 'transactions'
+    collection: 'transactions',
+    toJSON: {
+        getters: true,
+        transform: (_doc: any, ret: any) => {
+            // Convert Decimal128 fields to plain numbers in JSON output
+            const d128ToNum = (v: any) =>
+                v && typeof v === 'object' && typeof v.toString === 'function'
+                    ? parseFloat(v.toString())
+                    : v;
+            ret.amount = d128ToNum(ret.amount);
+            ret.balanceBefore = d128ToNum(ret.balanceBefore);
+            ret.balanceAfter = d128ToNum(ret.balanceAfter);
+            return ret;
+        },
+    },
+    toObject: { getters: true },
 });
 
 // Indexes

@@ -9,8 +9,11 @@ import '../utils/token_manager.dart';
 class DioClient {
   late final Dio _dio;
   final TokenManager _tokenManager;
+  /// Called when a 401 + refresh failure forces the session to be cleared.
+  /// Wire this to AuthProvider.forceLogout() so the UI navigates back to AuthPage.
+  void Function()? onForceLogout;
 
-  DioClient({required TokenManager tokenManager})
+  DioClient({required TokenManager tokenManager, this.onForceLogout})
       : _tokenManager = tokenManager {
     _dio = Dio(
       BaseOptions(
@@ -87,6 +90,7 @@ class DioClient {
 
           // No refresh token or refresh failed → force logout
           await _tokenManager.clearAll();
+          onForceLogout?.call(); // notify AuthProvider to clear user state
           handler.reject(
             DioException(
               requestOptions: error.requestOptions,

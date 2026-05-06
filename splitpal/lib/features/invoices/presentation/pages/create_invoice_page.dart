@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -47,7 +48,8 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
   String _selectedCurrency = 'VND';
   String _groupBaseCurrency = 'VND';
-  File? _receiptImage;
+  Uint8List? _receiptImageBytes;
+  String? _receiptImageFileName;
   bool _isUploadingImage = false;
 
   static const _supportedCurrencies = [
@@ -392,9 +394,12 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     final provider = context.read<InvoiceProvider>();
     
     String? uploadedImageUrl;
-    if (_receiptImage != null) {
+    if (_receiptImageBytes != null && _receiptImageFileName != null) {
       setState(() => _isUploadingImage = true);
-      uploadedImageUrl = await provider.uploadInvoiceImage(_receiptImage!.path);
+      uploadedImageUrl = await provider.uploadInvoiceImageBytes(
+        _receiptImageBytes!,
+        _receiptImageFileName!,
+      );
       setState(() => _isUploadingImage = false);
       if (uploadedImageUrl == null) {
         if (mounted) {
@@ -881,7 +886,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               const SizedBox(height: 24),
 
               // Attached Image Preview
-              if (_receiptImage != null) ...[
+              if (_receiptImageBytes != null) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -896,7 +901,10 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20, color: Colors.red),
-                      onPressed: () => setState(() => _receiptImage = null),
+                      onPressed: () => setState(() {
+                        _receiptImageBytes = null;
+                        _receiptImageFileName = null;
+                      }),
                       tooltip: 'Remove image',
                     ),
                   ],
@@ -904,21 +912,29 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    _receiptImage!,
+                  // Use Image.memory — works on both Web and Mobile
+                  child: Image.memory(
+                    _receiptImageBytes!,
                     width: double.infinity,
                     fit: BoxFit.cover,
                   ),
                 ),
               ],
               
-              if (_receiptImage == null) ...[
+              if (_receiptImageBytes == null) ...[
                 OutlinedButton.icon(
                   onPressed: () async {
                     final picker = ImagePicker();
-                    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+                    final pickedFile = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 85,
+                    );
                     if (pickedFile != null) {
-                      setState(() => _receiptImage = File(pickedFile.path));
+                      final bytes = await pickedFile.readAsBytes();
+                      setState(() {
+                        _receiptImageBytes = bytes;
+                        _receiptImageFileName = pickedFile.name;
+                      });
                     }
                   },
                   icon: const Icon(Icons.add_photo_alternate_outlined),

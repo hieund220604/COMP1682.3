@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,12 +41,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
       if (image == null) return;
 
       setState(() => _isUploading = true);
 
-      final url = await AppServices.upload.uploadImage(File(image.path));
+      // Use bytes universally — works on Web, Mobile, Desktop
+      final bytes = await image.readAsBytes();
+      final url = await AppServices.upload.uploadImageBytes(bytes, image.name);
 
       if (!mounted) return;
       setState(() {
