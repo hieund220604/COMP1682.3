@@ -29,6 +29,16 @@ class TokenManager {
     return token != null && token.isNotEmpty;
   }
 
+  // Save refresh token securely
+  Future<void> saveRefreshToken(String token) async {
+    await _secureStorage.write(key: AppConstants.keyRefreshToken, value: token);
+  }
+
+  // Get refresh token
+  Future<String?> getRefreshToken() async {
+    return await _secureStorage.read(key: AppConstants.keyRefreshToken);
+  }
+
   // Delete token
   Future<void> deleteToken() async {
     await _secureStorage.delete(key: AppConstants.keyToken);
@@ -62,6 +72,7 @@ class TokenManager {
   // Clear all auth data
   Future<void> clearAll() async {
     await _secureStorage.delete(key: AppConstants.keyToken);
+    await _secureStorage.delete(key: AppConstants.keyRefreshToken);
     await _prefs.remove(AppConstants.keyUserId);
     await _prefs.remove(AppConstants.keyUserEmail);
     await _prefs.setBool(AppConstants.keyIsLoggedIn, false);

@@ -1,12 +1,18 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User } from '../models/User';
 import { emailService } from './emailService';
 import { JWTPayLoad } from '../type/auth';
 import { admin } from '../config/firebase-config';
+import { buildRedisKey, getRedis } from '../redis';
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 const toPushNotificationsEnabled = (value: boolean | undefined): boolean => value !== false;
+
+// Token expiration constants
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 export const authService = {
     async hashPassword(password: string): Promise<string> {
@@ -20,8 +26,50 @@ export const authService = {
 
     generateToken(userId: string, email: string): string {
         const payload: JWTPayLoad = { userId, email };
-        const options: any = { expiresIn: '7d' };
+        const options: any = { expiresIn: ACCESS_TOKEN_EXPIRY };
         return jwt.sign(payload, process.env.JWT_SECRET || 'default_secret', options);
+    },
+
+    generateRefreshToken(): string {
+        return crypto.randomBytes(64).toString('hex');
+    },
+
+    async storeRefreshToken(userId: string, refreshToken: string): Promise<void> {
+        const redis = getRedis();
+        const key = buildRedisKey('refresh_token', refreshToken);
+        const payload = JSON.stringify({ userId, createdAt: Date.now() });
+        if (redis) {
+            await redis.set(key, payload, 'EX', REFRESH_TOKEN_EXPIRY_SECONDS);
+        }
+    },
+
+    async refreshAccessToken(oldRefreshToken: string): Promise<{ token: string; refreshToken: string }> {
+        const redis = getRedis();
+        if (!redis) throw new Error('Service temporarily unavailable');
+
+        const key = buildRedisKey('refresh_token', oldRefreshToken);
+        const raw = await redis.get(key);
+        if (!raw) throw new Error('Invalid or expired refresh token');
+
+        const { userId } = JSON.parse(raw);
+        const user = await User.findById(userId);
+        if (!user || user.status !== 'active') throw new Error('User not found or inactive');
+
+        // Token rotation: delete old, issue new
+        await redis.del(key);
+
+        const newAccessToken = this.generateToken(userId, user.email);
+        const newRefreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(userId, newRefreshToken);
+
+        return { token: newAccessToken, refreshToken: newRefreshToken };
+    },
+
+    async revokeRefreshToken(refreshToken: string): Promise<void> {
+        const redis = getRedis();
+        if (redis) {
+            await redis.del(buildRedisKey('refresh_token', refreshToken));
+        }
     },
 
     verifyToken(token: string): JWTPayLoad | null {
@@ -98,6 +146,9 @@ export const authService = {
         await user.save();
 
         await emailService.sendWelcomeEmail(normalizedEmail, user.displayName || '');
+        const token = this.generateToken(user._id.toString(), user.email);
+        const refreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(user._id.toString(), refreshToken);
         return {
             user: {
                 userId: user._id.toString(),
@@ -107,7 +158,8 @@ export const authService = {
                 pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
                 message: 'Email verified successfully. Your account is now active.'
             },
-            token: this.generateToken(user._id.toString(), user.email)
+            token,
+            refreshToken
         };
     },
 
@@ -148,6 +200,8 @@ export const authService = {
         }
 
         const token = this.generateToken(user._id.toString(), user.email);
+        const refreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(user._id.toString(), refreshToken);
         return {
             user: {
                 userId: user._id.toString(),
@@ -159,7 +213,8 @@ export const authService = {
                 twoFactorEnabled: false,
                 pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
             },
-            token
+            token,
+            refreshToken
         };
     },
 
@@ -195,6 +250,8 @@ export const authService = {
         }
 
         const token = this.generateToken(user._id.toString(), user.email);
+        const refreshToken = this.generateRefreshToken();
+        await this.storeRefreshToken(user._id.toString(), refreshToken);
         return {
             user: {
                 userId: user._id.toString(),
@@ -206,7 +263,8 @@ export const authService = {
                 twoFactorEnabled: user.twoFactorEnabled || false,
                 pushNotificationsEnabled: toPushNotificationsEnabled(user.pushNotificationsEnabled),
             },
-            token
+            token,
+            refreshToken
         };
     },
 

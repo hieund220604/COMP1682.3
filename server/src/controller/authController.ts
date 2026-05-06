@@ -223,6 +223,7 @@ export const authController = {
             const result = await authService.confirmChangePassword(req.user.userId, otp, newPassword);
             ResponseUtil.success(res, null, result);
         } catch (error) {
+
             ResponseUtil.handleError(res, error, 'Failed to confirm password change');
         }
     },
@@ -241,6 +242,32 @@ export const authController = {
             ResponseUtil.success(res, null, result);
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to send message');
+        }
+    },
+
+    async refreshToken(req: Request<{}, {}, { refreshToken: string }>, res: Response<AuthResponse>): Promise<void> {
+        try {
+            const { refreshToken } = req.body;
+            if (!refreshToken) {
+                return ResponseUtil.validationError(res, 'Refresh token is required');
+            }
+            const result = await authService.refreshAccessToken(refreshToken);
+            ResponseUtil.success(res, result, 'Token refreshed successfully');
+        } catch (error) {
+            ResponseUtil.error(res, 'Invalid or expired refresh token', 401, 'REFRESH_TOKEN_INVALID');
+        }
+    },
+
+    async logout(req: Request<{}, {}, { refreshToken?: string }>, res: Response<AuthResponse>): Promise<void> {
+        try {
+            const { refreshToken } = req.body;
+            if (refreshToken) {
+                await authService.revokeRefreshToken(refreshToken);
+            }
+            ResponseUtil.success(res, null, 'Logged out successfully');
+        } catch (error) {
+            // Always return success for logout — non-critical
+            ResponseUtil.success(res, null, 'Logged out successfully');
         }
     }
 };

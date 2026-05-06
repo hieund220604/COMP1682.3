@@ -31,6 +31,7 @@ export interface AuthResponse {
     message: string;
     data?: {
         token?: string;
+        refreshToken?: string;
         resetToken?: string;
         user?: {
             id: string;

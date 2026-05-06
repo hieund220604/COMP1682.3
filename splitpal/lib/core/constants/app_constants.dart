@@ -6,6 +6,7 @@ class AppConstants {
 
   // Storage Keys
   static const String keyToken = 'auth_token';
+  static const String keyRefreshToken = 'refresh_token';
   static const String keyUserId = 'user_id';
   static const String keyUserEmail = 'user_email';
   static const String keyIsLoggedIn = 'is_logged_in';

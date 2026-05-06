@@ -45,14 +45,48 @@ class DioClient {
     );
   }
 
-  // Error Interceptor - Handle common errors
+  // Error Interceptor - Auto-refresh on 401, handle common errors
   Interceptor _errorInterceptor() {
     return InterceptorsWrapper(
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401 && !(error.requestOptions.path.contains('/auth/login') || error.requestOptions.path.contains('/auth/signup'))) {
-          // Token expired or invalid - logout user
+        if (error.response?.statusCode == 401 &&
+            !_isAuthPath(error.requestOptions.path)) {
+          // Attempt to refresh the access token
+          final refreshToken = await _tokenManager.getRefreshToken();
+          if (refreshToken != null) {
+            try {
+              // Use a separate Dio instance to avoid interceptor recursion
+              final refreshDio = Dio(BaseOptions(
+                baseUrl: ApiConstants.apiBaseUrl,
+                connectTimeout: AppConstants.connectionTimeout,
+              ));
+              final resp = await refreshDio.post(
+                '/auth/refresh-token',
+                data: {'refreshToken': refreshToken},
+              );
+
+              final data = resp.data['data'];
+              if (data != null) {
+                final newAccessToken = data['token'] as String;
+                final newRefreshToken = data['refreshToken'] as String;
+
+                // Persist new tokens
+                await _tokenManager.saveToken(newAccessToken);
+                await _tokenManager.saveRefreshToken(newRefreshToken);
+
+                // Retry the original request with the new access token
+                error.requestOptions.headers['Authorization'] =
+                    'Bearer $newAccessToken';
+                final retryResp = await _dio.fetch(error.requestOptions);
+                return handler.resolve(retryResp);
+              }
+            } catch (_) {
+              // Refresh failed — fall through to clear session
+            }
+          }
+
+          // No refresh token or refresh failed → force logout
           await _tokenManager.clearAll();
-          // You might want to navigate to login page here
           handler.reject(
             DioException(
               requestOptions: error.requestOptions,
@@ -66,6 +100,13 @@ class DioClient {
         }
       },
     );
+  }
+
+  /// Paths that should NOT trigger an auto-refresh attempt.
+  bool _isAuthPath(String path) {
+    return path.contains('/auth/login') ||
+        path.contains('/auth/signup') ||
+        path.contains('/auth/refresh-token');
   }
 
   // GET request

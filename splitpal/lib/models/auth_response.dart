@@ -46,6 +46,7 @@ class AuthResponse {
 
 class AuthData {
   final String? token;
+  final String? refreshToken;
   final String? resetToken;
   final String? tempToken;
   final bool requires2FA;
@@ -53,6 +54,7 @@ class AuthData {
 
   AuthData({
     this.token,
+    this.refreshToken,
     this.resetToken,
     this.tempToken,
     this.requires2FA = false,
@@ -84,6 +86,7 @@ class AuthData {
 
     return AuthData(
       token: token,
+      refreshToken: json['refreshToken'] as String?,
       resetToken: json['resetToken'] as String?,
       tempToken: json['tempToken'] as String?,
       requires2FA: json['requires2FA'] == true,

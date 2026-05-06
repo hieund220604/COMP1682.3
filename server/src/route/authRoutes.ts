@@ -71,4 +71,10 @@ router.post('/2fa/verify', twoFactorController.verifyLogin);  // No authMiddlewa
 router.post('/2fa/disable', authMiddleware, twoFactorController.disable);
 router.get('/2fa/status', authMiddleware, twoFactorController.status);
 
+// Refresh Token (no authMiddleware — uses refreshToken from body)
+router.post('/refresh-token', authController.refreshToken);
+
+// Logout (revoke refresh token server-side)
+router.post('/logout', authController.logout);
+
 export default router;

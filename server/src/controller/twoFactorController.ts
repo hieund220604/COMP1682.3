@@ -90,8 +90,10 @@ export const twoFactorController = {
                 return ResponseUtil.error(res, 'User not found', 404);
             }
 
-            // Issue full JWT
+            // Issue full JWT + refresh token
             const fullToken = authService.generateToken(decoded.userId, decoded.email);
+            const refreshToken = authService.generateRefreshToken();
+            await authService.storeRefreshToken(decoded.userId, refreshToken);
 
             ResponseUtil.success(res, {
                 user: {
@@ -104,6 +106,7 @@ export const twoFactorController = {
                     twoFactorEnabled: user.twoFactorEnabled,
                 },
                 token: fullToken,
+                refreshToken,
             }, 'Two-factor verification successful');
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to verify 2FA');

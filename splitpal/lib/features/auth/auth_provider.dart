@@ -256,6 +256,13 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     _setState(AuthState.loading);
     try {
+      // Revoke refresh token server-side
+      final refreshToken = await _tokenManager.getRefreshToken();
+      if (refreshToken != null) {
+        try {
+          await _dio.post('/auth/logout', data: {'refreshToken': refreshToken});
+        } catch (_) {} // Non-critical — always proceed with local cleanup
+      }
       await _tokenManager.clearAll();
       _user = null;
       _setState(AuthState.unauthenticated);
@@ -532,6 +539,9 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _saveAuthData(AuthData data) async {
     if (data.token != null) {
       await _tokenManager.saveToken(data.token!);
+    }
+    if (data.refreshToken != null) {
+      await _tokenManager.saveRefreshToken(data.refreshToken!);
     }
     if (data.user != null) {
       await _tokenManager.saveUserInfo(
