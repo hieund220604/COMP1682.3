@@ -142,9 +142,11 @@ export const twoFactorService = {
         if (isValid) return true;
 
         // Try backup codes
+        // Normalize to lowercase because codes are generated as lowercase hex
+        const normalizedToken = token.toLowerCase().trim();
         if (user.twoFactorBackupCodes && user.twoFactorBackupCodes.length > 0) {
             for (let i = 0; i < user.twoFactorBackupCodes.length; i++) {
-                const match = await bcrypt.compare(token, user.twoFactorBackupCodes[i]);
+                const match = await bcrypt.compare(normalizedToken, user.twoFactorBackupCodes[i]);
                 if (match) {
                     // Remove used backup code
                     user.twoFactorBackupCodes.splice(i, 1);
