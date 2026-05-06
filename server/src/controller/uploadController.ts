@@ -1,19 +1,26 @@
 import { Request, Response } from 'express';
 import { ResponseUtil } from '../util/responseUtil';
+import { uploadToCloudinary } from '../util/cloudinaryStorage';
 
-export const uploadFile = (req: Request, res: Response) => {
+export const uploadFile = async (req: Request, res: Response) => {
     try {
         if (!req.file) {
             return ResponseUtil.validationError(res, 'No file uploaded');
         }
 
-        // Construct the URL to access the file
-        // Assumes the server is serving the 'uploads' directory statically
-        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+        // Upload to Cloudinary instead of local filesystem
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const filename = `${req.file.fieldname}-${uniqueSuffix}`;
+
+        const result = await uploadToCloudinary(
+            req.file.buffer,
+            filename,
+            req.file.mimetype,
+        );
 
         ResponseUtil.success(res, {
-            url: fileUrl,
-            filename: req.file.filename,
+            url: result.url,
+            filename: filename,
             mimetype: req.file.mimetype,
             size: req.file.size
         }, 'File uploaded successfully');
