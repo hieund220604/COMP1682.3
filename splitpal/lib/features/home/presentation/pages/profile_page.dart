@@ -833,24 +833,13 @@ class _LogoutCard extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      // Capture navigator because the widget will be unmounted when auth state changes
-      final navigator = Navigator.of(context, rootNavigator: true);
+      final auth = context.read<AuthProvider>();
 
-      // Show loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
+      // Navigate to root first to clear the stack and avoid any unmounted widget issues
+      Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
 
-      // Perform logout
-      await context.read<AuthProvider>().logout();
-
-      // Close loading dialog using the captured navigator
-      navigator.pop();
-
-      // Navigate to root and clear stack
-      navigator.pushNamedAndRemoveUntil('/', (route) => false);
+      // Perform logout (main.dart will automatically rebuild and show AuthPage)
+      await auth.logout();
     }
   }
 }
