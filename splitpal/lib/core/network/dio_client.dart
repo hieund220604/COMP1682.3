@@ -106,7 +106,8 @@ class DioClient {
   bool _isAuthPath(String path) {
     return path.contains('/auth/login') ||
         path.contains('/auth/signup') ||
-        path.contains('/auth/refresh-token');
+        path.contains('/auth/refresh-token') ||
+        path.contains('/auth/2fa/verify');
   }
 
   // GET request

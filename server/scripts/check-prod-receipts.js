@@ -51,6 +51,11 @@ async function main() {
   const summary = await apiCall('/api/receipts/month?month=2026-05', 'GET', { token });
   console.log('\nMonth Summary:');
   console.log(JSON.stringify(summary, null, 2));
+
+  // Get day receipts for May 6
+  const dayData = await apiCall('/api/receipts/day/2026-05-06', 'GET', { token });
+  console.log('\nDay Receipts (May 6):');
+  console.log(JSON.stringify(dayData, null, 2));
 }
 
 main().catch(console.error);
