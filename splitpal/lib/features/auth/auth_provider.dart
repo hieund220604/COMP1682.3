@@ -263,6 +263,13 @@ class AuthProvider extends ChangeNotifier {
           await _dio.post('/auth/logout', data: {'refreshToken': refreshToken});
         } catch (_) {} // Non-critical — always proceed with local cleanup
       }
+
+      // Clear Google & Firebase sessions if any
+      try {
+        await GoogleSignIn.instance.signOut();
+        await FirebaseAuth.instance.signOut();
+      } catch (_) {}
+
       await _tokenManager.clearAll();
       _user = null;
       _setState(AuthState.unauthenticated);
