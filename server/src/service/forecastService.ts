@@ -377,7 +377,7 @@ async function buildSpendingInsights(
         const type = (tx as any).type as string;
         if (!OUTFLOW_TYPES.has(type)) continue;
 
-        const amount = Number((tx as any).amount ?? 0);
+        const amount = Math.abs(Number((tx as any).amount ?? 0));
         const createdAt = new Date((tx as any).createdAt);
 
         if (createdAt >= currentStart) {

@@ -164,7 +164,7 @@ class _SpendingBreakdownChartState extends State<SpendingBreakdownChart> {
                           final color =
                               _chartColors[i % _chartColors.length];
                           return PieChartSectionData(
-                            value: cat.amount,
+                            value: cat.amount.abs(),
                             title: '${cat.percent}%',
                             titleStyle: TextStyle(
                               fontSize: isTouched ? 12 : 10,

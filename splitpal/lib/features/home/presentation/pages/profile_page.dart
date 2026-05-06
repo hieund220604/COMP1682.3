@@ -833,6 +833,9 @@ class _LogoutCard extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
+      // Capture navigator because the widget will be unmounted when auth state changes
+      final navigator = Navigator.of(context, rootNavigator: true);
+
       // Show loading
       showDialog(
         context: context,
@@ -843,13 +846,11 @@ class _LogoutCard extends StatelessWidget {
       // Perform logout
       await context.read<AuthProvider>().logout();
 
-      if (context.mounted) {
-        // Close loading dialog
-        Navigator.pop(context);
+      // Close loading dialog using the captured navigator
+      navigator.pop();
 
-        // Navigate to auth page and clear stack
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      }
+      // Navigate to root and clear stack
+      navigator.pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 }

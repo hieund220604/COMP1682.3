@@ -451,12 +451,31 @@ class _BalanceChartState extends State<_BalanceChart> {
       ...safeSpots.map((s) => s.y),
       ...expectedSpots.map((s) => s.y),
     ];
-    final minY = allValues.isEmpty
+    var minY = allValues.isEmpty
         ? 0.0
         : allValues.reduce((a, b) => a < b ? a : b);
-    final maxY = allValues.isEmpty
+    var maxY = allValues.isEmpty
         ? 1000000.0
         : allValues.reduce((a, b) => a > b ? a : b);
+
+    if (maxY == minY) {
+      if (maxY == 0) {
+        maxY = 10000;
+        minY = -10000;
+      } else {
+        final pad = maxY.abs() * 0.05;
+        maxY += pad;
+        minY -= pad;
+      }
+    } else {
+      final diff = maxY - minY;
+      if (diff < maxY.abs() * 0.02) {
+        final pad = (maxY.abs() * 0.02 - diff) / 2;
+        maxY += pad;
+        minY -= pad;
+      }
+    }
+
     final yPad = (maxY - minY) * 0.15;
 
     return Container(

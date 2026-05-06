@@ -93,7 +93,7 @@ export const twoFactorService = {
             secret: user.twoFactorSecret,
             encoding: 'base32',
             token: token,
-            window: 2, // ±2 time steps (±60 seconds)
+            window: 4, // ±4 time steps (±120 seconds)
         });
 
         console.log('[verifyAndEnable] Verify result:', isValid);
@@ -134,7 +134,7 @@ export const twoFactorService = {
             secret: user.twoFactorSecret,
             encoding: 'base32',
             token: token,
-            window: 2, // ±2 time steps (±60 seconds)
+            window: 4, // ±4 time steps (±120 seconds)
         });
 
         console.log('[verify] TOTP result:', isValid);

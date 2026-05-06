@@ -38,12 +38,15 @@ class _Verify2FAPageState extends State<Verify2FAPage> {
     });
 
     final authProvider = context.read<AuthProvider>();
-    final error = await authProvider.verify2FALogin(token: code);
+    // Convert to lowercase to support backup codes without case sensitivity issues
+    final error = await authProvider.verify2FALogin(token: code.toLowerCase());
 
     if (!mounted) return;
 
     if (error == null) {
-      return;
+      // Clear the navigator stack to reveal the HomeShellPage or OnboardingPage 
+      // set by main.dart's Consumer
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } else {
       setState(() {
         _isLoading = false;
