@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Unified Receipt models — replaces entity + model pairs.
 
@@ -119,7 +120,7 @@ Map<String, dynamic> _normalizeTag(dynamic raw) {
 }
 
 String _fixLocalhost(String url) {
-  if (Platform.isAndroid && url.contains('localhost')) {
+  if (!kIsWeb && Platform.isAndroid && url.contains('localhost')) {
     return url.replaceAll('localhost', '10.0.2.2');
   }
   return url;
