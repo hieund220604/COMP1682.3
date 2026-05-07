@@ -74,10 +74,9 @@ const OriginalDebtSchema = new Schema<IOriginalDebt>({
     collection: 'original_debts'
 });
 
-// Compound indexes for efficient queries
-OriginalDebtSchema.index({ groupId: 1, debtorId: 1 });
-OriginalDebtSchema.index({ groupId: 1, creditorId: 1 });
-
-OriginalDebtSchema.index({ remainingAmount: 1 }); // For finding unpaid debts
+// Compound indexes (ESR: Equality → Sort → Range)
+OriginalDebtSchema.index({ groupId: 1, debtorId: 1 });      // getDebtsBetweenUsers, allocateDebtsForTransfer, reduceDebtsBetweenUsers
+OriginalDebtSchema.index({ groupId: 1, creditorId: 1 });     // settlement engine, getUserDebtsInGroup
+OriginalDebtSchema.index({ groupId: 1, remainingAmount: 1 }); // dashboard debt overview, settlement engine full scan
 
 export const OriginalDebt = mongoose.model<IOriginalDebt>('OriginalDebt', OriginalDebtSchema);

@@ -59,6 +59,64 @@ export const transferService = {
             })
         );
 
+        // Build debt context: all debts between payer and receiver from this payment request
+        let debtContext: TransferResponse['debtContext'] = undefined;
+        try {
+            const { OriginalDebt } = await import('../models/OriginalDebt');
+            const { PaymentRequest } = await import('../models/PaymentRequest');
+
+            const paymentRequest = await PaymentRequest.findById(transfer.paymentRequestId);
+            const prInvoiceIds = paymentRequest?.invoiceIds || [];
+
+            if (prInvoiceIds.length > 0) {
+                const [debtsOwed, debtsOffset] = await Promise.all([
+                    // Payer owes receiver
+                    OriginalDebt.find({
+                        groupId: transfer.groupId,
+                        debtorId: transfer.fromUserId,
+                        creditorId: transfer.toUserId,
+                        invoiceId: { $in: prInvoiceIds }
+                    }),
+                    // Counter-debts: receiver owes payer
+                    OriginalDebt.find({
+                        groupId: transfer.groupId,
+                        debtorId: transfer.toUserId,
+                        creditorId: transfer.fromUserId,
+                        invoiceId: { $in: prInvoiceIds }
+                    })
+                ]);
+
+                // Bulk-load invoice titles
+                const allInvoiceIds = [...new Set([
+                    ...debtsOwed.map(d => d.invoiceId),
+                    ...debtsOffset.map(d => d.invoiceId)
+                ])];
+                const invoices = await Invoice.find({ _id: { $in: allInvoiceIds } });
+                const invoiceMap = new Map(invoices.map(inv => [inv._id.toString(), inv]));
+
+                const youOwe = debtsOwed.map(d => ({
+                    invoiceId: d.invoiceId,
+                    invoiceTitle: invoiceMap.get(d.invoiceId)?.title || 'Unknown',
+                    debtAmount: d.originalAmount,
+                }));
+
+                const theyOwe = debtsOffset.map(d => ({
+                    invoiceId: d.invoiceId,
+                    invoiceTitle: invoiceMap.get(d.invoiceId)?.title || 'Unknown',
+                    debtAmount: d.originalAmount,
+                }));
+
+                debtContext = {
+                    youOwe,
+                    theyOwe,
+                    totalYouOwe: youOwe.reduce((sum, e) => sum + e.debtAmount, 0),
+                    totalTheyOwe: theyOwe.reduce((sum, e) => sum + e.debtAmount, 0),
+                };
+            }
+        } catch (err) {
+            console.error('[transferService] Failed to build debtContext:', err);
+        }
+
         return {
             id: transfer._id.toString(),
             paymentRequestId: transfer.paymentRequestId,
@@ -71,7 +129,8 @@ export const transferService = {
             otpExpiresAt: transfer.otpExpiresAt ?? undefined,
             createdAt: transfer.createdAt,
             categoryTagId: transfer.categoryTagId ?? undefined,
-            debtAllocations: allocationDetails
+            debtAllocations: allocationDetails,
+            debtContext
         };
     },
 
@@ -358,6 +417,12 @@ export const transferService = {
         });
 
         const updatedTransfer = await this.getTransferById(transferId);
+
+        // Async check for budget alerts if the transfer was categorized
+        if (categoryTagId) {
+            const { budgetService } = require('./budgetService');
+            budgetService.checkBudgetAlerts(transfer.fromUserId).catch(console.error);
+        }
 
         return {
             success: true,

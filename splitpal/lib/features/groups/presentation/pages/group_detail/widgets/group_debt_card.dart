@@ -209,13 +209,32 @@ class GroupDebtCard extends StatelessWidget {
                           groupId: groupId,
                         );
                       },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.auto_awesome,
-                          size: 16,
-                          color: AppColors.brand,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.brand.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.auto_awesome,
+                              size: 14,
+                              color: AppColors.brand,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Nhắc',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.brand,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

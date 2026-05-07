@@ -5,7 +5,7 @@ import { createRateLimit } from '../middleware/rateLimitMiddleware';
 
 const router = Router();
 
-// Rate limits
+// ── Per-user rate limits ───────────────────────────────────────────────
 const createReceiptLimiter = createRateLimit({
     keyPrefix: 'receipt:create',
     windowMs: 60_000,
@@ -27,20 +27,28 @@ const tagLimiter = createRateLimit({
     keyGenerator: (req) => req.user?.userId || req.ip || 'anon'
 });
 
+// ── Per-IP rate limit for receipt write operations ─────────────────────
+const receiptWriteIpLimiter = createRateLimit({
+    keyPrefix: 'receipt:write:ip',
+    windowMs: 60_000,
+    maxRequests: 60,
+    keyGenerator: (req) => req.ip || 'unknown'
+});
+
 // All routes require auth
 router.use(authMiddleware);
 
 // Tag CRUD
 router.get('/tags', receiptController.listTags);
-router.post('/tags', tagLimiter, receiptController.createTag);
-router.put('/tags/:id', tagLimiter, receiptController.updateTag);
-router.delete('/tags/:id', tagLimiter, receiptController.deleteTag);
+router.post('/tags', receiptWriteIpLimiter, tagLimiter, receiptController.createTag);
+router.put('/tags/:id', receiptWriteIpLimiter, tagLimiter, receiptController.updateTag);
+router.delete('/tags/:id', receiptWriteIpLimiter, tagLimiter, receiptController.deleteTag);
 
 // Receipts
-router.post('/', createReceiptLimiter, receiptController.createReceipt);
+router.post('/', receiptWriteIpLimiter, createReceiptLimiter, receiptController.createReceipt);
 router.get('/month', receiptController.getMonthSummary);
 router.get('/day/:date', receiptController.getDayReceipts);
-router.put('/:id', mutateReceiptLimiter, receiptController.updateReceipt);
-router.delete('/:id', mutateReceiptLimiter, receiptController.deleteReceipt);
+router.put('/:id', receiptWriteIpLimiter, mutateReceiptLimiter, receiptController.updateReceipt);
+router.delete('/:id', receiptWriteIpLimiter, mutateReceiptLimiter, receiptController.deleteReceipt);
 
 export default router;

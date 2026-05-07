@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,12 @@ class DioClient {
   /// Called when a 401 + refresh failure forces the session to be cleared.
   /// Wire this to AuthProvider.forceLogout() so the UI navigates back to AuthPage.
   void Function()? onForceLogout;
+
+  // Mutex for token refresh — prevents race condition when multiple
+  // requests receive 401 simultaneously. Only the first triggers the
+  // actual refresh; the rest wait and reuse the new token.
+  bool _isRefreshing = false;
+  Completer<String?>? _refreshCompleter;
 
   DioClient({required TokenManager tokenManager, this.onForceLogout})
       : _tokenManager = tokenManager {
@@ -54,43 +61,24 @@ class DioClient {
       onError: (error, handler) async {
         if (error.response?.statusCode == 401 &&
             !_isAuthPath(error.requestOptions.path)) {
-          // Attempt to refresh the access token
-          final refreshToken = await _tokenManager.getRefreshToken();
-          if (refreshToken != null) {
+          // Try to get a fresh access token (mutex-protected)
+          final newToken = await _refreshAccessToken();
+
+          if (newToken != null) {
+            // Retry the original request with the new access token
+            error.requestOptions.headers['Authorization'] =
+                'Bearer $newToken';
             try {
-              // Use a separate Dio instance to avoid interceptor recursion
-              final refreshDio = Dio(BaseOptions(
-                baseUrl: ApiConstants.apiBaseUrl,
-                connectTimeout: AppConstants.connectionTimeout,
-              ));
-              final resp = await refreshDio.post(
-                '/auth/refresh-token',
-                data: {'refreshToken': refreshToken},
-              );
-
-              final data = resp.data['data'];
-              if (data != null) {
-                final newAccessToken = data['token'] as String;
-                final newRefreshToken = data['refreshToken'] as String;
-
-                // Persist new tokens
-                await _tokenManager.saveToken(newAccessToken);
-                await _tokenManager.saveRefreshToken(newRefreshToken);
-
-                // Retry the original request with the new access token
-                error.requestOptions.headers['Authorization'] =
-                    'Bearer $newAccessToken';
-                final retryResp = await _dio.fetch(error.requestOptions);
-                return handler.resolve(retryResp);
-              }
-            } catch (_) {
-              // Refresh failed — fall through to clear session
+              final retryResp = await _dio.fetch(error.requestOptions);
+              return handler.resolve(retryResp);
+            } catch (retryError) {
+              // Retry also failed — pass through
             }
           }
 
-          // No refresh token or refresh failed → force logout
+          // Refresh failed → force logout
           await _tokenManager.clearAll();
-          onForceLogout?.call(); // notify AuthProvider to clear user state
+          onForceLogout?.call();
           handler.reject(
             DioException(
               requestOptions: error.requestOptions,
@@ -104,6 +92,59 @@ class DioClient {
         }
       },
     );
+  }
+
+  /// Mutex-protected token refresh. If a refresh is already in progress,
+  /// subsequent callers wait for it to complete instead of firing
+  /// duplicate refresh requests (which would fail due to token rotation).
+  Future<String?> _refreshAccessToken() async {
+    // If another refresh is already in-flight, wait for its result
+    if (_isRefreshing && _refreshCompleter != null) {
+      return _refreshCompleter!.future;
+    }
+
+    _isRefreshing = true;
+    _refreshCompleter = Completer<String?>();
+
+    try {
+      final refreshToken = await _tokenManager.getRefreshToken();
+      if (refreshToken == null) {
+        _refreshCompleter!.complete(null);
+        return null;
+      }
+
+      // Use a separate Dio instance to avoid interceptor recursion
+      final refreshDio = Dio(BaseOptions(
+        baseUrl: ApiConstants.apiBaseUrl,
+        connectTimeout: AppConstants.connectionTimeout,
+      ));
+      final resp = await refreshDio.post(
+        '/auth/refresh-token',
+        data: {'refreshToken': refreshToken},
+      );
+
+      final data = resp.data['data'];
+      if (data != null) {
+        final newAccessToken = data['token'] as String;
+        final newRefreshToken = data['refreshToken'] as String;
+
+        // Persist new tokens
+        await _tokenManager.saveToken(newAccessToken);
+        await _tokenManager.saveRefreshToken(newRefreshToken);
+
+        _refreshCompleter!.complete(newAccessToken);
+        return newAccessToken;
+      }
+
+      _refreshCompleter!.complete(null);
+      return null;
+    } catch (_) {
+      _refreshCompleter!.complete(null);
+      return null;
+    } finally {
+      _isRefreshing = false;
+      _refreshCompleter = null;
+    }
   }
 
   /// Paths that should NOT trigger an auto-refresh attempt.

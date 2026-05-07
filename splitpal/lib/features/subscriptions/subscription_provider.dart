@@ -95,7 +95,7 @@ class SubscriptionProvider extends ChangeNotifier {
   // ─── Create ──────────────────────────────────────────────────────────────────
   /// Create a subscription. [amount] = fixed fee per member per cycle.
   Future<bool> create({
-    required String groupId,
+    String? groupId,
     required String name,
     required double amount,
     required String billingCycle,
@@ -107,7 +107,7 @@ class SubscriptionProvider extends ChangeNotifier {
 
     try {
       final resp = await _dio.post('/subscriptions', data: {
-        'groupId': groupId,
+        if (groupId != null) 'groupId': groupId,
         'name': name,
         'amount': amount,
         'billingCycle': billingCycle,

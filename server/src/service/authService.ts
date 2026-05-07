@@ -74,7 +74,7 @@ export const authService = {
 
     verifyToken(token: string): JWTPayLoad | null {
         try {
-            const decode = jwt.verify(token, process.env.JWT_SECRET || 'hieu2206') as JWTPayLoad;
+            const decode = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as JWTPayLoad;
             return decode;
         }
         catch (error) {

@@ -5,7 +5,7 @@ export type BillingStatus = 'SUCCESS' | 'FAILED' | 'PARTIAL';
 export interface IBillingHistory extends Document {
     _id: Types.ObjectId;
     subscriptionId: string;
-    groupId: string;
+    groupId?: string;
     billingDate: Date;
     amount: number;
     currency: string;
@@ -33,7 +33,7 @@ const BillingHistorySchema = new Schema<IBillingHistory>({
     },
     groupId: {
         type: String,
-        required: true,
+        default: null,
         ref: 'Group',
         index: true
     },

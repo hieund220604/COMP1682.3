@@ -11,7 +11,8 @@ import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'package:splitpal/models/invoice.dart';
 import 'package:splitpal/features/invoices/presentation/pages/payment_request_detail_page.dart';
-import 'package:splitpal/features/invoices/presentation/pages/transfer_payment_page.dart';
+import 'package:splitpal/features/invoices/presentation/widgets/transfer_payment_bottom_sheet.dart';
+import 'package:splitpal/features/invoices/presentation/widgets/transfer_detail_bottom_sheet.dart';
 import 'package:splitpal/features/invoices/invoice_provider.dart';
 
 class PaymentRequestSection extends StatefulWidget {
@@ -330,6 +331,14 @@ class _PaymentRequestSectionState extends State<PaymentRequestSection> {
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      onTap: () {
+        TransferDetailBottomSheet.show(
+          context,
+          transfer: transfer,
+          groupId: widget.groupId,
+          currency: currency,
+        );
+      },
       child: Row(
         children: [
           Container(
@@ -383,14 +392,10 @@ class _PaymentRequestSectionState extends State<PaymentRequestSection> {
           if (!isPaid && !isCancelled)
             FilledButton(
               onPressed: () {
-                Navigator.push(
+                showTransferPaymentBottomSheet(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => TransferPaymentPage(
-                      transfer: transfer,
-                      groupId: widget.groupId,
-                    ),
-                  ),
+                  transfer: transfer,
+                  groupId: widget.groupId,
                 );
               },
               style: FilledButton.styleFrom(

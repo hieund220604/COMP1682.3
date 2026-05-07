@@ -118,9 +118,10 @@ const TransferSchema = new Schema<ITransfer>({
     collection: 'transfers'
 });
 
-// Indexes
-TransferSchema.index({ paymentRequestId: 1, status: 1 });
-TransferSchema.index({ fromUserId: 1, status: 1 });
-
+// Compound indexes (ESR: Equality → Sort → Range)
+TransferSchema.index({ fromUserId: 1, status: 1 });   // forecastService, budgetService, personal dashboard
+TransferSchema.index({ toUserId: 1, status: 1 });     // forecastService, personal dashboard (theyOwe aggregate)
+TransferSchema.index({ groupId: 1, status: 1 });      // group dashboard: pending transfers aggregate
+TransferSchema.index({ groupId: 1, createdAt: -1 });  // group dashboard: recent transfers sort
 
 export const Transfer = mongoose.model<ITransfer>('Transfer', TransferSchema);

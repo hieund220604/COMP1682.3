@@ -18,7 +18,6 @@ import { Subscription } from '../models/Subscription';
 import { SubscriptionMember } from '../models/SubscriptionMember';
 import { SubInvitation } from '../models/SubInvitation';
 import { BillingHistory } from '../models/BillingHistory';
-import { GroupMember } from '../models/GroupMember';
 import { User } from '../models/User';
 import {
     BillingCycle,
@@ -36,9 +35,7 @@ import { notificationService } from './notificationService';
 import { NotificationType } from '../models/Notification';
 import { buildRedisKey, deleteKeysByPrefix, getJsonCache, setJsonCache } from '../redis';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function transformUser(user: any) {
     if (!user) return undefined;
@@ -87,7 +84,7 @@ function calculateNextBillingDate(fromDate: Date, cycle: BillingCycle): Date {
  */
 function warningWindowMs(cycle: BillingCycle): number {
     switch (cycle) {
-        case BillingCycle.DAILY:  return 0;                            // no warning â€” too short
+        case BillingCycle.DAILY: return 0;                            // no warning â€” too short
         case BillingCycle.WEEKLY: return 1 * 24 * 60 * 60 * 1000;    // 1 day
         case BillingCycle.MONTHLY: return 3 * 24 * 60 * 60 * 1000;   // 3 days
         case BillingCycle.YEARLY: return 7 * 24 * 60 * 60 * 1000;    // 7 days
@@ -136,18 +133,8 @@ export const subscriptionService = {
         userId: string,
         data: CreateSubscriptionRequest,
     ): Promise<SubscriptionResponse> {
-        // Only group owner/admin can create
-        const membership = await GroupMember.findOne({
-            groupId: data.groupId,
-            userId,
-            leftAt: null,
-        });
-        if (!membership || (membership.role !== 'OWNER' && membership.role !== 'ADMIN')) {
-            throw new Error('Only group owner or admin can create subscriptions');
-        }
-
         const subscription = await Subscription.create({
-            groupId: data.groupId,
+            groupId: data.groupId ?? null,
             name: data.name,
             description: data.description ?? null,
             amount: data.amount,
@@ -186,11 +173,13 @@ export const subscriptionService = {
         const userMap = new Map<string, any>();
         users.forEach((u) => userMap.set(u._id.toString(), u));
 
-        const { Group } = await import('../models/Group');
-        const [group, creator] = await Promise.all([
-            Group.findById(subscription.groupId).select('name'),
-            User.findById(subscription.createdBy).select('displayName email'),
-        ]);
+        let groupName: string | undefined;
+        if (subscription.groupId) {
+            const { Group } = await import('../models/Group');
+            const group = await Group.findById(subscription.groupId).select('name');
+            groupName = group?.name;
+        }
+        const creator = await User.findById(subscription.createdBy).select('displayName email');
 
         const memberResponses: SubscriptionMemberResponse[] = members.map((m) => ({
             id: m._id.toString(),
@@ -218,8 +207,8 @@ export const subscriptionService = {
 
         const response: SubscriptionResponse = {
             id: subscription._id.toString(),
-            groupId: subscription.groupId,
-            groupName: group?.name ?? 'Unknown Group',
+            groupId: subscription.groupId ?? undefined,
+            groupName: groupName,
             name: subscription.name,
             description: subscription.description ?? undefined,
             amount: Number(subscription.amount),
@@ -244,15 +233,17 @@ export const subscriptionService = {
         const cached = await getJsonCache<SubscriptionResponse[]>(cacheKey);
         if (cached) return cached;
 
-        // User sees subs they own OR are an active member of
-        const [memberSubs, ownedSubs] = await Promise.all([
+        // User sees subs they own, are an active member of, OR have a pending invite for
+        const [memberSubs, ownedSubs, pendingInvites] = await Promise.all([
             SubscriptionMember.find({ userId, status: 'ACTIVE' }).select('subscriptionId'),
             Subscription.find({ createdBy: userId, status: SubscriptionStatus.ACTIVE }).select('_id'),
+            SubInvitation.find({ inviteeId: userId, status: 'PENDING' }).select('subscriptionId'),
         ]);
 
         const idSet = new Set<string>([
             ...memberSubs.map((m) => m.subscriptionId),
             ...ownedSubs.map((s) => s._id.toString()),
+            ...pendingInvites.map((i) => i.subscriptionId),
         ]);
 
         const subscriptions = await Subscription.find({
@@ -326,13 +317,9 @@ export const subscriptionService = {
             throw new Error('Owner cannot invite themselves');
         }
 
-        // Must be a group member
-        const groupMembership = await GroupMember.findOne({
-            groupId: subscription.groupId,
-            userId: inviteeId,
-            leftAt: null,
-        });
-        if (!groupMembership) throw new Error('Invitee is not a member of the group');
+        // Verify invitee exists
+        const inviteeUser = await User.findById(inviteeId);
+        if (!inviteeUser) throw new Error('User not found');
 
         // Already an active sub member?
         const existing = await SubscriptionMember.findOne({
@@ -476,6 +463,24 @@ export const subscriptionService = {
                 categoryTagId: categoryTagId ?? null,
             }], { session });
 
+            const { BillingHistory } = await import('../models/BillingHistory');
+            await BillingHistory.create([{
+                subscriptionId: invite.subscriptionId,
+                billingDate: now,
+                amount: fee,
+                currency: subscription.currency,
+                status: 'SUCCESS',
+                membersCharged: 1,
+                membersFailed: 0,
+                totalCollected: fee,
+                memberResults: [{
+                    userId,
+                    shareAmount: fee,
+                    success: true,
+                    categoryTagId: categoryTagId ?? null,
+                }]
+            }], { session });
+
             await session.commitTransaction();
         } catch (err) {
             await session.abortTransaction();
@@ -490,7 +495,7 @@ export const subscriptionService = {
         await Promise.all([
             transactionService.createTransaction({
                 userId,
-                groupId: subscription.groupId,
+                groupId: subscription.groupId ?? undefined,
                 type: TransactionType.SUBSCRIPTION_FEE,
                 amount: fee,
                 balanceBefore: Number(memberAfter?.balance ?? 0) + fee,
@@ -502,7 +507,7 @@ export const subscriptionService = {
             }),
             transactionService.createTransaction({
                 userId: subscription.createdBy,
-                groupId: subscription.groupId,
+                groupId: subscription.groupId ?? undefined,
                 type: TransactionType.TRANSFER_RECEIVED,
                 amount: fee,
                 balanceBefore: Number(ownerAfter?.balance ?? 0) - fee,
@@ -703,7 +708,7 @@ export const subscriptionService = {
             await Promise.all([
                 transactionService.createTransaction({
                     userId,
-                    groupId: subscription.groupId,
+                    groupId: subscription.groupId ?? undefined,
                     type: TransactionType.SUBSCRIPTION_FEE,
                     amount: obligation,
                     balanceBefore: Number(memberAfter?.balance ?? 0) + obligation,
@@ -715,7 +720,7 @@ export const subscriptionService = {
                 }),
                 transactionService.createTransaction({
                     userId: subscription.createdBy,
-                    groupId: subscription.groupId,
+                    groupId: subscription.groupId ?? undefined,
                     type: TransactionType.TRANSFER_RECEIVED,
                     amount: obligation,
                     balanceBefore: Number(ownerAfter?.balance ?? 0) - obligation,
@@ -856,10 +861,10 @@ export const subscriptionService = {
             // Idempotency guard
             const cycleStart = new Date(currentNextBillingDate);
             switch (subscription.billingCycle as BillingCycle) {
-                case BillingCycle.DAILY:   cycleStart.setDate(cycleStart.getDate() - 1); break;
-                case BillingCycle.WEEKLY:  cycleStart.setDate(cycleStart.getDate() - 7); break;
+                case BillingCycle.DAILY: cycleStart.setDate(cycleStart.getDate() - 1); break;
+                case BillingCycle.WEEKLY: cycleStart.setDate(cycleStart.getDate() - 7); break;
                 case BillingCycle.MONTHLY: cycleStart.setMonth(cycleStart.getMonth() - 1); break;
-                case BillingCycle.YEARLY:  cycleStart.setFullYear(cycleStart.getFullYear() - 1); break;
+                case BillingCycle.YEARLY: cycleStart.setFullYear(cycleStart.getFullYear() - 1); break;
             }
 
             const lastCharged = currentMember!.lastChargedAt;
@@ -888,7 +893,7 @@ export const subscriptionService = {
                     result.kicked = true;
 
                     await BillingHistory.create({
-                        subscriptionId, groupId: subscription.groupId, billingDate: now,
+                        subscriptionId, groupId: subscription.groupId ?? undefined, billingDate: now,
                         amount: fee, currency: subscription.currency ?? 'VND',
                         status: 'FAILED', membersCharged: 0, membersFailed: 1, totalCollected: 0,
                         failureReason: `Member ${userId} kicked after 3 failed attempts`,
@@ -959,13 +964,13 @@ export const subscriptionService = {
                 const ownerAfter = await User.findById(subscription.createdBy);
                 await Promise.all([
                     transactionService.createTransaction({
-                        userId, groupId: subscription.groupId, type: TransactionType.SUBSCRIPTION_FEE,
+                        userId, groupId: subscription.groupId ?? undefined, type: TransactionType.SUBSCRIPTION_FEE,
                         amount: fee, balanceBefore: (memberAfter?.balance ?? 0) + fee, balanceAfter: memberAfter?.balance ?? 0,
                         currency: subscription.currency ?? 'VND', description: `Subscription renewal: ${subscription.name}`,
                         referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
                     }),
                     transactionService.createTransaction({
-                        userId: subscription.createdBy, groupId: subscription.groupId, type: TransactionType.TRANSFER_RECEIVED,
+                        userId: subscription.createdBy, groupId: subscription.groupId ?? undefined, type: TransactionType.TRANSFER_RECEIVED,
                         amount: fee, balanceBefore: (ownerAfter?.balance ?? 0) - fee, balanceAfter: ownerAfter?.balance ?? 0,
                         currency: subscription.currency ?? 'VND', description: `Subscription renewal payment from member: ${subscription.name}`,
                         referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
@@ -973,7 +978,7 @@ export const subscriptionService = {
                 ]);
 
                 await BillingHistory.create({
-                    subscriptionId, groupId: subscription.groupId, billingDate: now,
+                    subscriptionId, groupId: subscription.groupId ?? undefined, billingDate: now,
                     amount: fee, currency: subscription.currency ?? 'VND',
                     status: 'SUCCESS', membersCharged: 1, membersFailed: 0, totalCollected: fee,
                     memberResults: [{ userId, shareAmount: fee, success: true, categoryTagId: currentMember!.categoryTagId }],

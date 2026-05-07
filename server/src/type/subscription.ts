@@ -15,7 +15,7 @@ export enum SubscriptionStatus {
 // ── Request shapes ─────────────────────────────────────────────────────
 
 export interface CreateSubscriptionRequest {
-    groupId: string;
+    groupId?: string;
     name: string;
     description?: string;
     /** Fixed fee per member per cycle (VND). Not a total to split. */
@@ -72,7 +72,7 @@ export interface SubscriptionMemberResponse {
 
 export interface SubscriptionResponse {
     id: string;
-    groupId: string;
+    groupId?: string;
     groupName?: string;
     name: string;
     description?: string;

@@ -7,6 +7,7 @@ const router = Router();
 
 const transferOtpKey = (req: Request) => `${req.user?.userId || 'anonymous'}:${req.params?.transferId || 'unknown'}`;
 
+// ── Per-user OTP rate limits ───────────────────────────────────────────
 const transferResendOtpRateLimit = createRateLimit({
     keyPrefix: 'transfer:otp:resend',
     windowMs: 10 * 60 * 1000,
@@ -23,6 +24,14 @@ const transferVerifyOtpRateLimit = createRateLimit({
     keyGenerator: transferOtpKey
 });
 
+// ── Per-IP rate limit for transfer write operations ────────────────────
+const transferWriteIpLimiter = createRateLimit({
+    keyPrefix: 'transfer:write:ip',
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyGenerator: (req) => req.ip || 'unknown'
+});
+
 // All routes require authentication
 router.use(authMiddleware);
 
@@ -33,9 +42,9 @@ router.get('/group/:groupId', transferController.getMyTransfers);
 router.get('/:transferId', transferController.getTransferById);
 
 // Payment actions
-router.post('/:transferId/pay', transferController.initiatePayment);
-router.post('/:transferId/verify-otp', transferVerifyOtpRateLimit, transferController.verifyOTPAndPay);
-router.post('/:transferId/resend-otp', transferResendOtpRateLimit, transferController.resendOTP);
-router.post('/:transferId/cancel', transferController.cancelTransfer);
+router.post('/:transferId/pay', transferWriteIpLimiter, transferController.initiatePayment);
+router.post('/:transferId/verify-otp', transferWriteIpLimiter, transferVerifyOtpRateLimit, transferController.verifyOTPAndPay);
+router.post('/:transferId/resend-otp', transferWriteIpLimiter, transferResendOtpRateLimit, transferController.resendOTP);
+router.post('/:transferId/cancel', transferWriteIpLimiter, transferController.cancelTransfer);
 
 export default router;

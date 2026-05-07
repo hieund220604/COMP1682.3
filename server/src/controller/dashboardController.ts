@@ -10,6 +10,7 @@ import { Subscription } from '../models/Subscription';
 import { SubscriptionMember } from '../models/SubscriptionMember';
 import { ResponseUtil } from '../util/responseUtil';
 import { forecastService } from '../service/forecastService';
+import { buildRedisKey, getJsonCache, setJsonCache } from '../redis';
 
 const inflowTypes = new Set([
     'TOP_UP',
@@ -38,6 +39,12 @@ export const dashboardController = {
             const userId = req.user?.userId;
             if (!userId) {
                 return ResponseUtil.unauthorized(res);
+            }
+
+            const cacheKey = buildRedisKey('cache', 'dashboard', 'personal', userId);
+            const cached = await getJsonCache(cacheKey);
+            if (cached) {
+                return ResponseUtil.success(res, cached);
             }
 
             const user = await User.findById(userId).select('balance currency displayName');
@@ -90,7 +97,7 @@ export const dashboardController = {
                 // forecast failure should not break the dashboard
             }
 
-            ResponseUtil.success(res, {
+            const responseData = {
                 user: {
                     id: user?._id,
                     displayName: user?.displayName,
@@ -121,7 +128,10 @@ export const dashboardController = {
                     description: tx.description
                 })),
                 forecastSummary,
-            });
+            };
+
+            await setJsonCache(cacheKey, responseData, 60);
+            ResponseUtil.success(res, responseData);
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to load personal dashboard');
         }
@@ -144,6 +154,12 @@ export const dashboardController = {
 
             const membership = await GroupMember.findOne({ userId, groupId, leftAt: null });
             if (!membership) return ResponseUtil.forbidden(res, 'Not a member of this group');
+
+            const cacheKey = buildRedisKey('cache', 'dashboard', 'group', groupId, 'months', months.toString());
+            const cached = await getJsonCache(cacheKey);
+            if (cached) {
+                return ResponseUtil.success(res, cached);
+            }
 
             // Run all queries in parallel for performance
             const [
@@ -171,7 +187,7 @@ export const dashboardController = {
                 _getUpcomingEvents(groupId),
             ]);
 
-            ResponseUtil.success(res, {
+            const responseData = {
                 groupId,
                 paymentRequests: prs,
                 transfersPending: {
@@ -189,7 +205,10 @@ export const dashboardController = {
                 spending: spendingData,
                 debts: debtsData,
                 upcoming: upcomingData,
-            });
+            };
+
+            await setJsonCache(cacheKey, responseData, 60);
+            ResponseUtil.success(res, responseData);
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to load group dashboard');
         }

@@ -540,6 +540,21 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ─── Search Users ─────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> searchUsers(String email) async {
+    try {
+      final resp = await _dio.get('/users/search', queryParameters: {'email': email});
+      final root = resp.data;
+      if (root is Map<String, dynamic> && root['success'] == true) {
+        final dataList = root['data'] as List<dynamic>? ?? [];
+        return dataList.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ─── Onboarding ─────────────────────────────────────────
   Future<void> setShowOnboardingOnLogin(bool show) async {
     await _prefs.setBool('show_onboarding_on_login', show);

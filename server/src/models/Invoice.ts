@@ -132,6 +132,7 @@ const InvoiceSchema = new Schema<IInvoice>({
 
 // Indexes
 InvoiceSchema.index({ groupId: 1, status: 1 });
+InvoiceSchema.index({ groupId: 1, status: 1, invoiceDate: 1 });
 InvoiceSchema.index({ uploadedBy: 1 });
 InvoiceSchema.index({ paymentRequestId: 1 });
 InvoiceSchema.index({ templateId: 1 });

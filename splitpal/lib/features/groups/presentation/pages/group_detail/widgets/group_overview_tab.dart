@@ -197,9 +197,9 @@ class GroupOverviewTab extends StatelessWidget {
             // ── Existing cards ──
             _PaymentRequestOverview(dashboard: dashboard!),
             const SizedBox(height: AppSpacing.lg),
-            _TransferPendingCard(dashboard: dashboard!),
+            _TransferPendingCard(dashboard: dashboard!, currency: currency),
             const SizedBox(height: AppSpacing.lg),
-            _RecentTransfersCard(dashboard: dashboard!, members: members),
+            _RecentTransfersCard(dashboard: dashboard!, members: members, currency: currency),
             const SizedBox(height: AppSpacing.lg),
           ],
           MembersPreviewCard(
@@ -329,7 +329,8 @@ class _PaymentRequestOverview extends StatelessWidget {
 
 class _TransferPendingCard extends StatelessWidget {
   final Map<String, dynamic> dashboard;
-  const _TransferPendingCard({required this.dashboard});
+  final String currency;
+  const _TransferPendingCard({required this.dashboard, required this.currency});
 
   @override
   Widget build(BuildContext context) {
@@ -350,7 +351,12 @@ class _TransferPendingCard extends StatelessWidget {
               Text('$count items'),
             ],
           ),
-          Text(total.toStringAsFixed(0)),
+          Text(
+            CurrencyFormatter.formatCurrency(total, currency),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
@@ -360,9 +366,11 @@ class _TransferPendingCard extends StatelessWidget {
 class _RecentTransfersCard extends StatelessWidget {
   final Map<String, dynamic> dashboard;
   final List<dynamic> members;
+  final String currency;
   const _RecentTransfersCard({
     required this.dashboard,
     required this.members,
+    required this.currency,
   });
 
   String _getMemberName(dynamic id) {
@@ -423,7 +431,10 @@ class _RecentTransfersCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Text('${t['amount']}'),
+                  Text(
+                    CurrencyFormatter.formatCurrency(_sd(t['amount']), currency),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ],
               ),
             );

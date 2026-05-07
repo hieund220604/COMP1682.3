@@ -597,9 +597,10 @@ class _AuthPageState extends State<AuthPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.network(
-            'https://www.google.com/favicon.ico',
+            'https://img.icons8.com/color/48/google-logo.png',
             width: 20,
             height: 20,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 24, color: Color(0xFFE74C3C)),
           ),
           const SizedBox(width: 10),
           const Text(

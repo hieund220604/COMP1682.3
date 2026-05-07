@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
+import 'package:splitpal/features/groups/group_provider.dart';
 import 'package:splitpal/models/subscription.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
 import 'package:splitpal/features/subscriptions/subscription_provider.dart';
+import 'package:splitpal/features/subscriptions/presentation/widgets/subscription_invite_sheet.dart';
 
 class SubscriptionDetailPage extends StatefulWidget {
   final String subscriptionId;
@@ -120,6 +122,18 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
     }
   }
 
+  void _showInviteSheet(
+    BuildContext context,
+    SubscriptionProvider provider,
+    Subscription sub,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SubscriptionInviteSheet(subscription: sub),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -195,7 +209,8 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
                 _info('Fee per member',
                     '${sub.amount.toStringAsFixed(0)} ${sub.currency} / ${sub.billingCycle.toLowerCase()}'),
                 _info('Billing cycle', sub.billingCycle),
-                _info('Group', sub.groupName ?? sub.groupId),
+                if (sub.groupId != null)
+                  _info('Group', sub.groupName ?? sub.groupId ?? ''),
                 _info('Created by', sub.createdByName ?? sub.createdBy),
                 _info('Created at', _fmt(sub.createdAt)),
                 if (sub.cancelledAt != null)
@@ -218,9 +233,23 @@ class _SubscriptionDetailPageState extends State<SubscriptionDetailPage> {
 
                 // ── Members ───────────────────────────────────────────────────
                 const Divider(),
-                Text(
-                  'Members (${sub.memberCount} active)',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Members (${sub.memberCount} active)',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    if (isCreator && sub.isActive)
+                      TextButton.icon(
+                        onPressed: () => _showInviteSheet(context, provider, sub),
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('Invite'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 ...sub.members.where((m) => m.isActive).map(

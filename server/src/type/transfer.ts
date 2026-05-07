@@ -27,6 +27,14 @@ export interface TransferResponse {
 
     // Debt allocation details
     debtAllocations?: DebtAllocationDetail[];
+
+    // Full debt context between payer and receiver
+    debtContext?: {
+        youOwe: DebtContextEntry[];    // Debts: payer owes receiver
+        theyOwe: DebtContextEntry[];   // Counter-debts: receiver owes payer
+        totalYouOwe: number;
+        totalTheyOwe: number;
+    };
 }
 
 export interface DebtAllocationDetail {
@@ -34,6 +42,12 @@ export interface DebtAllocationDetail {
     invoiceId: string;
     invoiceTitle: string;
     allocatedAmount: number;
+}
+
+export interface DebtContextEntry {
+    invoiceId: string;
+    invoiceTitle: string;
+    debtAmount: number;  // originalAmount of the debt
 }
 
 export interface InitiatePaymentResponse {

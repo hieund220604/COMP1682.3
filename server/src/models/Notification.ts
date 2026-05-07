@@ -25,7 +25,8 @@ export enum NotificationType {
     // ── Recurring Bills ──────────────────────────────────────────
     RECURRING_BILL_DRAFT = 'RECURRING_BILL_DRAFT',
     // ────────────────────────────────────────────────────────────
-    ROLE_CHANGED = 'ROLE_CHANGED'
+    ROLE_CHANGED = 'ROLE_CHANGED',
+    BUDGET_ALERT = 'BUDGET_ALERT'
 }
 
 export interface INotification extends Document {

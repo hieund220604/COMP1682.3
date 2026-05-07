@@ -6,7 +6,7 @@ class CurrencyFormatter {
   static String formatVND(double amount) {
     final formatter = NumberFormat('#,##0', 'vi_VN');
     final formatted = formatter.format(amount.round());
-    return '$formatted đ';
+    return '$formatted VND';
   }
 
   /// Format currency based on currency code
@@ -28,19 +28,19 @@ class CurrencyFormatter {
   /// Example: 1000000 -> "1M đ"
   static String formatVNDCompact(double amount) {
     if (amount >= 1000000000) {
-      return '${(amount / 1000000000).toStringAsFixed(1)}B đ';
+      return '${(amount / 1000000000).toStringAsFixed(1)}B VND';
     } else if (amount >= 1000000) {
-      return '${(amount / 1000000).toStringAsFixed(1)}M đ';
+      return '${(amount / 1000000).toStringAsFixed(1)}M VND';
     } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(0)}K đ';
+      return '${(amount / 1000).toStringAsFixed(0)}K VND';
     }
-    return '${amount.round()} đ';
+    return '${amount.round()} VND';
   }
 
   static String _getCurrencySymbol(String currency) {
     switch (currency.toUpperCase()) {
       case 'VND':
-        return 'đ';
+        return 'VND';
       case 'USD':
         return '\$';
       case 'EUR':

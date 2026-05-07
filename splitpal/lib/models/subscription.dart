@@ -14,7 +14,7 @@ double _safeDouble(dynamic v, [double fallback = 0.0]) {
 
 class Subscription {
   final String id;
-  final String groupId;
+  final String? groupId;
   final String? groupName;
   final String name;
   final String? description;
@@ -34,7 +34,7 @@ class Subscription {
 
   const Subscription({
     required this.id,
-    required this.groupId,
+    this.groupId,
     this.groupName,
     required this.name,
     this.description,
@@ -96,7 +96,7 @@ class Subscription {
 
     return Subscription(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
-      groupId: (json['groupId'] ?? '').toString(),
+      groupId: json['groupId']?.toString(),
       groupName: json['groupName'] as String?,
       name: (json['name'] ?? '').toString(),
       description: json['description'] as String?,

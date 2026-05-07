@@ -68,7 +68,7 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
         context.read<ForecastProvider>().injectFromDashboard(forecastJson);
       }
     } catch (e) {
-      _error = 'Không tải được dashboard';
+      _error = 'Can not load dashboard';
     }
   }
 

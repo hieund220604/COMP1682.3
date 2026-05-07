@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:splitpal/models/subscription.dart';
 
+import 'package:provider/provider.dart';
+import 'package:splitpal/features/auth/auth_provider.dart';
+
 class SubscriptionCard extends StatelessWidget {
   final Subscription subscription;
   final VoidCallback onTap;
@@ -27,6 +30,9 @@ class SubscriptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final currentUserId = context.read<AuthProvider>().user?.id;
+    final isPendingForMe = subscription.pendingInvitations.any((inv) => inv.inviteeId == currentUserId && inv.isPending);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -92,20 +98,29 @@ class SubscriptionCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(
-                      subscription.nextBillingDate != null
-                          ? 'Next: ${_fmtDate(subscription.nextBillingDate!)}'
-                          : 'No active members',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Colors.grey),
-                    ),
+                    if (isPendingForMe) ...[
+                      const Icon(Icons.mark_email_unread, size: 16, color: Colors.blue),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Pending Invite',
+                        style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ] else ...[
+                      const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      Text(
+                        subscription.nextBillingDate != null
+                            ? 'Next: ${_fmtDate(subscription.nextBillingDate!)}'
+                            : 'No active members',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.grey),
+                      ),
+                    ],
                   ],
                 ),
-                if (onCancel != null)
+                if (onCancel != null && !isPendingForMe)
                   TextButton(
                     onPressed: onCancel,
                     style: TextButton.styleFrom(foregroundColor: colorScheme.error),

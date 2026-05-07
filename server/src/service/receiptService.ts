@@ -181,6 +181,10 @@ export const receiptService = {
             receiptDate,
         });
 
+        // Async check for budget alerts
+        const { budgetService } = require('./budgetService');
+        budgetService.checkBudgetAlerts(userId).catch(console.error);
+
         return toReceiptDto(receipt, tags);
     },
 
@@ -248,6 +252,11 @@ export const receiptService = {
 
         await receipt.save();
         const allTags = tags ?? await ReceiptTag.find({ _id: { $in: receipt.tags }, userId });
+        
+        // Async check for budget alerts
+        const { budgetService } = require('./budgetService');
+        budgetService.checkBudgetAlerts(userId).catch(console.error);
+        
         return toReceiptDto(receipt, allTags);
     },
 

@@ -272,6 +272,83 @@ class PaymentRequest {
   }
 }
 
+/// Represents a single debt allocation within a transfer,
+/// mapping how much of the transfer pays toward a specific invoice debt.
+class DebtAllocation {
+  final String originalDebtId;
+  final String invoiceId;
+  final String invoiceTitle;
+  final double allocatedAmount;
+
+  DebtAllocation({
+    required this.originalDebtId,
+    required this.invoiceId,
+    required this.invoiceTitle,
+    required this.allocatedAmount,
+  });
+
+  factory DebtAllocation.fromJson(Map<String, dynamic> json) {
+    return DebtAllocation(
+      originalDebtId: json['originalDebtId'] ?? '',
+      invoiceId: json['invoiceId'] ?? '',
+      invoiceTitle: json['invoiceTitle'] ?? 'Unknown',
+      allocatedAmount: _safeDouble(json['allocatedAmount']),
+    );
+  }
+}
+
+/// A single debt entry showing how much is owed from a specific invoice.
+class DebtContextEntry {
+  final String invoiceId;
+  final String invoiceTitle;
+  final double debtAmount;
+
+  DebtContextEntry({
+    required this.invoiceId,
+    required this.invoiceTitle,
+    required this.debtAmount,
+  });
+
+  factory DebtContextEntry.fromJson(Map<String, dynamic> json) {
+    return DebtContextEntry(
+      invoiceId: json['invoiceId'] ?? '',
+      invoiceTitle: json['invoiceTitle'] ?? 'Unknown',
+      debtAmount: _safeDouble(json['debtAmount']),
+    );
+  }
+}
+
+/// Full debt context between payer and receiver.
+class DebtContext {
+  final List<DebtContextEntry> youOwe;
+  final List<DebtContextEntry> theyOwe;
+  final double totalYouOwe;
+  final double totalTheyOwe;
+
+  DebtContext({
+    required this.youOwe,
+    required this.theyOwe,
+    required this.totalYouOwe,
+    required this.totalTheyOwe,
+  });
+
+  double get netAmount => totalYouOwe - totalTheyOwe;
+  bool get hasOffset => theyOwe.isNotEmpty;
+
+  factory DebtContext.fromJson(Map<String, dynamic> json) {
+    return DebtContext(
+      youOwe: (json['youOwe'] as List? ?? [])
+          .map((e) => DebtContextEntry.fromJson(e))
+          .toList(),
+      theyOwe: (json['theyOwe'] as List? ?? [])
+          .map((e) => DebtContextEntry.fromJson(e))
+          .toList(),
+      totalYouOwe: _safeDouble(json['totalYouOwe']),
+      totalTheyOwe: _safeDouble(json['totalTheyOwe']),
+    );
+  }
+}
+
 class Transfer {
   final String id;
   final String paymentRequestId;
@@ -292,6 +369,14 @@ class Transfer {
   final String? convertedCurrency;
   final double? exchangeRate;
 
+  // Debt allocation breakdown (nullable for hot-reload safety)
+  final List<DebtAllocation>? _debtAllocations;
+  List<DebtAllocation> get debtAllocations => _debtAllocations ?? const [];
+
+  // Full debt context (nullable for hot-reload safety)
+  final DebtContext? _debtContext;
+  DebtContext? get debtContext => _debtContext;
+
   Transfer({
     required this.id,
     required this.paymentRequestId,
@@ -309,7 +394,10 @@ class Transfer {
     this.originalAmount,
     this.convertedCurrency,
     this.exchangeRate,
-  });
+    List<DebtAllocation> debtAllocations = const [],
+    DebtContext? debtContext,
+  }) : _debtAllocations = debtAllocations,
+       _debtContext = debtContext;
 
   bool get isCancelled => status == 'CANCELLED';
   bool get isPending => status == 'PENDING';
@@ -341,6 +429,19 @@ class Transfer {
       toUserId = json['toUserId'] ?? '';
     }
 
+    // Parse debt allocations
+    final allocsRaw = json['debtAllocations'];
+    List<DebtAllocation> allocations = [];
+    if (allocsRaw is List) {
+      allocations = allocsRaw.map((a) => DebtAllocation.fromJson(a)).toList();
+    }
+
+    // Parse debt context
+    DebtContext? debtContext;
+    if (json['debtContext'] is Map<String, dynamic>) {
+      debtContext = DebtContext.fromJson(json['debtContext']);
+    }
+
     return Transfer(
       id: json['id'] ?? json['_id'] ?? '',
       paymentRequestId: json['paymentRequestId'] ?? '',
@@ -363,6 +464,8 @@ class Transfer {
       exchangeRate: json['exchangeRate'] != null
           ? _safeDouble(json['exchangeRate'])
           : null,
+      debtAllocations: allocations,
+      debtContext: debtContext,
     );
   }
 }

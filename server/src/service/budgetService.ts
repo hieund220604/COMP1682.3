@@ -86,5 +86,61 @@ export const budgetService = {
 
         // Filter out archived tags that have 0 spending
         return envelopes.filter(e => !e.isArchived || e.spent > 0);
+    },
+
+    /**
+     * Check current month's budget and send alerts if approaching or exceeding limit.
+     */
+    async checkBudgetAlerts(userId: string): Promise<void> {
+        try {
+            const now = new Date();
+            const monthStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+            const summary = await this.getMonthlyBudgetSummary(userId, monthStr);
+            
+            for (const envelope of summary) {
+                if (envelope.monthlyBudget && envelope.monthlyBudget > 0) {
+                    const ratio = envelope.spent / envelope.monthlyBudget;
+                    if (ratio >= 0.8) {
+                        let threshold = 80;
+                        if (ratio >= 1.0) threshold = 100;
+                        else if (ratio >= 0.9) threshold = 90;
+
+                        // Check if an alert for this tag, month, and threshold was already sent
+                        const { Notification, NotificationType } = require('../models/Notification');
+                        const alreadySent = await Notification.exists({
+                            userId,
+                            type: NotificationType.BUDGET_ALERT,
+                            'data.tagId': envelope.tagId,
+                            'data.month': monthStr,
+                            'data.threshold': { $gte: threshold }
+                        });
+
+                        if (!alreadySent) {
+                            const { notificationService } = require('./notificationService');
+                            const title = threshold >= 100 ? `Budget Exceeded: ${envelope.name.toUpperCase()}` : `Budget Nearing Limit: ${envelope.name.toUpperCase()}`;
+                            const message = threshold >= 100 
+                                ? `You have spent ${envelope.spent}, which exceeds your ${envelope.monthlyBudget} limit.`
+                                : `You have spent ${Math.round(ratio * 100)}% of your limit.`;
+                                
+                            await notificationService.notify(
+                                userId,
+                                NotificationType.BUDGET_ALERT,
+                                title,
+                                message,
+                                {
+                                    tagId: envelope.tagId,
+                                    month: monthStr,
+                                    threshold,
+                                    spent: envelope.spent,
+                                    budget: envelope.monthlyBudget
+                                }
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking budget alerts:', error);
+        }
     }
 };

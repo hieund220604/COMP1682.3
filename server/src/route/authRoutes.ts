@@ -9,6 +9,7 @@ const router = Router();
 
 const otpEmailKey = (req: Request) => `${String(req.body?.email || 'unknown').trim().toLowerCase()}:${req.ip || 'unknown'}`;
 
+// ── Existing rate limits ───────────────────────────────────────────────
 const resendOtpRateLimit = createRateLimit({
     keyPrefix: 'otp:resend',
     windowMs: 10 * 60 * 1000,
@@ -25,56 +26,80 @@ const verifyOtpRateLimit = createRateLimit({
     keyGenerator: otpEmailKey
 });
 
-router.post('/signup', authController.signUp);
+// ── Per-user rate limits ───────────────────────────────────────────────
+const signupLimiter = createRateLimit({
+    keyPrefix: 'auth:signup',
+    windowMs: 60 * 60 * 1000,
+    maxRequests: 5,
+    message: 'Too many signup attempts. Please try again in 1 hour.',
+    keyGenerator: (req) => req.ip || 'unknown'
+});
 
-// Verify OTP and activate account
+const forgotPasswordLimiter = createRateLimit({
+    keyPrefix: 'auth:forgot',
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 3,
+    message: 'Too many password reset requests. Please wait a few minutes.',
+    keyGenerator: (req) => `${String(req.body?.email || 'unknown').trim().toLowerCase()}:${req.ip || 'unknown'}`
+});
+
+const authWriteLimiter = createRateLimit({
+    keyPrefix: 'auth:write',
+    windowMs: 60_000,
+    maxRequests: 15,
+    keyGenerator: (req) => req.user?.userId || req.ip || 'anon'
+});
+
+const twoFactorLimiter = createRateLimit({
+    keyPrefix: 'auth:2fa',
+    windowMs: 5 * 60 * 1000,
+    maxRequests: 10,
+    message: 'Too many 2FA attempts. Please try again later.',
+    keyGenerator: (req) => req.user?.userId || req.ip || 'anon'
+});
+
+// ── Per-IP rate limits (dual-key: prevents multi-account abuse) ────────
+const authWriteIpLimiter = createRateLimit({
+    keyPrefix: 'auth:write:ip',
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyGenerator: (req) => req.ip || 'unknown'
+});
+
+const twoFactorIpLimiter = createRateLimit({
+    keyPrefix: 'auth:2fa:ip',
+    windowMs: 5 * 60 * 1000,
+    maxRequests: 25,
+    keyGenerator: (req) => req.ip || 'unknown'
+});
+
+// ── Public routes ──────────────────────────────────────────────────────
+router.post('/signup', signupLimiter, authController.signUp);
 router.post('/verify-otp', verifyOtpRateLimit, authController.verifyOTP);
-
-// Resend OTP
 router.post('/resend-otp', resendOtpRateLimit, authController.resendOTP);
-
-// Login
 router.post('/login', loginGuard, authController.loginUser);
-
-// Google Login
-router.post('/google-login', authController.loginWithGoogle);
-
-// Forgot Password - Send OTP
-router.post('/forgot-password', authController.forgotPassword);
-
-// Verify Reset OTP
+router.post('/google-login', authWriteIpLimiter, authWriteLimiter, authController.loginWithGoogle);
+router.post('/forgot-password', forgotPasswordLimiter, authController.forgotPassword);
 router.post('/verify-reset-otp', verifyOtpRateLimit, authController.verifyResetOTP);
+router.post('/reset-password-token', authWriteIpLimiter, authWriteLimiter, authController.resetPasswordWithToken);
+router.post('/reset-password', authWriteIpLimiter, authWriteLimiter, authController.resetPassword);
 
-// Reset Password with Token (after OTP verified)
-router.post('/reset-password-token', authController.resetPasswordWithToken);
-
-// Reset password with token (legacy)
-router.post('/reset-password', authController.resetPassword);
-
-// Get current user info
+// ── Authenticated routes ───────────────────────────────────────────────
 router.get('/me', authMiddleware, authController.getCurrentUser);
+router.patch('/profile', authMiddleware, authWriteIpLimiter, authWriteLimiter, authController.updateProfile);
+router.post('/change-password/initiate', authMiddleware, authWriteIpLimiter, authWriteLimiter, authController.initiateChangePassword);
+router.post('/change-password/confirm', authMiddleware, authWriteIpLimiter, authWriteLimiter, authController.confirmChangePassword);
+router.post('/contact-us', authMiddleware, authWriteIpLimiter, authWriteLimiter, authController.contactUs);
 
-// Update user profile
-router.patch('/profile', authMiddleware, authController.updateProfile);
-
-// Change Password
-router.post('/change-password/initiate', authMiddleware, authController.initiateChangePassword);
-router.post('/change-password/confirm', authMiddleware, authController.confirmChangePassword);
-
-// Contact Us
-router.post('/contact-us', authMiddleware, authController.contactUs);
-
-// ── Two-Factor Authentication ───────────────────────────────
-router.post('/2fa/setup', authMiddleware, twoFactorController.setup);
-router.post('/2fa/verify-setup', authMiddleware, twoFactorController.verifySetup);
-router.post('/2fa/verify', twoFactorController.verifyLogin);  // No authMiddleware — uses tempToken
-router.post('/2fa/disable', authMiddleware, twoFactorController.disable);
+// ── Two-Factor Authentication ──────────────────────────────────────────
+router.post('/2fa/setup', authMiddleware, twoFactorIpLimiter, twoFactorLimiter, twoFactorController.setup);
+router.post('/2fa/verify-setup', authMiddleware, twoFactorIpLimiter, twoFactorLimiter, twoFactorController.verifySetup);
+router.post('/2fa/verify', twoFactorIpLimiter, twoFactorLimiter, twoFactorController.verifyLogin);
+router.post('/2fa/disable', authMiddleware, twoFactorIpLimiter, twoFactorLimiter, twoFactorController.disable);
 router.get('/2fa/status', authMiddleware, twoFactorController.status);
 
-// Refresh Token (no authMiddleware — uses refreshToken from body)
-router.post('/refresh-token', authController.refreshToken);
-
-// Logout (revoke refresh token server-side)
+// ── Token management ───────────────────────────────────────────────────
+router.post('/refresh-token', authWriteIpLimiter, authWriteLimiter, authController.refreshToken);
 router.post('/logout', authController.logout);
 
 export default router;

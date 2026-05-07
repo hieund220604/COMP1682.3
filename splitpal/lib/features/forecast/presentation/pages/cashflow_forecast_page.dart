@@ -763,7 +763,7 @@ class _DayGroup extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  '${net >= 0 ? '+' : ''}${CurrencyFormatter.formatVNDCompact(net)} đ',
+                  '${net >= 0 ? '+' : ''}${CurrencyFormatter.formatVNDCompact(net)}',
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: netColor,

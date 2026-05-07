@@ -39,6 +39,10 @@ async function invalidateGroupCache(groupId: string): Promise<void> {
     await deleteKeysByPrefix(buildRedisKey('cache', 'group', groupId));
 }
 
+async function invalidateUserGroupListCache(userId: string): Promise<void> {
+    await deleteKeysByPrefix(buildRedisKey('cache', 'group_list', userId));
+}
+
 function generateJoinCode(): string {
     return crypto.randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
 }
@@ -78,6 +82,8 @@ export const groupService = {
             userId: userId,
             role: 'OWNER'
         });
+
+        await invalidateUserGroupListCache(userId);
 
         return {
             id: group._id.toString(),
@@ -154,42 +160,65 @@ export const groupService = {
     },
 
     async getGroupsForUser(userId: string): Promise<GroupResponse[]> {
+        const cacheKey = buildRedisKey('cache', 'group_list', userId);
+        const cached = await getJsonCache<GroupResponse[]>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const memberships = await GroupMember.find({ userId, leftAt: null });
         const groupIds = memberships.map(m => m.groupId);
 
-        const groups = await Group.find({ _id: { $in: groupIds } });
+        if (groupIds.length === 0) {
+            return [];
+        }
 
-        const groupResponses = await Promise.all(
-            groups.map(async (group) => {
-                const members = await GroupMember.find({ groupId: group._id.toString(), leftAt: null });
-                const users = await User.find({ _id: { $in: members.map(m => m.userId) } }).select('_id email displayName avatarUrl');
-                const userMap = new Map();
-                users.forEach(u => userMap.set(u._id.toString(), u));
+        const groups = await Group.find({ _id: { $in: groupIds }, deletedAt: null });
 
-                return {
-                    id: group._id.toString(),
-                    name: group.name,
-                    description: group.description,
-                    joinCode: group.joinCode,
-                    baseCurrency: group.baseCurrency,
-                    createdAt: group.createdAt,
-                    createdBy: group.createdBy,
-                    memberCount: members.length,
-                    members: members
-                        .filter(m => userMap.has(m.userId))
-                        .map(m => ({
-                            id: m._id.toString(),
-                            userId: m.userId,
-                            groupId: m.groupId,
-                            role: m.role as GroupRole,
-                            joinedAt: m.joinedAt,
-                            leftAt: m.leftAt ?? undefined,
-                            user: transformUser(userMap.get(m.userId))
-                        }))
-                };
-            })
-        );
+        // Fetch all members of these groups in bulk
+        const allMembers = await GroupMember.find({ groupId: { $in: groupIds }, leftAt: null });
+        
+        // Fetch all users referenced by these members in bulk
+        const userIdsToFetch = Array.from(new Set(allMembers.map(m => m.userId)));
+        const users = await User.find({ _id: { $in: userIdsToFetch } }).select('_id email displayName avatarUrl');
+        
+        const userMap = new Map();
+        users.forEach(u => userMap.set(u._id.toString(), u));
 
+        // Group members by groupId
+        const membersByGroup = new Map<string, any[]>();
+        allMembers.forEach(m => {
+            const list = membersByGroup.get(m.groupId) || [];
+            list.push(m);
+            membersByGroup.set(m.groupId, list);
+        });
+
+        const groupResponses = groups.map((group) => {
+            const members = membersByGroup.get(group._id.toString()) || [];
+            return {
+                id: group._id.toString(),
+                name: group.name,
+                description: group.description,
+                joinCode: group.joinCode,
+                baseCurrency: group.baseCurrency,
+                createdAt: group.createdAt,
+                createdBy: group.createdBy,
+                memberCount: members.length,
+                members: members
+                    .filter(m => userMap.has(m.userId))
+                    .map(m => ({
+                        id: m._id.toString(),
+                        userId: m.userId,
+                        groupId: m.groupId,
+                        role: m.role as GroupRole,
+                        joinedAt: m.joinedAt,
+                        leftAt: m.leftAt ?? undefined,
+                        user: transformUser(userMap.get(m.userId))
+                    }))
+            };
+        });
+
+        await setJsonCache(cacheKey, groupResponses, 30);
         return groupResponses;
     },
 
@@ -456,6 +485,7 @@ export const groupService = {
 
         await Invite.findByIdAndUpdate(invite._id, { status: 'ACCEPTED' });
         await invalidateGroupCache(invite.groupId);
+        await invalidateUserGroupListCache(userId);
 
         // Notify all group members about the new member (except the new member themselves)
         const group = await Group.findById(invite.groupId);
@@ -513,6 +543,7 @@ export const groupService = {
         });
 
         await invalidateGroupCache(group._id.toString());
+        await invalidateUserGroupListCache(userId);
 
         // Notify all group members about the new member
         const allMembers = await GroupMember.find({ groupId: group._id.toString(), leftAt: null });
@@ -709,6 +740,7 @@ export const groupService = {
 
         await GroupMember.findByIdAndUpdate(membership._id, { leftAt: new Date() });
         await invalidateGroupCache(groupId);
+        await invalidateUserGroupListCache(userId);
     },
 
     async calculateGroupBalance(userId: string, groupId: string): Promise<GroupBalanceResponse> {

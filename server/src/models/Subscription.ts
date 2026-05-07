@@ -5,7 +5,7 @@ export type SubscriptionStatus = 'ACTIVE' | 'CANCELLED';
 
 export interface ISubscription extends Document {
     _id: Types.ObjectId;
-    groupId: string;
+    groupId?: string;
     name: string;
     description?: string;
     /** Fixed fee per member per cycle (VND). NOT a total to be split. */
@@ -22,7 +22,7 @@ export interface ISubscription extends Document {
 const SubscriptionSchema = new Schema<ISubscription>({
     groupId: {
         type: String,
-        required: true,
+        default: null,
         ref: 'Group'
     },
     name: {

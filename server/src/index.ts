@@ -12,6 +12,7 @@ import mongoose from 'mongoose';
 import { setupSocketIO } from './socketSetup';
 import { initializeFirebase } from './config/firebase';
 import authRoutes from './route/authRoutes';
+import userRoutes from './route/userRoutes';
 import groupRoutes from './route/groupRoutes';
 import accountRoutes from './route/accountRoutes';
 import vnpayRoutes from './route/vnpayRoutes';
@@ -33,6 +34,7 @@ import receiptRoutes from './route/receiptRoutes';
 import budgetRoutes from './route/budgetRoutes';
 import billTemplateRoutes from './route/billTemplateRoutes';
 import { connectRedis, disconnectRedis } from './redis';
+import { createRateLimit } from './middleware/rateLimitMiddleware';
 
 const app = express();
 const httpServer = createServer(app);
@@ -49,8 +51,19 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ── Global API Rate Limit: 120 requests/minute per IP ──────────────────
+const globalApiLimiter = createRateLimit({
+    keyPrefix: 'global:api',
+    windowMs: 60_000,
+    maxRequests: 120,
+    message: 'Too many requests from this IP. Please slow down.',
+    keyGenerator: (req) => req.ip || 'unknown'
+});
+app.use('/api', globalApiLimiter);
+
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/payments', vnpayRoutes);
