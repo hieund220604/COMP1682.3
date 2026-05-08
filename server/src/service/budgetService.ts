@@ -4,6 +4,8 @@ import { ReceiptTag } from '../models/ReceiptTag';
 import { BillingHistory } from '../models/BillingHistory';
 import { Transfer } from '../models/Transfer';
 import { AppError } from './receiptService';
+import { Notification, NotificationType } from '../models/Notification';
+import { notificationService } from './notificationService';
 
 export const budgetService = {
     /**
@@ -106,7 +108,6 @@ export const budgetService = {
                         else if (ratio >= 0.9) threshold = 90;
 
                         // Check if an alert for this tag, month, and threshold was already sent
-                        const { Notification, NotificationType } = require('../models/Notification');
                         const alreadySent = await Notification.exists({
                             userId,
                             type: NotificationType.BUDGET_ALERT,
@@ -116,7 +117,6 @@ export const budgetService = {
                         });
 
                         if (!alreadySent) {
-                            const { notificationService } = require('./notificationService');
                             const title = threshold >= 100 ? `Budget Exceeded: ${envelope.name.toUpperCase()}` : `Budget Nearing Limit: ${envelope.name.toUpperCase()}`;
                             const message = threshold >= 100 
                                 ? `You have spent ${envelope.spent}, which exceeds your ${envelope.monthlyBudget} limit.`

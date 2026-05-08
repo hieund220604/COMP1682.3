@@ -11,6 +11,8 @@ import { SubscriptionMember } from '../models/SubscriptionMember';
 import { ResponseUtil } from '../util/responseUtil';
 import { forecastService } from '../service/forecastService';
 import { buildRedisKey, getJsonCache, setJsonCache } from '../redis';
+import { originalDebtService } from '../service/originalDebtService';
+import { debtSettlementEngine } from '../service/debtSettlementEngine';
 
 const inflowTypes = new Set([
     'TOP_UP',
@@ -166,7 +168,6 @@ export const dashboardController = {
                 prs,
                 pendingTransfers,
                 recentTransfers,
-                spendingData,
                 debtsData,
                 upcomingData,
             ] = await Promise.all([
@@ -179,8 +180,6 @@ export const dashboardController = {
                 ]),
                 // ── Existing: Recent transfers ──
                 Transfer.find({ groupId }).sort({ createdAt: -1 }).limit(15).lean(),
-                // ── NEW: Spending analytics ──
-                _getSpendingAnalytics(groupId, months),
                 // ── NEW: Debt overview ──
                 _getDebtOverview(groupId),
                 // ── NEW: Upcoming events ──
@@ -202,7 +201,6 @@ export const dashboardController = {
                     status: (t as any).status,
                     createdAt: (t as any).createdAt
                 })),
-                spending: spendingData,
                 debts: debtsData,
                 upcoming: upcomingData,
             };
@@ -252,169 +250,42 @@ async function _getPaymentRequests(groupId: string) {
     });
 }
 
-// ── Helper: Spending Analytics ─────────────────────────────────────────────────
-
-async function _getSpendingAnalytics(groupId: string, months: number) {
-    const now = new Date();
-    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
-
-    // Monthly trend aggregation
-    const monthlyAgg = await Invoice.aggregate([
-        {
-            $match: {
-                groupId,
-                status: { $in: ['SUBMITTED', 'LOCKED'] },
-                invoiceDate: { $gte: cutoff },
-            }
-        },
-        {
-            $group: {
-                _id: {
-                    year: { $year: '$invoiceDate' },
-                    month: { $month: '$invoiceDate' },
-                },
-                total: { $sum: '$amountTotal' },
-                count: { $sum: 1 },
-            }
-        },
-        { $sort: { '_id.year': 1, '_id.month': 1 } },
-    ]);
-
-    // Build monthly trend array with all months filled
-    const monthlyTrend: Array<{ month: string; total: number; count: number }> = [];
-    for (let i = months - 1; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const found = monthlyAgg.find(
-            (m: any) => m._id.year === d.getFullYear() && m._id.month === d.getMonth() + 1
-        );
-        monthlyTrend.push({
-            month: key,
-            total: found?.total ?? 0,
-            count: found?.count ?? 0,
-        });
-    }
-
-    // This month vs last month
-    const thisMonthData = monthlyTrend[monthlyTrend.length - 1];
-    const lastMonthData = monthlyTrend.length >= 2 ? monthlyTrend[monthlyTrend.length - 2] : null;
-    const thisMonth = thisMonthData?.total ?? 0;
-    const lastMonth = lastMonthData?.total ?? 0;
-    const changePercent = lastMonth > 0
-        ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100 * 10) / 10
-        : 0;
-    const trend: 'UP' | 'DOWN' | 'STABLE' =
-        changePercent > 10 ? 'UP' : changePercent < -10 ? 'DOWN' : 'STABLE';
-
-    // All-time total
-    const allTimeAgg = await Invoice.aggregate([
-        { $match: { groupId, status: { $in: ['SUBMITTED', 'LOCKED'] } } },
-        { $group: { _id: null, total: { $sum: '$amountTotal' } } },
-    ]);
-    const totalAllTime = allTimeAgg[0]?.total ?? 0;
-
-    // By-member breakdown
-    const memberAgg = await Invoice.aggregate([
-        { $match: { groupId, status: { $in: ['SUBMITTED', 'LOCKED'] } } },
-        {
-            $group: {
-                _id: '$uploadedBy',
-                total: { $sum: '$amountTotal' },
-                invoiceCount: { $sum: 1 },
-            }
-        },
-        { $sort: { total: -1 } },
-    ]);
-
-    // Resolve member names
-    const userIds = memberAgg.map((m: any) => m._id);
-    const users = userIds.length > 0
-        ? await User.find({ _id: { $in: userIds } }).select('displayName email').lean()
-        : [];
-    const userMap = new Map<string, string>();
-    users.forEach((u: any) => userMap.set(u._id.toString(), u.displayName ?? u.email ?? 'Unknown'));
-
-    const totalForPercent = totalAllTime || 1;
-    const byMember = memberAgg.map((m: any) => ({
-        userId: m._id,
-        displayName: userMap.get(m._id) ?? 'Unknown',
-        total: m.total,
-        percent: Math.round((m.total / totalForPercent) * 100),
-        invoiceCount: m.invoiceCount,
-    }));
-
-    return {
-        totalAllTime,
-        thisMonth,
-        lastMonth,
-        changePercent,
-        trend,
-        months,
-        monthlyTrend,
-        byMember,
-    };
-}
-
-// ── Helper: Debt Overview ──────────────────────────────────────────────────────
+// ── Helper: Debt Overview (Now serving Group Pending Transfers) ────────────
 
 async function _getDebtOverview(groupId: string) {
-    const debts = await OriginalDebt.find({
-        groupId,
-        remainingAmount: { $gt: 0 },
-    }).lean();
+    const pendingTransfers = await Transfer.find({ groupId, status: 'PENDING' }).lean();
 
-    // Resolve user names
+    let totalOutstanding = 0;
+    
     const allUserIds = new Set<string>();
-    debts.forEach((d: any) => {
-        allUserIds.add(d.debtorId);
-        allUserIds.add(d.creditorId);
+    pendingTransfers.forEach((t: any) => {
+        allUserIds.add(t.fromUserId);
+        allUserIds.add(t.toUserId);
     });
+
     const users = allUserIds.size > 0
         ? await User.find({ _id: { $in: Array.from(allUserIds) } }).select('displayName email').lean()
         : [];
     const nameMap = new Map<string, string>();
     users.forEach((u: any) => nameMap.set(u._id.toString(), u.displayName ?? u.email ?? 'Unknown'));
 
-    // Aggregate debts per debtor→creditor pair
-    const pairMap = new Map<string, { debtorId: string; creditorId: string; amount: number }>();
-    let totalOutstanding = 0;
-    let totalOriginal = 0;
-
-    debts.forEach((d: any) => {
-        const key = `${d.debtorId}_${d.creditorId}`;
-        const existing = pairMap.get(key);
-        if (existing) {
-            existing.amount += d.remainingAmount;
-        } else {
-            pairMap.set(key, {
-                debtorId: d.debtorId,
-                creditorId: d.creditorId,
-                amount: d.remainingAmount,
-            });
-        }
-        totalOutstanding += d.remainingAmount;
-        totalOriginal += d.originalAmount;
+    const simplifiedItems = pendingTransfers.map((t: any) => {
+        totalOutstanding += Number(t.amount) || 0;
+        return {
+            id: t._id,
+            debtorId: t.fromUserId,
+            debtorName: nameMap.get(t.fromUserId) ?? 'Unknown',
+            creditorId: t.toUserId,
+            creditorName: nameMap.get(t.toUserId) ?? 'Unknown',
+            amount: Number(t.amount) || 0
+        };
     });
-
-    const settledPercent = totalOriginal > 0
-        ? Math.round(((totalOriginal - totalOutstanding) / totalOriginal) * 100)
-        : 100;
-
-    const items = Array.from(pairMap.values())
-        .sort((a, b) => b.amount - a.amount)
-        .map(d => ({
-            debtorId: d.debtorId,
-            debtorName: nameMap.get(d.debtorId) ?? 'Unknown',
-            creditorId: d.creditorId,
-            creditorName: nameMap.get(d.creditorId) ?? 'Unknown',
-            amount: d.amount,
-        }));
 
     return {
         totalOutstanding,
-        totalOriginal,
-        settledPercent,
-        items,
+        totalOriginal: totalOutstanding,
+        settledPercent: 0,
+        items: simplifiedItems,
     };
 }
 
@@ -423,57 +294,6 @@ async function _getDebtOverview(groupId: string) {
 async function _getUpcomingEvents(groupId: string) {
     const now = new Date();
     const horizon = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days
-
-    // Upcoming subscriptions
-    const activeSubs = await Subscription.find({ groupId, status: 'ACTIVE' }).lean();
-    const subIds = activeSubs.map((s: any) => s._id.toString());
-
-    const upcomingMembers = subIds.length > 0
-        ? await SubscriptionMember.find({
-            subscriptionId: { $in: subIds },
-            status: 'ACTIVE',
-            nextBillingDate: { $lte: horizon },
-        }).lean()
-        : [];
-
-    // Group by subscription
-    const subMemberMap = new Map<string, { count: number; nextDate: Date | null; totalAmount: number }>();
-    upcomingMembers.forEach((m: any) => {
-        const sid = m.subscriptionId;
-        const existing = subMemberMap.get(sid);
-        if (existing) {
-            existing.count++;
-            existing.totalAmount += Number(m.amount);
-            if (!existing.nextDate || m.nextBillingDate < existing.nextDate) {
-                existing.nextDate = m.nextBillingDate;
-            }
-        } else {
-            subMemberMap.set(sid, {
-                count: 1,
-                totalAmount: Number(m.amount),
-                nextDate: m.nextBillingDate,
-            });
-        }
-    });
-
-    const subscriptions = activeSubs
-        .filter((s: any) => subMemberMap.has(s._id.toString()))
-        .map((s: any) => {
-            const data = subMemberMap.get(s._id.toString())!;
-            return {
-                id: s._id,
-                name: s.name,
-                nextBillingDate: data.nextDate?.toISOString() ?? null,
-                totalAmount: data.totalAmount,
-                memberCount: data.count,
-                billingCycle: s.billingCycle,
-            };
-        })
-        .sort((a: any, b: any) => {
-            if (!a.nextBillingDate) return 1;
-            if (!b.nextBillingDate) return -1;
-            return a.nextBillingDate.localeCompare(b.nextBillingDate);
-        });
 
     // Expiring payment requests
     const expiringPRs = await PaymentRequest.find({
@@ -489,5 +309,5 @@ async function _getUpcomingEvents(groupId: string) {
         daysLeft: Math.ceil((new Date(pr.expiresAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
     }));
 
-    return { subscriptions, paymentRequests };
+    return { paymentRequests };
 }

@@ -58,22 +58,8 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
       Map<String, dynamic>.from(data as Map),
     );
 
-    String? invoicesError;
-    List<Invoice> sourceInvoices = const [];
-    try {
-      final invoiceProvider = context.read<InvoiceProvider>();
-      await invoiceProvider.loadInvoices(widget.groupId, status: 'LOCKED');
-      sourceInvoices = invoiceProvider.invoices
-          .where((i) => i.paymentRequestId == widget.requestId)
-          .toList(growable: false);
-    } catch (e) {
-      invoicesError = e.toString();
-    }
-
     return _LoadedPaymentRequestDetail(
       detail: detail,
-      sourceInvoices: sourceInvoices,
-      invoicesError: invoicesError,
     );
   }
 
@@ -232,25 +218,7 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
-              SliverToBoxAdapter(
-                child: AppSectionHeader(
-                  title: 'Sources (Invoices)',
-                  subtitle:
-                      'This payment request is generated from submitted invoices (now locked).',
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                sliver: SliverToBoxAdapter(
-                  child: _SourcesCard(
-                    invoices: loaded.sourceInvoices,
-                    invoiceIds: detail.invoiceIds,
-                    invoicesError: loaded.invoicesError,
-                    groupId: widget.groupId,
-                  ),
-                ),
-              ),
+
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
               SliverToBoxAdapter(
                 child: AppSectionHeader(
@@ -323,13 +291,9 @@ class _PaymentRequestDetailPageState extends State<PaymentRequestDetailPage> {
 
 class _LoadedPaymentRequestDetail {
   final _PaymentRequestDetail detail;
-  final List<Invoice> sourceInvoices;
-  final String? invoicesError;
 
   const _LoadedPaymentRequestDetail({
     required this.detail,
-    required this.sourceInvoices,
-    required this.invoicesError,
   });
 }
 
@@ -374,131 +338,8 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _SourcesCard extends StatelessWidget {
-  final List<Invoice> invoices;
-  final List<String> invoiceIds;
-  final String? invoicesError;
-  final String groupId;
 
-  const _SourcesCard({
-    required this.invoices,
-    required this.invoiceIds,
-    required this.invoicesError,
-    required this.groupId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    if (invoicesError != null) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Text(
-          invoicesError!,
-          style: textTheme.bodyMedium?.copyWith(color: scheme.error),
-        ),
-      );
-    }
-
-    if (invoiceIds.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Text(
-          'No invoices were attached to this request.',
-          style: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-        ),
-      );
-    }
-
-    if (invoices.isEmpty) {
-      return AppCard(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Text(
-          'Invoices are locked, but details are not available in-app yet.',
-          style: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-        ),
-      );
-    }
-
-    final df = DateFormat(AppConstants.displayDateFormat);
-
-    return Column(
-      children: [
-        for (final inv in invoices) ...[
-          AppCard(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => InvoiceDetailPage(
-                    groupId: groupId,
-                    invoiceId: inv.id,
-                  ),
-                ),
-              );
-            },
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withAlpha(18),
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                    border: Border.all(color: scheme.primary.withAlpha(50)),
-                  ),
-                  child: Icon(AppIcons.invoices, color: scheme.primary),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        inv.title,
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        df.format(inv.invoiceDate),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        CurrencyFormatter.formatCurrency(
-                          inv.amountTotal,
-                          inv.currency,
-                        ),
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Icon(AppIcons.chevronRight, color: scheme.onSurfaceVariant),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-      ],
-    );
-  }
-}
-
-class _UserBreakdownCard extends StatelessWidget {
+class _UserBreakdownCard extends StatefulWidget {
   final _UserPaymentBreakdown breakdown;
   final String? currency;
 
@@ -508,15 +349,29 @@ class _UserBreakdownCard extends StatelessWidget {
   });
 
   @override
+  State<_UserBreakdownCard> createState() => _UserBreakdownCardState();
+}
+
+class _UserBreakdownCardState extends State<_UserBreakdownCard> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final isOwing = breakdown.netBalance < 0;
+    final isOwing = widget.breakdown.netBalance < 0;
     final color = isOwing ? scheme.primary : scheme.tertiary;
     final sign = isOwing ? '-' : '+';
 
     return AppCard(
+      onTap: widget.breakdown.debts.isEmpty
+          ? null
+          : () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,17 +381,17 @@ class _UserBreakdownCard extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: scheme.surfaceContainerLowest,
-                backgroundImage: breakdown.user.avatarUrl == null
+                backgroundImage: widget.breakdown.user.avatarUrl == null
                     ? null
-                    : NetworkImage(breakdown.user.avatarUrl!),
-                child: breakdown.user.avatarUrl == null
+                    : NetworkImage(widget.breakdown.user.avatarUrl!),
+                child: widget.breakdown.user.avatarUrl == null
                     ? Icon(AppIcons.person, color: scheme.onSurfaceVariant)
                     : null,
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
-                  breakdown.user.displayName ?? 'User',
+                  widget.breakdown.user.displayName ?? 'User',
                   style: textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
@@ -545,25 +400,26 @@ class _UserBreakdownCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '$sign${_fmtMoney(breakdown.netBalance.abs(), currency: currency)}',
+                '$sign${_fmtMoney(widget.breakdown.netBalance.abs(), currency: widget.currency)}',
                 style: textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: color,
                 ),
               ),
+              if (widget.breakdown.debts.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          if (breakdown.debts.isEmpty)
-            Text(
-              'No invoice breakdown available.',
-              style:
-                  textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            )
-          else
+          if (_isExpanded && widget.breakdown.debts.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
             Column(
               children: [
-                for (final d in breakdown.debts) ...[
+                for (final d in widget.breakdown.debts) ...[
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
@@ -602,14 +458,14 @@ class _UserBreakdownCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              _fmtMoney(d.remainingAmount, currency: currency),
+                              _fmtMoney(d.remainingAmount, currency: widget.currency),
                               style: textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'of ${_fmtMoney(d.originalAmount, currency: currency)}',
+                              'of ${_fmtMoney(d.originalAmount, currency: widget.currency)}',
                               style: textTheme.labelSmall?.copyWith(
                                 color: scheme.onSurfaceVariant,
                               ),
@@ -623,6 +479,7 @@ class _UserBreakdownCard extends StatelessWidget {
                 ],
               ],
             ),
+          ],
         ],
       ),
     );

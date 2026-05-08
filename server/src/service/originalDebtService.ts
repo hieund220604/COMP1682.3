@@ -141,16 +141,27 @@ export const originalDebtService = {
         // Filter out debts whose ALL transfers were cancelled without ever being paid
         debts = await this.filterCancelledTransferDebts(debts);
 
+        // Batch-load all referenced invoices and users (eliminates N+1 queries)
+        const invoiceIds = [...new Set(debts.map(d => d.invoiceId))];
+        const creditorIds = [...new Set(debts.filter(d => d.debtorId === userId).map(d => d.creditorId))];
+
+        const [invoices, creditors] = await Promise.all([
+            Invoice.find({ _id: { $in: invoiceIds } }),
+            User.find({ _id: { $in: creditorIds } })
+        ]);
+
+        const invoiceMap = new Map(invoices.map(inv => [inv._id.toString(), inv]));
+        const creditorMap = new Map(creditors.map(u => [u._id.toString(), u]));
+
         let netBalance = 0;
         const breakdown: UserDebtBreakdown[] = [];
 
         for (const debt of debts) {
-            const invoice = await Invoice.findById(debt.invoiceId);
-
             if (debt.debtorId === userId) {
                 // User owes this amount
                 netBalance -= debt.remainingAmount;
-                const creditor = await User.findById(debt.creditorId);
+                const invoice = invoiceMap.get(debt.invoiceId);
+                const creditor = creditorMap.get(debt.creditorId);
                 breakdown.push({
                     invoiceId: debt.invoiceId,
                     invoiceTitle: invoice?.title || 'Unknown',
