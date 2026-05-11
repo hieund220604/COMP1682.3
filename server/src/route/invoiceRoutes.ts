@@ -25,8 +25,9 @@ const invoiceWriteIpLimiter = createRateLimit({
 // All routes require authentication
 router.use(authMiddleware);
 
-// User balance - MUST be before :invoiceId routes
+// Static segment routes - MUST be before dynamic :invoiceId routes
 router.get('/:groupId/my-balance', invoiceController.getMyBalance);
+router.get('/:groupId/search', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.searchInvoices);
 
 // Invoice CRUD
 router.post('/:groupId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.createInvoice);
@@ -34,7 +35,6 @@ router.get('/:groupId', invoiceController.getInvoices);
 router.get('/:groupId/:invoiceId', invoiceController.getInvoiceById);
 router.put('/:groupId/:invoiceId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.updateInvoice);
 router.delete('/:groupId/:invoiceId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.deleteInvoice);
-router.get('/:groupId/search', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.searchInvoices);
 
 // Invoice actions
 router.post('/:groupId/:invoiceId/submit', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.submitInvoice);
