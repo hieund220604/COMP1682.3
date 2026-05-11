@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +37,8 @@ class GroupInvoicesTab extends StatefulWidget {
 
 class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
   InvoiceStatusFilterValue _filter = InvoiceStatusFilterValue.all;
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -44,10 +47,18 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     await context.read<InvoiceProvider>().loadInvoices(
           widget.groupId,
           status: invoiceStatusToParam(_filter),
+          searchQuery: _searchController.text.trim(),
         );
     // Guard: widget may have been disposed while the first await was in flight
     if (!mounted) return;
@@ -55,6 +66,13 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
     if (widget.isOwnerOrAdmin) {
       await context.read<BillTemplateProvider>().loadTemplates(widget.groupId);
     }
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      _load();
+    });
   }
 
   void _setFilter(InvoiceStatusFilterValue next) {
@@ -300,6 +318,43 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
                   );
                 },
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                0,
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search invoices...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _onSearchChanged('');
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  filled: true,
+                  fillColor: scheme.surface,
+                ),
+              ),
+            ),
             // ── Filter Row + New Invoice Button ────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(

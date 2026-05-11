@@ -370,7 +370,7 @@ export const invoiceService = {
             query.status = status;
         }
 
-        const invoices = await Invoice.find(query).sort({ createdAt: -1 });
+        const invoices = await Invoice.find(query).sort({ invoiceDate: -1, createdAt: -1 });
 
         const result = await Promise.all(
             invoices.map(inv => this.getInvoiceById(userId, groupId, inv._id.toString()))
@@ -388,7 +388,7 @@ export const invoiceService = {
             groupId,
             status: 'SUBMITTED',
             isLocked: false
-        }).sort({ createdAt: -1 });
+        }).sort({ invoiceDate: -1, createdAt: -1 });
 
         // Return basic info without full population for efficiency
         const uploaderIds = [...new Set(invoices.map(i => i.uploadedBy))];
@@ -604,6 +604,7 @@ export const invoiceService = {
         await invalidateInvoiceCache(groupId);
     },
 
+
     /**
      * Submit invoice - DEPRECATED: Invoices are now created with SUBMITTED status
      * This function is kept for backwards compatibility
@@ -653,5 +654,89 @@ export const invoiceService = {
         await invalidateInvoiceCache(groupId);
 
         return this.getInvoiceById(userId, groupId, result.id);
+    },
+
+    /**
+     * Search invoices with pagination
+     */
+    async searchInvoices(
+        userId: string,
+        groupId: string,
+        searchQuery: string | undefined,
+        status: InvoiceStatus | undefined,
+        page: number,
+        limit: number
+    ): Promise<{ invoices: InvoiceResponse[], total: number, page: number, totalPages: number }> {
+        const membership = await GroupMember.findOne({ groupId, userId, leftAt: null });
+        if (!membership) {
+            throw new Error('NOT_GROUP_MEMBER');
+        }
+
+        const query: any = { groupId };
+        if (status) {
+            query.status = status;
+        }
+
+        if (searchQuery && searchQuery.trim() !== '') {
+            const trimmedQuery = searchQuery.trim();
+            const searchRegex = new RegExp(trimmedQuery, 'i');
+            const orConditions: any[] = [{ title: searchRegex }];
+
+            let searchDate: Date | null = null;
+            
+            // Try to parse DD/MM/YYYY or D/M/YYYY
+            const vnDateMatch = trimmedQuery.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (vnDateMatch) {
+                const day = parseInt(vnDateMatch[1], 10);
+                const month = parseInt(vnDateMatch[2], 10) - 1;
+                const year = parseInt(vnDateMatch[3], 10);
+                searchDate = new Date(year, month, day);
+            } else {
+                // Try YYYY-MM-DD
+                const isoDateMatch = trimmedQuery.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+                if (isoDateMatch) {
+                    const year = parseInt(isoDateMatch[1], 10);
+                    const month = parseInt(isoDateMatch[2], 10) - 1;
+                    const day = parseInt(isoDateMatch[3], 10);
+                    searchDate = new Date(year, month, day);
+                }
+            }
+
+            if (searchDate && !isNaN(searchDate.getTime())) {
+                const startOfDay = new Date(searchDate);
+                startOfDay.setHours(0, 0, 0, 0);
+                
+                const endOfDay = new Date(searchDate);
+                endOfDay.setHours(23, 59, 59, 999);
+
+                orConditions.push({
+                    invoiceDate: {
+                        $gte: startOfDay,
+                        $lte: endOfDay
+                    }
+                });
+            }
+
+            query.$or = orConditions;
+        }
+
+        const skip = (page - 1) * limit;
+
+        const [invoices, total] = await Promise.all([
+            Invoice.find(query).sort({ invoiceDate: -1, createdAt: -1 }).skip(skip).limit(limit),
+            Invoice.countDocuments(query)
+        ]);
+
+        const result = await Promise.all(
+            invoices.map(inv => this.getInvoiceById(userId, groupId, inv._id.toString()))
+        );
+
+        return {
+            invoices: result,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 };
+

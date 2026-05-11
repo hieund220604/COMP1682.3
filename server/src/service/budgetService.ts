@@ -18,7 +18,7 @@ export const budgetService = {
             throw new AppError('Invalid month format. Use YYYY-MM', 'INVALID_MONTH');
         }
         const [year, m] = month.split('-').map(Number);
-        
+
         // Start of selected month
         const startOfMonth = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0, 0));
         // Start of next month
@@ -28,7 +28,7 @@ export const budgetService = {
         // Even archived tags should be checked if they had spending, 
         // but let's fetch all tags that the user owns.
         const tags = await ReceiptTag.find({ userId });
-        
+
         // 2. Aggregate spending from Receipts
         // Unwind tags because a receipt can belong to multiple categories.
         const receiptAgg = await Receipt.aggregate([
@@ -72,18 +72,18 @@ export const budgetService = {
 
         // 5. Map the results to envelopes
         const envelopes = tags.map(tag => {
-             const spent = spentMap.get(tag._id.toString()) || 0;
-             const budget = tag.monthlyBudget ?? null;
+            const spent = spentMap.get(tag._id.toString()) || 0;
+            const budget = tag.monthlyBudget ?? null;
 
-             return {
-                 tagId: tag._id.toString(),
-                 name: tag.name,
-                 icon: tag.icon,
-                 color: tag.color,
-                 isArchived: tag.isArchived,
-                 monthlyBudget: budget,
-                 spent: spent,
-             };
+            return {
+                tagId: tag._id.toString(),
+                name: tag.name,
+                icon: tag.icon,
+                color: tag.color,
+                isArchived: tag.isArchived,
+                monthlyBudget: budget,
+                spent: spent,
+            };
         });
 
         // Filter out archived tags that have 0 spending
@@ -98,7 +98,7 @@ export const budgetService = {
             const now = new Date();
             const monthStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
             const summary = await this.getMonthlyBudgetSummary(userId, monthStr);
-            
+
             for (const envelope of summary) {
                 if (envelope.monthlyBudget && envelope.monthlyBudget > 0) {
                     const ratio = envelope.spent / envelope.monthlyBudget;
@@ -121,7 +121,7 @@ export const budgetService = {
                             const message = threshold >= 100 
                                 ? `You have spent ${envelope.spent}, which exceeds your ${envelope.monthlyBudget} limit.`
                                 : `You have spent ${Math.round(ratio * 100)}% of your limit.`;
-                                
+
                             await notificationService.notify(
                                 userId,
                                 NotificationType.BUDGET_ALERT,

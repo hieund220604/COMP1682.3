@@ -25,6 +25,31 @@ export const invoiceController = {
         }
     },
 
+
+
+    /**
+     * Search invoices in group
+     */
+    async searchInvoices(req: Request, res: Response): Promise<void> {
+        try {
+            const { groupId } = req.params;
+            const userId = req.user?.userId;
+            const query = req.query.search as string | undefined;
+
+            if (!userId) {
+                return ResponseUtil.unauthorized(res);
+            }
+
+            const page = req.query.page ? parseInt(req.query.page as string) : 1;
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+            const status = req.query.status as InvoiceStatus | undefined;
+            const invoices = await invoiceService.searchInvoices(userId, groupId, query || '', status, page, limit);
+            ResponseUtil.success(res, invoices, 'Invoices retrieved successfully');
+        } catch (error) {
+            ResponseUtil.handleError(res, error, 'Failed to search invoices');
+        }
+    },
+
     /**
      * Get all invoices in group
      * GET /api/groups/:groupId/invoices

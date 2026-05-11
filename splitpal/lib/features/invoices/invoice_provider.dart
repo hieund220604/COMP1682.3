@@ -104,15 +104,28 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   // ─── Load Invoices ──────────────────────────────────────
-  Future<void> loadInvoices(String groupId, {String? status}) async {
+  Future<void> loadInvoices(String groupId, {String? status, String? searchQuery}) async {
     _setLoading(true);
     _setError(null);
     try {
+      final queryParams = <String, dynamic>{
+        'page': 1,
+        'limit': 50, // Default high limit for now, can implement infinite scroll later
+      };
+      if (status != null) queryParams['status'] = status;
+      if (searchQuery != null && searchQuery.isNotEmpty) queryParams['search'] = searchQuery;
+
+      // Call the paginated search endpoint
       final resp = await _dio.get(
-        '/invoices/$groupId',
-        queryParameters: status != null ? {'status': status} : null,
+        '/invoices/$groupId/search',
+        queryParameters: queryParams,
       );
-      _invoices = (resp.data['data'] as List)
+      
+      // The new search endpoint returns { invoices: [...], total, page, totalPages }
+      final data = resp.data['data'];
+      final invoicesList = data['invoices'] as List;
+      
+      _invoices = invoicesList
           .map((j) => Invoice.fromJson(j))
           .toList();
       _setLoading(false);

@@ -1,5 +1,5 @@
 /**
- * Subscription Service â€” v2
+ * Subscription Service — v2
  *
  * Core model:
  *   Subscription   = container (ACTIVE | CANCELLED)
@@ -49,7 +49,7 @@ function transformUser(user: any) {
 
 /**
  * Calculate the next billing date given a start date and billing cycle.
- * Handles month-end overflow (e.g. Jan 31 â†’ Feb 28) and leap years.
+ * Handles month-end overflow (e.g. Jan 31 → Feb 28) and leap years.
  */
 function calculateNextBillingDate(fromDate: Date, cycle: BillingCycle): Date {
     const next = new Date(fromDate);
@@ -84,14 +84,14 @@ function calculateNextBillingDate(fromDate: Date, cycle: BillingCycle): Date {
  */
 function warningWindowMs(cycle: BillingCycle): number {
     switch (cycle) {
-        case BillingCycle.DAILY: return 0;                            // no warning â€” too short
+        case BillingCycle.DAILY: return 0;                            // no warning — too short
         case BillingCycle.WEEKLY: return 1 * 24 * 60 * 60 * 1000;    // 1 day
         case BillingCycle.MONTHLY: return 3 * 24 * 60 * 60 * 1000;   // 3 days
         case BillingCycle.YEARLY: return 7 * 24 * 60 * 60 * 1000;    // 7 days
     }
 }
 
-// â”€â”€ Cache helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Cache helpers ─────────────────────────────────────────────────────────────
 
 const DETAIL_TTL = 60;
 const LIST_TTL = 45;
@@ -117,17 +117,17 @@ async function invalidateSubCache(subscriptionId: string): Promise<void> {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────────────────────
 // Service
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────────────────────
 
 export const subscriptionService = {
 
-    // â”€â”€ CREATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CREATE ────────────────────────────────────────────────────────────────
 
     /**
      * Owner creates a subscription. Status is ACTIVE immediately.
-     * No members are added â€” owner invites them separately.
+     * No members are added — owner invites them separately.
      */
     async createSubscription(
         userId: string,
@@ -148,7 +148,7 @@ export const subscriptionService = {
         return this.getSubscriptionById(userId, subscription._id.toString());
     },
 
-    // â”€â”€ READ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── READ ──────────────────────────────────────────────────────────────────
 
     async getSubscriptionById(userId: string, subscriptionId: string): Promise<SubscriptionResponse> {
         const cacheKey = detailKey(subscriptionId, userId);
@@ -258,7 +258,7 @@ export const subscriptionService = {
         return result;
     },
 
-    // â”€â”€ BILLING HISTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── BILLING HISTORY ───────────────────────────────────────────────────────
 
     async getBillingHistory(userId: string, subscriptionId: string): Promise<any[]> {
         const cacheKey = billingHistoryKey(subscriptionId, userId);
@@ -294,7 +294,7 @@ export const subscriptionService = {
         return result;
     },
 
-    // â”€â”€ INVITE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── INVITE ────────────────────────────────────────────────────────────────
 
     /**
      * Owner invites a group member to the subscription.
@@ -421,7 +421,7 @@ export const subscriptionService = {
             return;
         }
 
-        // â”€â”€ ACCEPT: check balance then charge atomically â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── ACCEPT: check balance then charge atomically ──────────────────────
 
         const fee = Number(subscription.amount);
         const member = await User.findById(userId);
@@ -451,17 +451,22 @@ export const subscriptionService = {
 
             await SubInvitation.findByIdAndUpdate(invitationId, { status: 'ACCEPTED' }, { session });
 
-            await SubscriptionMember.create([{
-                subscriptionId: invite.subscriptionId,
-                userId,
-                amount: fee,
-                status: 'ACTIVE',
-                joinedAt: now,
-                nextBillingDate,
-                lastChargedAt: now,
-                retryCount: 0,
-                categoryTagId: categoryTagId ?? null,
-            }], { session });
+            await SubscriptionMember.findOneAndUpdate(
+                { subscriptionId: invite.subscriptionId, userId },
+                {
+                    $set: {
+                        amount: fee,
+                        status: 'ACTIVE',
+                        joinedAt: now,
+                        nextBillingDate,
+                        lastChargedAt: now,
+                        retryCount: 0,
+                        categoryTagId: categoryTagId ?? null,
+                    },
+                    $unset: { leftAt: 1 }
+                },
+                { upsert: true, new: true, session }
+            );
 
             const { BillingHistory } = await import('../models/BillingHistory');
             await BillingHistory.create([{
@@ -489,13 +494,12 @@ export const subscriptionService = {
             session.endSession();
         }
 
-        // Log transactions
+        // Log transactions (REMOVED groupId as subscriptions are independent)
         const memberAfter = await User.findById(userId);
         const ownerAfter = await User.findById(subscription.createdBy);
         await Promise.all([
             transactionService.createTransaction({
                 userId,
-                groupId: subscription.groupId ?? undefined,
                 type: TransactionType.SUBSCRIPTION_FEE,
                 amount: fee,
                 balanceBefore: Number(memberAfter?.balance ?? 0) + fee,
@@ -507,7 +511,6 @@ export const subscriptionService = {
             }),
             transactionService.createTransaction({
                 userId: subscription.createdBy,
-                groupId: subscription.groupId ?? undefined,
                 type: TransactionType.TRANSFER_RECEIVED,
                 amount: fee,
                 balanceBefore: Number(ownerAfter?.balance ?? 0) - fee,
@@ -544,7 +547,7 @@ export const subscriptionService = {
         await invalidateSubCache(invite.subscriptionId);
     },
 
-    // â”€â”€ GET MEMBERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── GET MEMBERS ───────────────────────────────────────────────────────────
 
     async getMembers(userId: string, subscriptionId: string): Promise<{
         members: SubscriptionMemberResponse[];
@@ -557,7 +560,7 @@ export const subscriptionService = {
         };
     },
 
-    // â”€â”€ CANCEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── CANCEL ────────────────────────────────────────────────────────────────
 
     /**
      * Owner cancels the subscription.
@@ -610,7 +613,7 @@ export const subscriptionService = {
         return this.getSubscriptionById(userId, subscriptionId);
     },
 
-    // â”€â”€ LEAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── LEAVE ─────────────────────────────────────────────────────────────────
 
     /**
      * Member leaves a subscription.
@@ -633,11 +636,10 @@ export const subscriptionService = {
         });
         if (!subMember) throw new Error('You are not an active member of this subscription');
 
-        // â”€â”€ Obligation calculation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Obligation calculation ────────────────────────────────────────────────
         // cycleStart = nextBillingDate - 1 billingCycle
-        // If lastChargedAt >= cycleStart â†’ already paid this cycle â†’ obligation = 0
-        // Otherwise â†’ obligation = amount (settle current cycle)
-        // cycleStart = nextBillingDate - 1 billingCycle (the point in time the current cycle BEGAN)
+        // If lastChargedAt >= cycleStart → already paid this cycle → obligation = 0
+        // Otherwise → obligation = amount (settle current cycle)
         // Use strict > so that when lastChargedAt === cycleStart (member just joined at cycle boundary)
         // we correctly treat it as NOT yet charged for the new cycle.
         const nbd = new Date(subMember.nextBillingDate);
@@ -702,13 +704,12 @@ export const subscriptionService = {
                 session.endSession();
             }
 
-            // Log transactions
+            // Log transactions (REMOVED groupId as subscriptions are independent)
             const memberAfter = await User.findById(userId);
             const ownerAfter = await User.findById(subscription.createdBy);
             await Promise.all([
                 transactionService.createTransaction({
                     userId,
-                    groupId: subscription.groupId ?? undefined,
                     type: TransactionType.SUBSCRIPTION_FEE,
                     amount: obligation,
                     balanceBefore: Number(memberAfter?.balance ?? 0) + obligation,
@@ -720,19 +721,18 @@ export const subscriptionService = {
                 }),
                 transactionService.createTransaction({
                     userId: subscription.createdBy,
-                    groupId: subscription.groupId ?? undefined,
                     type: TransactionType.TRANSFER_RECEIVED,
                     amount: obligation,
                     balanceBefore: Number(ownerAfter?.balance ?? 0) - obligation,
                     balanceAfter: Number(ownerAfter?.balance ?? 0),
                     currency: subscription.currency,
-                    description: `Member left "${subscription.name}" â€” cycle settlement`,
+                    description: `Member left "${subscription.name}" – cycle settlement`,
                     referenceId: subscriptionId,
                     referenceType: 'SUBSCRIPTION',
                 }),
             ]);
         } else {
-            // Already paid this cycle â€” just mark LEFT
+            // Already paid this cycle – just mark LEFT
             await SubscriptionMember.findByIdAndUpdate(subMember._id, {
                 status: 'LEFT',
                 leftAt: new Date(),
@@ -764,12 +764,12 @@ export const subscriptionService = {
         await invalidateSubCache(subscriptionId);
     },
 
-    // â”€â”€ SCHEDULER: PROCESS PER-MEMBER BILLING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── SCHEDULER: PROCESS PER-MEMBER BILLING ─────────────────────────────────
 
     /**
      * Called by the scheduler every hour.
      * Processes each SubscriptionMember independently.
-     * Fails only kick the individual member â€” not the whole subscription.
+     * Fails only kick the individual member — not the whole subscription.
      */
     async processRenewals(): Promise<ProcessChargesResponse> {
         const now = new Date();
@@ -892,8 +892,9 @@ export const subscriptionService = {
                     });
                     result.kicked = true;
 
+                    // REMOVED groupId
                     await BillingHistory.create({
-                        subscriptionId, groupId: subscription.groupId ?? undefined, billingDate: now,
+                        subscriptionId, billingDate: now,
                         amount: fee, currency: subscription.currency ?? 'VND',
                         status: 'FAILED', membersCharged: 0, membersFailed: 1, totalCollected: 0,
                         failureReason: `Member ${userId} kicked after 3 failed attempts`,
@@ -962,23 +963,26 @@ export const subscriptionService = {
 
                 const memberAfter = await User.findById(userId);
                 const ownerAfter = await User.findById(subscription.createdBy);
+                
+                // REMOVED groupId
                 await Promise.all([
                     transactionService.createTransaction({
-                        userId, groupId: subscription.groupId ?? undefined, type: TransactionType.SUBSCRIPTION_FEE,
+                        userId, type: TransactionType.SUBSCRIPTION_FEE,
                         amount: fee, balanceBefore: (memberAfter?.balance ?? 0) + fee, balanceAfter: memberAfter?.balance ?? 0,
                         currency: subscription.currency ?? 'VND', description: `Subscription renewal: ${subscription.name}`,
                         referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
                     }),
                     transactionService.createTransaction({
-                        userId: subscription.createdBy, groupId: subscription.groupId ?? undefined, type: TransactionType.TRANSFER_RECEIVED,
+                        userId: subscription.createdBy, type: TransactionType.TRANSFER_RECEIVED,
                         amount: fee, balanceBefore: (ownerAfter?.balance ?? 0) - fee, balanceAfter: ownerAfter?.balance ?? 0,
                         currency: subscription.currency ?? 'VND', description: `Subscription renewal payment from member: ${subscription.name}`,
                         referenceId: subscriptionId, referenceType: 'SUBSCRIPTION',
                     }),
                 ]);
 
+                // REMOVED groupId
                 await BillingHistory.create({
-                    subscriptionId, groupId: subscription.groupId ?? undefined, billingDate: now,
+                    subscriptionId, billingDate: now,
                     amount: fee, currency: subscription.currency ?? 'VND',
                     status: 'SUCCESS', membersCharged: 1, membersFailed: 0, totalCollected: fee,
                     memberResults: [{ userId, shareAmount: fee, success: true, categoryTagId: currentMember!.categoryTagId }],
@@ -1060,11 +1064,10 @@ export const subscriptionService = {
         }
     },
 
-    // â”€â”€ LEGACY COMPAT (kept so controller compiles) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── LEGACY COMPAT (kept so controller compiles) ───────────────────────────
 
     /** @deprecated - use processRenewals */
     async processCharges(): Promise<ProcessChargesResponse> {
         return this.processRenewals();
     },
 };
-

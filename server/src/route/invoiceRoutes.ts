@@ -31,6 +31,7 @@ router.get('/:groupId/my-balance', invoiceController.getMyBalance);
 // Invoice CRUD
 router.post('/:groupId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.createInvoice);
 router.get('/:groupId', invoiceController.getInvoices);
+router.get('/:groupId/search', invoiceController.searchInvoices);
 router.get('/:groupId/:invoiceId', invoiceController.getInvoiceById);
 router.put('/:groupId/:invoiceId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.updateInvoice);
 router.delete('/:groupId/:invoiceId', invoiceWriteIpLimiter, invoiceWriteLimiter, invoiceController.deleteInvoice);
