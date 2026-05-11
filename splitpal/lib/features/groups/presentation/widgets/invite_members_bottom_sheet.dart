@@ -102,12 +102,7 @@ class InviteMembersBottomSheet extends StatelessWidget {
                   'Join code copied to clipboard'
                 ),
               ),
-              _buildOption(
-                context,
-                icon: Icons.share_rounded,
-                label: 'Share',
-                onTap: () => _shareInvite(context),
-              ),
+
             ],
           ),
           

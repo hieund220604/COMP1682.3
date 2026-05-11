@@ -6,8 +6,8 @@ import 'package:splitpal/features/notifications/notification_provider.dart';
 import 'dashboard_page.dart';
 import 'subscriptions_page.dart';
 import 'groups_page.dart';
-import 'notifications_page.dart';
 import 'profile_page.dart';
+import '../../../../features/receipts/presentation/pages/budget_page.dart';
 
 /// Notification to switch the home tab.
 class SwitchTabNotification extends Notification {
@@ -47,7 +47,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       case 2:
         return GroupsPage(key: ValueKey('groups-${_tabRefreshTokens[2]}'));
       case 3:
-        return NotificationsPage(key: ValueKey('notifications-${_tabRefreshTokens[3]}'));
+        return BudgetPage(key: ValueKey('budget-${_tabRefreshTokens[3]}'));
       default:
         return ProfilePage(key: ValueKey('profile-${_tabRefreshTokens[4]}'));
     }
@@ -90,36 +90,28 @@ class _BottomNavBar extends StatelessWidget {
       builder: (context, notificationProvider, _) {
         final unread = notificationProvider.unreadCount;
 
-        Widget _activityIcon() {
-          if (unread <= 0) return const Icon(AppIcons.notifications);
-          return Badge(
-            isLabelVisible: unread > 0,
-            label: Text(unread > 99 ? '99+' : '$unread'),
-            child: const Icon(AppIcons.notifications),
-          );
-        }
-
         return NavigationBar(
           selectedIndex: current,
           onDestinationSelected: onTap,
-          destinations: [
-            const NavigationDestination(
+          destinations: const [
+            NavigationDestination(
               icon: Icon(AppIcons.home),
               label: 'Home',
             ),
-            const NavigationDestination(
+            NavigationDestination(
               icon: Icon(AppIcons.subscriptions),
               label: 'Subs',
             ),
-            const NavigationDestination(
+            NavigationDestination(
               icon: Icon(AppIcons.groups),
               label: 'Groups',
             ),
             NavigationDestination(
-              icon: _activityIcon(),
-              label: 'Activity',
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              selectedIcon: Icon(Icons.account_balance_wallet),
+              label: 'Budget',
             ),
-            const NavigationDestination(
+            NavigationDestination(
               icon: Icon(AppIcons.settings),
               label: 'Settings',
             ),

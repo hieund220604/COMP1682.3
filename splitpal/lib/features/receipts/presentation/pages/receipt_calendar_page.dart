@@ -129,18 +129,6 @@ class _ReceiptCalendarPageState extends State<ReceiptCalendarPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Receipt diary'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.pie_chart_outline),
-            tooltip: 'Budget Envelopes',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BudgetPage()),
-              ).then((_) => _loadMonth(provider));
-            },
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -241,13 +229,14 @@ class _DayTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isToday ? colorScheme.primary : colorScheme.outlineVariant),
+          border: Border.all(color: isToday ? colorScheme.primary : colorScheme.outlineVariant.withAlpha(120)),
         ),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (thumbUrls.isNotEmpty)
+            if (thumbUrls.isNotEmpty) ...[
               Stack(
                 children: List.generate(
                   thumbUrls.length.clamp(0, 3),
@@ -282,8 +271,18 @@ class _DayTile extends StatelessWidget {
                     );
                   },
                 ).reversed.toList(),
-              )
-            else if (count > 0)
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Colors.black54, Colors.transparent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ] else if (count > 0)
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
@@ -294,16 +293,6 @@ class _DayTile extends StatelessWidget {
                   ),
                 ),
               ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
-                  colors: [Colors.black54, Colors.transparent],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
             Align(
               alignment: Alignment.center,
               child: Text(

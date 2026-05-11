@@ -7,6 +7,14 @@ import { AppError } from './receiptService';
 import { Notification, NotificationType } from '../models/Notification';
 import { notificationService } from './notificationService';
 
+function toTitleCase(text: string): string {
+    return text
+        .toLowerCase()
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+}
+
 export const budgetService = {
     /**
      * Get monthly spending summary against budget envelopes.
@@ -117,7 +125,9 @@ export const budgetService = {
                         });
 
                         if (!alreadySent) {
-                            const title = threshold >= 100 ? `Budget Exceeded: ${envelope.name.toUpperCase()}` : `Budget Nearing Limit: ${envelope.name.toUpperCase()}`;
+                            const title = threshold >= 100
+                                ? `Budget Exceeded: ${toTitleCase(envelope.name)}`
+                                : `Budget Nearing Limit: ${toTitleCase(envelope.name)}`;
                             const message = threshold >= 100 
                                 ? `You have spent ${envelope.spent}, which exceeds your ${envelope.monthlyBudget} limit.`
                                 : `You have spent ${Math.round(ratio * 100)}% of your limit.`;

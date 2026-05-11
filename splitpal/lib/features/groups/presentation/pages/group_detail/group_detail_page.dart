@@ -401,10 +401,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 dashboard: _dashboard,
                 onRefresh: _refreshGroup,
                 onOpenChat: _openGroupChat,
-                onInvite: isOwnerOrAdmin ? _openInvite : null,
-                onCreateInvoice: isOwnerOrAdmin ? _openCreateInvoice : null,
-                onCreatePaymentRequest:
-                    isOwnerOrAdmin ? _createPaymentRequest : null,
+                onInvite: _openInvite,
+                onCreateInvoice: _openCreateInvoice,
+                onCreatePaymentRequest: _createPaymentRequest,
                 onTransferOwnership: resolvedRole == 'OWNER' ? _transferOwnership : null,
                 onUpdateMemberRole: isOwnerOrAdmin ? _updateMemberRole : null,
                 onChangePeriod: _onChangePeriod,
@@ -412,7 +411,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
               GroupInvoicesTab(
                 groupId: widget.groupId,
                 isOwnerOrAdmin: isOwnerOrAdmin,
-                onCreateInvoice: isOwnerOrAdmin ? _openCreateInvoice : null,
+                onCreateInvoice: _openCreateInvoice,
               ),
               ColoredBox(
                 color: Theme.of(context).scaffoldBackgroundColor,
@@ -421,8 +420,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                   groupName: name,
                   currency: currency,
                   isOwnerOrAdmin: isOwnerOrAdmin,
-                  onCreatePaymentRequest:
-                      isOwnerOrAdmin ? _createPaymentRequest : null,
+                  onCreatePaymentRequest: _createPaymentRequest,
                 ),
               ),
             ],

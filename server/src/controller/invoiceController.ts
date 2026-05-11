@@ -43,7 +43,10 @@ export const invoiceController = {
             const page = req.query.page ? parseInt(req.query.page as string) : 1;
             const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
             const status = req.query.status as InvoiceStatus | undefined;
-            const invoices = await invoiceService.searchInvoices(userId, groupId, query || '', status, page, limit);
+            const sortBy = req.query.sortBy as string | undefined;
+            const sortOrder = req.query.sortOrder as string | undefined;
+
+            const invoices = await invoiceService.searchInvoices(userId, groupId, query || '', status, sortBy, sortOrder, page, limit);
             ResponseUtil.success(res, invoices, 'Invoices retrieved successfully');
         } catch (error) {
             ResponseUtil.handleError(res, error, 'Failed to search invoices');

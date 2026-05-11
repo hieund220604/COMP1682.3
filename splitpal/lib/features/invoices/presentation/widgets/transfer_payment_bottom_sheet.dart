@@ -12,6 +12,16 @@ import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/presentation/widgets/icon_helpers.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
 
+/// Title Case: "moving expenses" → "Moving Expenses"
+String _toTitleCase(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .toLowerCase()
+      .split(' ')
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
+}
+
 Future<void> showTransferPaymentBottomSheet(
   BuildContext context, {
   required Transfer transfer,
@@ -217,7 +227,7 @@ class _TransferPaymentSheetState extends State<_TransferPaymentSheet> {
                             ),
                             const SizedBox(width: AppSpacing.sm),
                           ],
-                          Text(tag.name),
+                          Text(_toTitleCase(tag.name)),
                         ],
                       ),
                     );

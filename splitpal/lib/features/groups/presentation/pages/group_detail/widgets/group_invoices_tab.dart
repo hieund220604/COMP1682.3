@@ -39,6 +39,8 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
   InvoiceStatusFilterValue _filter = InvoiceStatusFilterValue.all;
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
+  String _sortBy = 'invoiceDate';
+  String _sortOrder = 'desc';
 
   @override
   void initState() {
@@ -59,6 +61,8 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
           widget.groupId,
           status: invoiceStatusToParam(_filter),
           searchQuery: _searchController.text.trim(),
+          sortBy: _sortBy,
+          sortOrder: _sortOrder,
         );
     // Guard: widget may have been disposed while the first await was in flight
     if (!mounted) return;
@@ -319,97 +323,113 @@ class _GroupInvoicesTabState extends State<GroupInvoicesTab> {
                 },
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                0,
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search invoices...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _onSearchChanged('');
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                    borderSide: BorderSide(color: scheme.outlineVariant),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                    borderSide: BorderSide(color: scheme.outlineVariant),
-                  ),
-                  filled: true,
-                  fillColor: scheme.surface,
-                ),
-              ),
-            ),
-            // ── Filter Row + New Invoice Button ────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.sm,
-              ),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: InvoiceStatusFilter(
-                      value: _filter,
-                      onChanged: _setFilter,
-                    ),
-                  ),
-                if (widget.isOwnerOrAdmin) ...[
-                  const SizedBox(width: AppSpacing.xs),
-                  // Open recurring template management page
-                  IconButton(
-                    tooltip: 'Manage recurring bills',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BillTemplateListPage(groupId: widget.groupId),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: scheme.outlineVariant.withOpacity(0.6)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.02),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              )
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: _onSearchChanged,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                            decoration: InputDecoration(
+                              hintText: 'Search by title, date...',
+                              hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(0.7), fontSize: 15, fontWeight: FontWeight.w400),
+                              prefixIcon: Icon(Icons.search, size: 20, color: scheme.onSurfaceVariant),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(Icons.cancel, size: 18, color: scheme.onSurfaceVariant),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        _onSearchChanged('');
+                                        setState(() {});
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              isDense: true,
+                            ),
+                          ),
                         ),
-                      ).then((_) => _load());
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: scheme.primary,
-                      foregroundColor: scheme.onPrimary,
-                    ),
-                    icon: const Icon(Icons.autorenew, size: 20),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  // Create manual invoice
-                  if (widget.onCreateInvoice != null)
-                    IconButton(
-                      tooltip: 'New invoice',
-                      onPressed: widget.onCreateInvoice,
-                      style: IconButton.styleFrom(
-                        backgroundColor: scheme.primary,
-                        foregroundColor: scheme.onPrimary,
                       ),
-                      icon: const Icon(AppIcons.add, size: 20),
-                    ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: scheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: scheme.outlineVariant.withOpacity(0.6)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            )
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _showSortModal(context),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Icon(
+                                Icons.tune, 
+                                size: 22, 
+                                color: (_sortBy != 'invoiceDate' || _sortOrder != 'desc') ? scheme.primary : scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  InvoiceStatusFilter(
+                    value: _filter,
+                    onChanged: _setFilter,
+                  ),
                 ],
-              ],
-            ),
+              ),
             ),
             Expanded(child: content),
           ],
         );
       },
+    );
+  }
+
+  void _showSortModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _SortBottomSheet(
+        currentSortBy: _sortBy,
+        currentSortOrder: _sortOrder,
+        onSortApplied: (sortBy, sortOrder) {
+          setState(() {
+            _sortBy = sortBy;
+            _sortOrder = sortOrder;
+          });
+          _load();
+        },
+      ),
     );
   }
 }
@@ -703,6 +723,98 @@ class _TemplateChipCard extends StatelessWidget {
       title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
       onTap: onTap,
+    );
+  }
+}
+
+class _SortBottomSheet extends StatelessWidget {
+  final String currentSortBy;
+  final String currentSortOrder;
+  final void Function(String sortBy, String sortOrder) onSortApplied;
+
+  const _SortBottomSheet({
+    required this.currentSortBy,
+    required this.currentSortOrder,
+    required this.onSortApplied,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: scheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Sort Invoices',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 16),
+          _buildOption(context, 'Newest Date', 'invoiceDate', 'desc', Icons.calendar_today),
+          _buildOption(context, 'Oldest Date', 'invoiceDate', 'asc', Icons.event_note),
+          _buildOption(context, 'Highest Amount', 'amountTotal', 'desc', Icons.arrow_upward),
+          _buildOption(context, 'Lowest Amount', 'amountTotal', 'asc', Icons.arrow_downward),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOption(BuildContext context, String label, String sortBy, String sortOrder, IconData icon) {
+    final scheme = Theme.of(context).colorScheme;
+    final isSelected = currentSortBy == sortBy && currentSortOrder == sortOrder;
+
+    return InkWell(
+      onTap: () {
+        onSortApplied(sortBy, sortOrder);
+        Navigator.pop(context);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? scheme.primaryContainer.withOpacity(0.5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? scheme.primary.withOpacity(0.5) : scheme.outlineVariant.withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: isSelected ? scheme.primary : scheme.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? scheme.primary : scheme.onSurface,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle, size: 20, color: scheme.primary),
+          ],
+        ),
+      ),
     );
   }
 }

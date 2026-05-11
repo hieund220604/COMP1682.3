@@ -664,6 +664,8 @@ export const invoiceService = {
         groupId: string,
         searchQuery: string | undefined,
         status: InvoiceStatus | undefined,
+        sortBy: string | undefined,
+        sortOrder: string | undefined,
         page: number,
         limit: number
     ): Promise<{ invoices: InvoiceResponse[], total: number, page: number, totalPages: number }> {
@@ -722,8 +724,16 @@ export const invoiceService = {
 
         const skip = (page - 1) * limit;
 
+        const sortConfig: any = {};
+        if (sortBy) {
+            sortConfig[sortBy] = sortOrder === 'asc' ? 1 : -1;
+        } else {
+            sortConfig['invoiceDate'] = -1;
+            sortConfig['createdAt'] = -1;
+        }
+
         const [invoices, total] = await Promise.all([
-            Invoice.find(query).sort({ invoiceDate: -1, createdAt: -1 }).skip(skip).limit(limit),
+            Invoice.find(query).sort(sortConfig).skip(skip).limit(limit),
             Invoice.countDocuments(query)
         ]);
 

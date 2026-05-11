@@ -104,7 +104,7 @@ class InvoiceProvider with ChangeNotifier {
   }
 
   // ─── Load Invoices ──────────────────────────────────────
-  Future<void> loadInvoices(String groupId, {String? status, String? searchQuery}) async {
+  Future<void> loadInvoices(String groupId, {String? status, String? searchQuery, String? sortBy, String? sortOrder}) async {
     _setLoading(true);
     _setError(null);
     try {
@@ -114,6 +114,8 @@ class InvoiceProvider with ChangeNotifier {
       };
       if (status != null) queryParams['status'] = status;
       if (searchQuery != null && searchQuery.isNotEmpty) queryParams['search'] = searchQuery;
+      if (sortBy != null) queryParams['sortBy'] = sortBy;
+      if (sortOrder != null) queryParams['sortOrder'] = sortOrder;
 
       // Call the paginated search endpoint
       final resp = await _dio.get(

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { chatService } from '../service/chatService';
 import { ResponseUtil } from '../util/responseUtil';
 import { ApiResponse, GetMessagesResponse, SendMessageRequest } from '../type/chat';
+import { getIO } from '../socketSetup';
 
 export const chatController = {
     // Send a message to a group
@@ -25,6 +26,13 @@ export const chatController = {
                 fileName,
                 replyToId
             });
+
+            try {
+                const io = getIO();
+                io.to(`group:${groupId}`).emit('new_message', message);
+            } catch (socketErr) {
+                console.error('[ChatController] Failed to emit new_message:', socketErr);
+            }
 
             ResponseUtil.success(res, message, 'Message sent successfully', 201);
         } catch (error) {

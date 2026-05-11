@@ -25,6 +25,8 @@ import 'package:splitpal/features/forecast/forecast_provider.dart';
 import 'package:splitpal/features/forecast/presentation/widgets/forecast_risk_card.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/utils/safe_parse.dart';
+import 'package:splitpal/features/notifications/notification_provider.dart';
+import 'notifications_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -192,6 +194,27 @@ class _Header extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const Spacer(),
+          Consumer<NotificationProvider>(
+            builder: (context, notificationProvider, _) {
+              final unread = notificationProvider.unreadCount;
+              return IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsPage(),
+                    ),
+                  );
+                },
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: Icon(Icons.notifications_outlined, color: colorScheme.onSurface),
+                ),
+              );
+            },
           ),
         ],
       ),

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
@@ -237,22 +238,35 @@ class _MiniBarsChart extends StatelessWidget {
     }
 
     final bars = daily.take(7).toList();
-    final maxBalance = bars
-        .map((d) => d.closingBalanceSafe.abs())
-        .fold<double>(1, (a, b) => a > b ? a : b);
+    if (bars.isEmpty) return const SizedBox();
+
+    final maxVal = bars.map((d) => d.closingBalanceSafe).reduce(math.max);
+    final minVal = bars.map((d) => d.closingBalanceSafe).reduce(math.min);
+    final range = maxVal - minVal;
+
+    // Create a baseline slightly below minVal to ensure the lowest bar still has visible height
+    final baseline = range == 0 ? 0.0 : minVal - (range * 0.5); 
+    final adjustedRange = range == 0 ? 1.0 : (maxVal - baseline);
 
     return SizedBox(
       height: 72,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: bars.map((day) {
-          final ratio = maxBalance == 0
-              ? 0.0
-              : (day.closingBalanceSafe.abs() / maxBalance).clamp(0.0, 1.0);
+          final val = day.closingBalanceSafe;
+          
+          double ratio;
+          if (range == 0) {
+            ratio = val > 0 ? 0.8 : 0.2; // Show flat height if no changes
+          } else {
+            ratio = ((val - baseline) / adjustedRange).clamp(0.0, 1.0);
+          }
+
           // Max bar height = 36px so that bar(36) + gap(4) + label(12) + slack(20) = 72px
-          final barH = day.closingBalanceSafe == 0 ? 4.0 : (6 + ratio * 36).clamp(4.0, 36.0);
+          final barH = (4 + ratio * 32).clamp(4.0, 36.0);
           final isNeg = day.isNegative;
           final date = DateTime.tryParse(day.date);
+          
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),

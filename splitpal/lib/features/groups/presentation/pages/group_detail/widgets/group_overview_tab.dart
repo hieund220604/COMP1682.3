@@ -11,6 +11,7 @@ import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets
 import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/group_spending_card.dart';
 import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/group_upcoming_card.dart';
 import 'package:splitpal/features/groups/presentation/pages/group_detail/widgets/members_preview_card.dart';
+import 'package:splitpal/features/invoices/presentation/pages/bill_template_list_page.dart';
 
 class GroupOverviewTab extends StatelessWidget {
   final String groupId;
@@ -80,6 +81,21 @@ class GroupOverviewTab extends StatelessWidget {
                   label: 'Invoice',
                   isPrimary: true,
                   onPressed: onCreateInvoice,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _QuickActionSquare(
+                  icon: Icons.autorenew,
+                  label: 'Recurring',
+                  onPressed: isOwnerOrAdmin ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BillTemplateListPage(groupId: groupId),
+                      ),
+                    ).then((_) => onRefresh());
+                  } : null,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

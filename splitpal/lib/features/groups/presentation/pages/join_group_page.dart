@@ -220,12 +220,6 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextButton.icon(
-                onPressed: _isLoading ? null : _pasteFromClipboard,
-                icon: const Icon(Icons.content_paste),
-                label: const Text('Paste Invitation Link'),
-              ),
             ],
           ),
         ),
