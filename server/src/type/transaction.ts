@@ -11,7 +11,10 @@ export enum TransactionType {
     REFUND = 'REFUND',
     DEPOSIT = 'DEPOSIT',
     TRANSFER_REFUND_SENT = 'TRANSFER_REFUND_SENT',
-    TRANSFER_REFUND_RECEIVED = 'TRANSFER_REFUND_RECEIVED'
+    TRANSFER_REFUND_RECEIVED = 'TRANSFER_REFUND_RECEIVED',
+    // ── Savings ─────────────────────────────────────────────────
+    SAVINGS_DEPOSIT = 'SAVINGS_DEPOSIT',
+    SAVINGS_WITHDRAW = 'SAVINGS_WITHDRAW',
 }
 
 export interface CreateTransactionRequest {

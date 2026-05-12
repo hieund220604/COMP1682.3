@@ -23,6 +23,7 @@ import chatRoutes from './route/chatRoutes';
 import uploadRoutes from './route/uploadRoutes';
 import notificationRoutes from './route/notificationRoutes';
 import aiRoutes from './route/aiRoutes';
+import aiChatRoutes from './route/aiChatRoutes';
 // UpBill Routes
 import invoiceRoutes from './route/invoiceRoutes';
 import paymentRequestRoutes from './route/paymentRequestRoutes';
@@ -34,6 +35,7 @@ import receiptRoutes from './route/receiptRoutes';
 import budgetRoutes from './route/budgetRoutes';
 import billTemplateRoutes from './route/billTemplateRoutes';
 import reportRoutes from './route/reportRoutes';
+import savingsRoutes from './route/savingsRoutes';
 import { connectRedis, disconnectRedis } from './redis';
 import { createRateLimit } from './middleware/rateLimitMiddleware';
 
@@ -75,6 +77,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes); // New upload route
 app.use('/api/notifications', notificationRoutes); // Notification route
 app.use('/api/ai', aiRoutes);
+app.use('/api/ai-chat', aiChatRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/budget', budgetRoutes);
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'))); // Serve uploaded files
@@ -87,6 +90,7 @@ app.use('/api/exchange', exchangeRateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/forecast', forecastRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/savings', savingsRoutes);
 app.use('/api/groups/:groupId/bill-templates', billTemplateRoutes);
 
 // Health check endpoint

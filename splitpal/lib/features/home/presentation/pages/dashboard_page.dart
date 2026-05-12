@@ -27,7 +27,9 @@ import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/utils/safe_parse.dart';
 import 'package:splitpal/features/notifications/notification_provider.dart';
 import 'package:splitpal/features/reports/presentation/pages/financial_report_page.dart';
+import 'package:splitpal/features/ai/presentation/pages/ai_chat_page.dart';
 import 'notifications_page.dart';
+import 'profile_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -117,6 +119,16 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AiChatPage()),
+          );
+        },
+        backgroundColor: colorScheme.primary,
+        child: Icon(Icons.smart_toy, color: colorScheme.onPrimary),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 100),
@@ -218,6 +230,17 @@ class _Header extends StatelessWidget {
                 ),
               );
             },
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProfilePage(),
+                ),
+              );
+            },
+            icon: Icon(Icons.settings_outlined, color: colorScheme.onSurface),
           ),
         ],
       ),

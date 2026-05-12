@@ -32,6 +32,9 @@ import 'features/forecast/forecast_provider.dart';
 // Report Provider
 import 'features/reports/report_provider.dart';
 
+// Savings Provider
+import 'features/savings/savings_provider.dart';
+
 // Pages
 import 'package:splitpal/features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
@@ -146,6 +149,10 @@ class _MyAppState extends State<MyApp> {
         // Report Provider
         ChangeNotifierProvider(
           create: (_) => ReportProvider(dio: AppServices.dio),
+        ),
+        // Savings Provider
+        ChangeNotifierProvider(
+          create: (_) => SavingsProvider(dio: AppServices.dio),
         ),
       ],
       child: _AppInitializer(

@@ -136,6 +136,14 @@ class ApiConstants {
   static const String reportMonthly = '/reports/monthly';
   static const String reportYearly = '/reports/yearly';
 
+  // Savings
+  static const String savingsGoals = '/savings/goals';
+  static String savingsGoalById(String id) => '/savings/goals/$id';
+  static String savingsGoalDeposits(String goalId) => '/savings/goals/$goalId/deposits';
+  static String savingsDepositWithdraw(String depositId) => '/savings/deposits/$depositId/withdraw';
+  static const String savingsInterestPreview = '/savings/interest-preview';
+  static String savingsGoalProjection(String goalId) => '/savings/goals/$goalId/projection';
+
   // Chat Endpoints
   static String chatMessages(String groupId) =>
       '/chat/groups/$groupId/messages';

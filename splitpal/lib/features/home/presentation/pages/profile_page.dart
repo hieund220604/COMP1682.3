@@ -323,20 +323,23 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(4, 12, 16, 8),
       child: Row(
         children: [
-          const SizedBox(width: 42),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
           Expanded(
             child: Text(
-              'Profile',
+              'Settings',
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
-          IconButton(onPressed: () {}, icon: const Icon(Icons.settings)),
+          const SizedBox(width: 48), // balance the back button
         ],
       ),
     );
