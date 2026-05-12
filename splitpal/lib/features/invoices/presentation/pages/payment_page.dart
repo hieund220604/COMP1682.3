@@ -4,6 +4,7 @@ import 'package:splitpal/features/invoices/invoice_provider.dart';
 import 'package:splitpal/features/auth/auth_provider.dart';
 import 'package:splitpal/core/widgets/app_card.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
 import '../../../auth/presentation/widgets/totp_verification_dialog.dart';
 
 class PaymentPage extends StatefulWidget {
@@ -234,7 +235,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             ),
                           ),
                           Text(
-                            '\$${transfer.amount.toStringAsFixed(2)}',
+                            CurrencyFormatter.formatVND(transfer.amount),
                             style: textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: scheme.primary,

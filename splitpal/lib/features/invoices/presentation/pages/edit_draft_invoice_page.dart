@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_tokens.dart';
@@ -34,7 +35,7 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
       return _ItemEditState(
         item: item,
         amountController: TextEditingController(
-          text: item.amount == 0 ? '' : item.amount.toStringAsFixed(0),
+          text: item.amount == 0 ? '' : CurrencyFormatter.formatInput(item.amount.toInt()),
         ),
       );
     }).toList();
@@ -419,13 +420,17 @@ class _EditDraftInvoicePageState extends State<EditDraftInvoicePage> {
           TextFormField(
             controller: state.amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              CurrencyInputFormatter(),
+            ],
             onChanged: (v) {
               setState(() {
-                state.currentAmount = double.tryParse(v.replaceAll(',', ''));
+                state.currentAmount = CurrencyFormatter.parseFormatted(v);
               });
             },
             validator: (v) {
-              final val = double.tryParse(v?.replaceAll(',', '') ?? '');
+              final val = CurrencyFormatter.parseFormatted(v ?? '');
               if (val == null || val <= 0) {
                 return 'Amount must be greater than 0';
               }

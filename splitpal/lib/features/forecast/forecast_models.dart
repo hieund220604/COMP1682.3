@@ -110,6 +110,7 @@ class ForecastEventModel {
   final String actionType;
   final String status;
   final int retryCount;
+  final String? receiptTagName;
 
   const ForecastEventModel({
     required this.id,
@@ -126,6 +127,7 @@ class ForecastEventModel {
     required this.actionType,
     required this.status,
     this.retryCount = 0,
+    this.receiptTagName,
   });
 
   factory ForecastEventModel.fromJson(Map<String, dynamic> j) =>
@@ -146,10 +148,12 @@ class ForecastEventModel {
         actionType: j['actionType'] as String? ?? 'OPEN_SUBSCRIPTION',
         status: j['status'] as String? ?? '',
         retryCount: (j['retryCount'] as num?)?.toInt() ?? 0,
+        receiptTagName: j['receiptTagName'] as String?,
       );
 
   bool get isOutflow => direction == 'OUTFLOW';
   bool get isSubscription => sourceType == 'SUBSCRIPTION';
+  bool get isReceipt => sourceType == 'RECEIPT_SPENDING';
   bool get isTransfer =>
       sourceType == 'TRANSFER_OUT' || sourceType == 'TRANSFER_IN';
 

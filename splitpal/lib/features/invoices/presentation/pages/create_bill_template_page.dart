@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/features/invoices/bill_template_provider.dart';
@@ -430,8 +431,12 @@ class _CreateBillTemplatePageState extends State<CreateBillTemplatePage> {
                   child: TextFormField(
                     controller: item.amountCtrl,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      CurrencyInputFormatter(),
+                    ],
                     decoration: _inputDeco('Amount (0 = Enter later)'),
-                    onChanged: (v) => setState(() => item.amount = double.tryParse(v) ?? 0),
+                    onChanged: (v) => setState(() => item.amount = CurrencyFormatter.parseFormatted(v) ?? 0),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),

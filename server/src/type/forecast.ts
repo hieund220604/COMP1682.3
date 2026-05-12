@@ -3,7 +3,8 @@
 export type ForecastSourceType =
     | 'SUBSCRIPTION'
     | 'TRANSFER_OUT'
-    | 'TRANSFER_IN';
+    | 'TRANSFER_IN'
+    | 'RECEIPT_SPENDING';
 
 export type ForecastDirection = 'INFLOW' | 'OUTFLOW';
 
@@ -15,6 +16,7 @@ export type ForecastCertainty =
 export type ForecastActionType =
     | 'OPEN_SUBSCRIPTION'
     | 'OPEN_TRANSFER'
+    | 'OPEN_RECEIPT'
     | 'TOP_UP';
 
 export interface ForecastEvent {
@@ -32,6 +34,7 @@ export interface ForecastEvent {
     actionType: ForecastActionType;
     status: string;
     retryCount?: number; // for subscription members
+    receiptTagName?: string; // for receipt spending events
 }
 
 export interface DailyForecast {

@@ -104,9 +104,11 @@ class EventDetailSheet extends StatelessWidget {
             label: 'Type',
             value: event.isSubscription
                 ? 'Subscription charge'
-                : event.sourceType == 'TRANSFER_OUT'
-                    ? 'Outgoing payment'
-                    : 'Incoming payment',
+                : event.isReceipt
+                    ? 'Receipt spending'
+                    : event.sourceType == 'TRANSFER_OUT'
+                        ? 'Outgoing payment'
+                        : 'Incoming payment',
           ),
           const SizedBox(height: 12),
           _InfoRow(
@@ -115,6 +117,14 @@ class EventDetailSheet extends StatelessWidget {
             value: event.certainty,
             valueColor: certColor,
           ),
+          if (event.receiptTagName != null) ...[
+            const SizedBox(height: 12),
+            _InfoRow(
+              icon: Icons.label_outlined,
+              label: 'Category',
+              value: event.receiptTagName!,
+            ),
+          ],
           if (event.groupName != null) ...[
             const SizedBox(height: 12),
             _InfoRow(
@@ -133,13 +143,6 @@ class EventDetailSheet extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  // sourceId for a subscription event is "sub_member_{memberId}"
-                  // We extract the memberId and navigate — the detail page
-                  // fetches subscription info by subscriptionId from the member.
-                  // Here we navigate using the sourceId directly; the page
-                  // accepts subscriptionId, so we pass what we have and let the
-                  // server sort it out. The API returns sourceId = memberId, so
-                  // we strip the prefix to get the raw mongo id.
                   final rawId = event.sourceId;
                   Navigator.push(
                     context,
@@ -151,6 +154,15 @@ class EventDetailSheet extends StatelessWidget {
                 },
                 icon: const Icon(Icons.open_in_new, size: 18),
                 label: const Text('View Subscription'),
+              ),
+            )
+          else if (event.isReceipt)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('Projected from past receipts'),
               ),
             )
           else
@@ -177,9 +189,11 @@ class _SourceIcon extends StatelessWidget {
     final color = event.certaintyColor;
     final icon = event.isSubscription
         ? Icons.subscriptions_outlined
-        : event.sourceType == 'TRANSFER_OUT'
-            ? Icons.arrow_upward_rounded
-            : Icons.arrow_downward_rounded;
+        : event.isReceipt
+            ? Icons.receipt_long_outlined
+            : event.sourceType == 'TRANSFER_OUT'
+                ? Icons.arrow_upward_rounded
+                : Icons.arrow_downward_rounded;
 
     return Container(
       width: 48,

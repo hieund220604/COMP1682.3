@@ -26,6 +26,7 @@ import 'package:splitpal/features/forecast/presentation/widgets/forecast_risk_ca
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/core/utils/safe_parse.dart';
 import 'package:splitpal/features/notifications/notification_provider.dart';
+import 'package:splitpal/features/reports/presentation/pages/financial_report_page.dart';
 import 'notifications_page.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -133,6 +134,8 @@ class _DashboardPageState extends State<DashboardPage> with RouteAware {
                     const ForecastRiskCard(),
                     const SizedBox(height: 20),
                     const _CurrencyConverterCard(),
+                    const SizedBox(height: 20),
+                    const _FinancialReportCard(),
                     const SizedBox(height: 20),
                     const _ReceiptDiarySection(),
                     const SizedBox(height: 20),
@@ -859,6 +862,87 @@ class _CurrencyConverterCard extends StatelessWidget {
 }
 
 
+
+/// Quick access card for financial reports
+class _FinancialReportCard extends StatelessWidget {
+  const _FinancialReportCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FinancialReportPage()),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.deepPurple.shade400, Colors.deepPurple.shade700],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurple.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.analytics_outlined,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Financial Reports',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Monthly & yearly insights across all modules',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.white.withOpacity(0.7),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _ReceiptDiarySection extends StatefulWidget {
   const _ReceiptDiarySection();

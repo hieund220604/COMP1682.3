@@ -22,6 +22,10 @@ firebase-service-account.json
 # Firebase cache
 .firebase/
 
+# Server temp/scratch scripts
+server/check_messages.ts
+server/fetch_banks.js
+
 # Server uploads (user-generated content)
 server/uploads/
 

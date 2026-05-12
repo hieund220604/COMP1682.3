@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/features/invoices/bill_template_provider.dart';
@@ -50,7 +51,7 @@ class _EditBillTemplatePageState extends State<EditBillTemplatePage> {
     for (final item in t.items) {
       final draft = _ItemDraft();
       draft.nameCtrl.text = item.name;
-      draft.amountCtrl.text = item.amount == 0 ? '0' : item.amount.toStringAsFixed(0);
+      draft.amountCtrl.text = item.amount == 0 ? '0' : CurrencyFormatter.formatInput(item.amount.toInt());
       draft.amount = item.amount;
       draft.splitType = item.splitType;
       draft.assignedTo = List<String>.from(item.assignedTo);
@@ -386,8 +387,12 @@ class _EditBillTemplatePageState extends State<EditBillTemplatePage> {
                 child: TextFormField(
                   controller: item.amountCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    CurrencyInputFormatter(),
+                  ],
                   decoration: _inputDeco('Amount (0 = Enter later)'),
-                  onChanged: (v) => setState(() => item.amount = double.tryParse(v) ?? 0),
+                  onChanged: (v) => setState(() => item.amount = CurrencyFormatter.parseFormatted(v) ?? 0),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

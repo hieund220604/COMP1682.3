@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:splitpal/core/constants/app_colors.dart';
 
+import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
-import 'package:intl/intl.dart';
 import 'budget_page.dart';
 
 class ReceiptDetailPage extends StatefulWidget {
@@ -52,8 +53,7 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
       }
       if (found != null) {
         _receipt = found;
-        final formatter = NumberFormat('#,##0', 'en_US');
-        _amountCtrl.text = formatter.format(found.totalAmount.round());
+        _amountCtrl.text = CurrencyFormatter.formatInput(found.totalAmount.round());
         _noteCtrl.text = found.note ?? '';
         _selectedTagIds.addAll(found.tags.map((t) => t.id));
         setState(() {});
@@ -66,7 +66,7 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
     final provider = context.read<ReceiptProvider>();
     await provider.updateReceipt(
       id: _receipt!.id,
-      totalAmount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
+      totalAmount: CurrencyFormatter.parseFormatted(_amountCtrl.text) ?? 0.0,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       tagIds: _selectedTagIds.toList(),
     );
@@ -123,6 +123,10 @@ class _ReceiptDetailPageState extends State<ReceiptDetailPage> {
             TextField(
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
               style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
               decoration: const InputDecoration(
                 labelText: 'Total Amount (VND)',

@@ -6,6 +6,8 @@ import { Subscription } from '../models/Subscription';
 import { Transfer } from '../models/Transfer';
 import { Transaction } from '../models/Transaction';
 import { PaymentRequest } from '../models/PaymentRequest';
+import { Receipt } from '../models/Receipt';
+import { ReceiptTag } from '../models/ReceiptTag';
 import {
     ForecastEvent,
     DailyForecast,
@@ -41,6 +43,7 @@ const OUTFLOW_TYPES = new Set([
     'SETTLEMENT_SENT',
     'EXPENSE_PAYMENT',
     'VNPAY_PAYMENT',
+    'RECEIPT_SPENDING',
 ]);
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -51,6 +54,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     SETTLEMENT_SENT: 'Settlements',
     EXPENSE_PAYMENT: 'Expense payments',
     VNPAY_PAYMENT: 'VNPay payments',
+    RECEIPT_SPENDING: 'Receipt spending',
 };
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -134,7 +138,7 @@ async function buildForecastEvents(
         try {
             const toUser = await User.findById((t as any).toUserId).select('displayName email').lean();
             counterparty = (toUser as any)?.displayName ?? (toUser as any)?.email ?? undefined;
-        } catch {}
+        } catch { }
 
         events.push({
             id: `transfer_out_${t._id}`,
@@ -181,7 +185,7 @@ async function buildForecastEvents(
         try {
             const fromUser = await User.findById((t as any).fromUserId).select('displayName email').lean();
             counterparty = (fromUser as any)?.displayName ?? (fromUser as any)?.email ?? undefined;
-        } catch {}
+        } catch { }
 
         events.push({
             id: `transfer_in_${t._id}`,
@@ -197,6 +201,69 @@ async function buildForecastEvents(
             actionType: 'OPEN_TRANSFER',
             status: (t as any).status,
         });
+    }
+
+    // ── 4. Receipt spending (past pattern projected forward) ──────────────────
+    // Aggregate receipts from the past 30 days to estimate a daily spending
+    // pattern, then project it forward into the horizon as ESTIMATED outflows.
+    const lookbackDays = 30;
+    const lookbackStart = addDays(today, -lookbackDays);
+    const receipts = await Receipt.find({
+        userId,
+        receiptDate: { $gte: lookbackStart, $lt: today },
+        totalAmount: { $gt: 0 },
+    }).populate<{ tags: { _id: mongoose.Types.ObjectId; name: string }[] }>({
+        path: 'tags',
+        select: 'name',
+    }).lean();
+
+    if (receipts.length > 0) {
+        // Calculate daily average receipt spending
+        const totalReceiptSpending = receipts.reduce(
+            (sum, r) => sum + Number((r as any).totalAmount ?? 0), 0,
+        );
+        const dailyAvgReceipt = totalReceiptSpending / lookbackDays;
+
+        // Find most common tag for labelling
+        const tagFreq = new Map<string, { name: string; count: number }>();
+        for (const r of receipts) {
+            const tags = (r as any).tags as any[];
+            if (tags && tags.length > 0) {
+                for (const t of tags) {
+                    const name = t?.name ?? 'Uncategorized';
+                    const id = t?._id?.toString() ?? 'unknown';
+                    const existing = tagFreq.get(id) ?? { name, count: 0 };
+                    existing.count += 1;
+                    tagFreq.set(id, existing);
+                }
+            }
+        }
+        const topTag = [...tagFreq.values()].sort((a, b) => b.count - a.count)[0];
+
+        // Project daily average as a single weekly summary event going forward
+        // We create one event per 7-day block to avoid cluttering the timeline
+        const weeklyAvg = dailyAvgReceipt * 7;
+        if (weeklyAvg > 0) {
+            for (let week = 0; week * 7 < horizonDays; week++) {
+                const effectiveDate = startOfDay(addDays(today, week * 7 + 3)); // mid-week
+                if (effectiveDate > horizon) break;
+
+                events.push({
+                    id: `receipt_spending_w${week}`,
+                    sourceType: 'RECEIPT_SPENDING',
+                    sourceId: `receipt_weekly_${week}`,
+                    direction: 'OUTFLOW',
+                    certainty: 'EXPECTED',
+                    amount: Math.round(weeklyAvg),
+                    currency: 'VND',
+                    effectiveDate,
+                    title: `Est. weekly spending${topTag ? ` (${topTag.name})` : ''}`,
+                    actionType: 'OPEN_RECEIPT',
+                    status: 'PROJECTED',
+                    receiptTagName: topTag?.name,
+                });
+            }
+        }
     }
 
     return events;
@@ -367,6 +434,44 @@ async function buildSpendingInsights(
         createdAt: { $gte: previousStart },
     }).lean();
 
+    // Fetch receipts for both periods
+    const receiptAgg = await Receipt.aggregate([
+        {
+            $match: {
+                userId,
+                receiptDate: { $gte: previousStart, $lt: now },
+                totalAmount: { $gt: 0 },
+            },
+        },
+        {
+            $group: {
+                _id: {
+                    period: {
+                        $cond: [
+                            { $gte: ['$receiptDate', currentStart] },
+                            'current',
+                            'previous',
+                        ],
+                    },
+                },
+                total: { $sum: '$totalAmount' },
+                count: { $sum: 1 },
+            },
+        },
+    ]);
+
+    let receiptCurrentTotal = 0;
+    let receiptPreviousTotal = 0;
+    let receiptCurrentCount = 0;
+    for (const bucket of receiptAgg) {
+        if (bucket._id.period === 'current') {
+            receiptCurrentTotal = bucket.total;
+            receiptCurrentCount = bucket.count;
+        } else {
+            receiptPreviousTotal = bucket.total;
+        }
+    }
+
     let currentOutflow = 0;
     let previousOutflow = 0;
     const categoryMap = new Map<string, { amount: number; count: number }>();
@@ -400,6 +505,18 @@ async function buildSpendingInsights(
             // Previous period
             previousOutflow += amount;
         }
+    }
+
+    // Merge receipt spending into category breakdown + totals
+    if (receiptCurrentTotal > 0) {
+        currentOutflow += receiptCurrentTotal;
+        const receiptCat = categoryMap.get('RECEIPT_SPENDING') ?? { amount: 0, count: 0 };
+        receiptCat.amount += receiptCurrentTotal;
+        receiptCat.count += receiptCurrentCount;
+        categoryMap.set('RECEIPT_SPENDING', receiptCat);
+    }
+    if (receiptPreviousTotal > 0) {
+        previousOutflow += receiptPreviousTotal;
     }
 
     // Build category breakdown sorted by amount desc
@@ -572,6 +689,30 @@ function generateSmartTips(
             description: `You spend an average of ${Math.round(spendingInsight.dailyAvgSpending).toLocaleString()} đ per day over the last ${spendingInsight.periodDays} days.`,
             type: 'INFO',
             priority: 7,
+        });
+    }
+
+    // 9. Receipt spending insight
+    const receiptCategory = spendingInsight.categoryBreakdown.find(
+        c => c.category === 'RECEIPT_SPENDING',
+    );
+    if (receiptCategory && receiptCategory.percent > 30) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🧾',
+            title: 'High receipt spending',
+            description: `Receipt-tracked spending accounts for ${receiptCategory.percent}% of your total outflow (${receiptCategory.amount.toLocaleString()} đ). Review your receipts for savings.`,
+            type: 'WARNING',
+            priority: 3,
+        });
+    } else if (receiptCategory && receiptCategory.percent > 0) {
+        tips.push({
+            id: `tip_${++id}`,
+            icon: '🧾',
+            title: 'Receipt spending tracked',
+            description: `${receiptCategory.amount.toLocaleString()} đ in receipt spending (${receiptCategory.percent}% of total). Keep tracking for better insights!`,
+            type: 'INFO',
+            priority: 6,
         });
     }
 

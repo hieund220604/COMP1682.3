@@ -841,9 +841,11 @@ class _EventTile extends StatelessWidget {
               child: Icon(
                 event.isSubscription
                     ? Icons.subscriptions_outlined
-                    : event.sourceType == 'TRANSFER_OUT'
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
+                    : event.isReceipt
+                        ? Icons.receipt_long_outlined
+                        : event.sourceType == 'TRANSFER_OUT'
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
                 color: certColor,
                 size: 18,
               ),
@@ -864,7 +866,9 @@ class _EventTile extends StatelessWidget {
                   Text(
                     event.isSubscription
                         ? 'Subscription${event.groupName != null ? ' • ${event.groupName}' : ''}'
-                        : 'Transfer${event.counterparty != null ? ' • ${event.counterparty}' : ''}',
+                        : event.isReceipt
+                            ? 'Receipt spending${event.receiptTagName != null ? ' • ${event.receiptTagName}' : ''}'
+                            : 'Transfer${event.counterparty != null ? ' • ${event.counterparty}' : ''}',
                     style: textTheme.bodySmall
                         ?.copyWith(color: Colors.grey),
                     maxLines: 1,

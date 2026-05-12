@@ -1,5 +1,5 @@
 {
-  "name": "split-pay",
+  "name": "splitpal-server",
   "version": "1.0.0",
   "description": "Express + TypeScript + MongoDB project for expense tracking",
   "main": "dist/index.js",

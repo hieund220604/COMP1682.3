@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -353,7 +354,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
 
   double _calculateTotal() {
     return _items.fold(0.0, (sum, item) {
-      final amount = double.tryParse(item.amountController.text) ?? 0.0;
+      final amount = CurrencyFormatter.parseFormatted(item.amountController.text) ?? 0.0;
       return sum + amount;
     });
   }
@@ -384,7 +385,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       }
       return InvoiceItemCreate(
         name: item.nameController.text,
-        amount: double.parse(item.amountController.text),
+        amount: CurrencyFormatter.parseFormatted(item.amountController.text) ?? 0.0,
         splitType: splitType,
         assignedTo: item.assignedTo,
         splits: splits,
@@ -963,7 +964,7 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
         '';
 
     for (final item in _items) {
-      final amount = double.tryParse(item.amountController.text.trim()) ?? 0;
+      final amount = CurrencyFormatter.parseFormatted(item.amountController.text) ?? 0;
       if (amount <= 0 || item.assignedTo.isEmpty) continue;
 
       final n = item.assignedTo.length;
@@ -1243,11 +1244,15 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
               fontSize: 16,
             ),
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              CurrencyInputFormatter(),
+            ],
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Please enter amount';
               }
-              if (double.tryParse(value) == null) {
+              if (CurrencyFormatter.parseFormatted(value) == null) {
                 return 'Please enter a valid number';
               }
               return null;

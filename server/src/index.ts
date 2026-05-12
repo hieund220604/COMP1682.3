@@ -33,6 +33,7 @@ import forecastRoutes from './route/forecastRoutes';
 import receiptRoutes from './route/receiptRoutes';
 import budgetRoutes from './route/budgetRoutes';
 import billTemplateRoutes from './route/billTemplateRoutes';
+import reportRoutes from './route/reportRoutes';
 import { connectRedis, disconnectRedis } from './redis';
 import { createRateLimit } from './middleware/rateLimitMiddleware';
 
@@ -85,6 +86,7 @@ app.use('/api/transfers', transferRoutes);
 app.use('/api/exchange', exchangeRateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/forecast', forecastRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/groups/:groupId/bill-templates', billTemplateRoutes);
 
 // Health check endpoint

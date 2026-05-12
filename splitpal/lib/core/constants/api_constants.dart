@@ -132,6 +132,10 @@ class ApiConstants {
   static const String forecastSummary = '/forecast/summary';
   static const String forecast = '/forecast';
 
+  // Reports
+  static const String reportMonthly = '/reports/monthly';
+  static const String reportYearly = '/reports/yearly';
+
   // Chat Endpoints
   static String chatMessages(String groupId) =>
       '/chat/groups/$groupId/messages';

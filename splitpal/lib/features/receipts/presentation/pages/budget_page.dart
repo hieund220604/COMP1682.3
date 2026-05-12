@@ -615,7 +615,7 @@ class _BudgetCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        summary.tag.name.toUpperCase(),
+                        summary.tag.name,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15),
                       ),

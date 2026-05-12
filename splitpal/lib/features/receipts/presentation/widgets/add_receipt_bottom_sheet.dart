@@ -2,14 +2,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:splitpal/core/constants/app_colors.dart';
 import 'package:splitpal/core/theme/app_tokens.dart';
+import 'package:splitpal/core/utils/currency_formatter.dart';
 import 'package:splitpal/models/receipt.dart';
 import 'package:splitpal/features/receipts/receipt_provider.dart';
-import 'package:intl/intl.dart';
 import '../pages/budget_page.dart';
 
 class AddReceiptBottomSheet extends StatefulWidget {
@@ -65,8 +66,7 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
             setState(() {
                _scanning = false;
                if (amount != null && amount > 0) {
-                 final formatter = NumberFormat('#,##0', 'en_US');
-                 _amountCtrl.text = formatter.format(amount.round());
+                 _amountCtrl.text = CurrencyFormatter.formatInput(amount.round());
                }
             });
           }
@@ -86,7 +86,7 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
       bytes: _fileBytes!,
       fileName: _fileName!,
       receiptDate: _selectedDate,
-      totalAmount: double.tryParse(_amountCtrl.text.replaceAll(',', '')) ?? 0.0,
+      totalAmount: CurrencyFormatter.parseFormatted(_amountCtrl.text) ?? 0.0,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       tagIds: _selectedTagIds.toList(),
     );
@@ -373,6 +373,10 @@ class _AddReceiptBottomSheetState extends State<AddReceiptBottomSheet> {
             child: TextField(
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
               cursorColor: Colors.white70,
               style: const TextStyle(
                 color: Colors.white,

@@ -33,9 +33,11 @@ export const receiptController = {
             if (!userId) return ResponseUtil.unauthorized(res);
             const { id } = req.params;
             const { name, color, monthlyBudget, icon, isArchived } = req.body;
+            console.log('[updateTag] id:', id, 'body:', JSON.stringify(req.body));
             const tag = await receiptService.updateTag(userId, id, name, color, monthlyBudget, icon, isArchived);
             ResponseUtil.success(res, tag, 'Tag updated');
-        } catch (error) {
+        } catch (error: any) {
+            console.error('[updateTag] ERROR:', error?.message, error?.code);
             handleControllerError(res, error, 'Failed to update tag');
         }
     },

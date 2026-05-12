@@ -29,6 +29,9 @@ import 'package:splitpal/features/ai/ai_provider.dart';
 // Forecast Provider
 import 'features/forecast/forecast_provider.dart';
 
+// Report Provider
+import 'features/reports/report_provider.dart';
+
 // Pages
 import 'package:splitpal/features/auth/presentation/pages/auth_page.dart';
 import 'features/auth/presentation/pages/verify_2fa_page.dart';
@@ -139,6 +142,10 @@ class _MyAppState extends State<MyApp> {
         // Forecast Provider
         ChangeNotifierProvider(
           create: (_) => ForecastProvider(dio: AppServices.dio),
+        ),
+        // Report Provider
+        ChangeNotifierProvider(
+          create: (_) => ReportProvider(dio: AppServices.dio),
         ),
       ],
       child: _AppInitializer(

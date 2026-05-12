@@ -17,7 +17,11 @@ class AppError extends Error {
 
 const MAX_TAGS_PER_USER = 20;
 const MAX_RECEIPTS_PER_DAY = 50;
+// Suggested color palette (exposed to frontend for UI pickers)
 const TAG_COLORS = ['#4F46E5', '#0EA5E9', '#22C55E', '#F59E0B', '#EF4444', '#EC4899', '#10B981', '#6366F1'];
+
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+function isValidHexColor(c: string): boolean { return HEX_COLOR_RE.test(c); }
 
 function normalizeDate(dateStr?: string): Date {
     const d = dateStr ? new Date(dateStr) : new Date();
@@ -97,8 +101,8 @@ export const receiptService = {
         if (name.length > 30) {
             throw new AppError('Tag name too long (max 30)', 'VALIDATION_ERROR');
         }
-        if (!TAG_COLORS.includes(color)) {
-            throw new AppError('Invalid tag color', 'INVALID_COLOR');
+        if (!isValidHexColor(color)) {
+            throw new AppError('Invalid tag color format (expected #RRGGBB)', 'INVALID_COLOR');
         }
 
         const tagCount = await ReceiptTag.countDocuments({ userId });
@@ -108,7 +112,7 @@ export const receiptService = {
 
         const tag = await ReceiptTag.create({
             userId,
-            name: name.trim().toLowerCase(),
+            name: name.trim(),
             color,
             monthlyBudget: monthlyBudget ?? undefined,
             icon: icon?.trim() ?? undefined,
@@ -117,29 +121,47 @@ export const receiptService = {
     },
 
     async updateTag(userId: string, tagId: string, name?: string, color?: string, monthlyBudget?: number | null, icon?: string | null, isArchived?: boolean): Promise<TagDto> {
-        const update: Partial<IReceiptTag> = {} as any;
+        const set: Record<string, any> = {};
+        const unset: Record<string, any> = {};
+
         if (name !== undefined) {
             if (!name.trim()) throw new AppError('Tag name is required', 'VALIDATION_ERROR');
             if (name.length > 30) throw new AppError('Tag name too long (max 30)', 'VALIDATION_ERROR');
-            update.name = name.trim().toLowerCase();
+            set.name = name.trim();
         }
         if (color !== undefined) {
-            if (!TAG_COLORS.includes(color)) throw new AppError('Invalid tag color', 'INVALID_COLOR');
-            update.color = color;
+            if (!isValidHexColor(color)) throw new AppError('Invalid tag color format (expected #RRGGBB)', 'INVALID_COLOR');
+            set.color = color;
         }
         if (monthlyBudget !== undefined) {
-            update.monthlyBudget = monthlyBudget === null ? undefined : monthlyBudget;
+            if (monthlyBudget === null) {
+                unset.monthlyBudget = 1;
+            } else {
+                set.monthlyBudget = monthlyBudget;
+            }
         }
         if (icon !== undefined) {
-            update.icon = icon === null ? undefined : icon.trim();
+            if (icon === null || icon.trim() === '') {
+                unset.icon = 1;
+            } else {
+                set.icon = icon.trim();
+            }
         }
         if (isArchived !== undefined) {
-            update.isArchived = isArchived;
+            set.isArchived = isArchived;
+        }
+
+        const updateOp: Record<string, any> = {};
+        if (Object.keys(set).length > 0) updateOp.$set = set;
+        if (Object.keys(unset).length > 0) updateOp.$unset = unset;
+
+        if (Object.keys(updateOp).length === 0) {
+            throw new AppError('No fields to update', 'VALIDATION_ERROR');
         }
 
         const tag = await ReceiptTag.findOneAndUpdate(
             { _id: tagId, userId },
-            { $set: update },
+            updateOp,
             { new: true }
         );
         if (!tag) throw new AppError('Tag not found', 'NOT_FOUND', 404);
@@ -252,11 +274,11 @@ export const receiptService = {
 
         await receipt.save();
         const allTags = tags ?? await ReceiptTag.find({ _id: { $in: receipt.tags }, userId });
-        
+
         // Async check for budget alerts
         const { budgetService } = require('./budgetService');
         budgetService.checkBudgetAlerts(userId).catch(console.error);
-        
+
         return toReceiptDto(receipt, allTags);
     },
 

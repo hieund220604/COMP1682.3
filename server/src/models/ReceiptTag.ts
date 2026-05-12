@@ -23,7 +23,6 @@ const ReceiptTagSchema = new Schema<IReceiptTag>({
         type: String,
         required: true,
         trim: true,
-        lowercase: true,
     },
     color: {
         type: String,

@@ -78,13 +78,15 @@ class ReceiptProvider with ChangeNotifier {
 
   Future<bool> updateTag(String id, {String? name, String? color, double? monthlyBudget, String? icon, bool? isArchived}) async {
     try {
-      final resp = await _dio.put('/receipts/tags/$id', data: {
+      final body = {
         if (name != null) 'name': name,
         if (color != null) 'color': color,
         if (monthlyBudget != null) 'monthlyBudget': monthlyBudget,
         if (icon != null) 'icon': icon,
         if (isArchived != null) 'isArchived': isArchived,
-      });
+      };
+      debugPrint('[updateTag] PUT /receipts/tags/$id body=$body');
+      final resp = await _dio.put('/receipts/tags/$id', data: body);
       final tag = ReceiptTag.fromJson(resp.data['data']);
       final idx = _tags.indexWhere((t) => t.id == id);
       if (idx != -1) _tags[idx] = tag;
@@ -93,6 +95,7 @@ class ReceiptProvider with ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
+      debugPrint('[updateTag] ERROR: $e');
       _setError(e.toString());
       return false;
     }

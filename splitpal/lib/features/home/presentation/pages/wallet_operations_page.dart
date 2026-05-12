@@ -37,30 +37,6 @@ const _popularBanks = [
   BankModel('Agribank', 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam', 'https://cdn.vietqr.io/img/VBA.png')
 ];
 
-class CurrencyInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.selection.baseOffset == 0) {
-      return newValue;
-    }
-    // Remove all dots/commas
-    String newText = newValue.text.replaceAll(RegExp(r'[,.]'), '');
-    if (newText.isEmpty) return newValue;
-    
-    int? value = int.tryParse(newText);
-    if (value == null) return oldValue;
-    
-    // Format with dots
-    final formatter = NumberFormat('#,###', 'vi_VN');
-    String formatted = formatter.format(value).replaceAll(',', '.');
-    
-    return newValue.copyWith(
-        text: formatted,
-        selection: TextSelection.collapsed(offset: formatted.length));
-  }
-}
-
 // --- Main Page ---
 
 class WalletOperationsPage extends StatefulWidget {
